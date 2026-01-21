@@ -2645,6 +2645,49 @@ const TASKS_API_URL = BACKEND_URL;
 // Analysis API - Replit/Gemini endpoint for AI analysis
 const API_URL = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/patient-analyzer';
 
+// ✅ نظام إعادة المحاولة التلقائي عند نوم الخادم
+async function fetchWithRetry(url, options, maxRetries = 3) {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
+      
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      return response;
+      
+    } catch (err) {
+      lastError = err;
+      console.log(`[Retry ${attempt}/${maxRetries}] Connection failed:`, err.message);
+      
+      if (attempt < maxRetries) {
+        // Show wake-up message
+        const statusEl = document.getElementById('analysisStatus');
+        if (statusEl) {
+          statusEl.innerHTML = `
+            <div style="background: linear-gradient(135deg, #f39c12, #e67e22); color: white; padding: 20px; border-radius: 12px; text-align: center;">
+              <i class="fas fa-sync fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+              <div style="font-size: 1.1rem; font-weight: bold;">جاري تنشيط الخادم...</div>
+              <div style="font-size: 0.9rem; margin-top: 8px;">المحاولة ${attempt + 1} من ${maxRetries} - انتظر ${5 * attempt} ثواني</div>
+            </div>
+          `;
+        }
+        
+        // Wait before retry (increasing delay)
+        await new Promise(resolve => setTimeout(resolve, 5000 * attempt));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 // pdfjsLib guard - prevent crash if library failed to load
 if (typeof pdfjsLib !== 'undefined') {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
@@ -5004,7 +5047,7 @@ analyzeBtn.addEventListener('click', async () => {
             console.log(`[Batch ${batchNum}] Sending textContent: ${lineCount} lines, header: "${headerPreview}..."`);
           }
           
-          const resp = await fetch(API_URL, {
+          const resp = await fetchWithRetry(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -5122,7 +5165,7 @@ analyzeBtn.addEventListener('click', async () => {
         type: f.mimeType || 'text/plain'
       }));
       
-      const resp = await fetch(API_URL, {
+      const resp = await fetchWithRetry(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -5670,7 +5713,7 @@ async function translateReport() {
         type: f.mimeType || 'text/plain'
       }));
       
-      const resp = await fetch(API_URL, {
+      const resp = await fetchWithRetry(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
