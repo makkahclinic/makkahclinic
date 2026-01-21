@@ -21,7 +21,7 @@ const AuthGuard = {
         appId: "1:992769471393:web:c8a9400210a0e7901011e0"
     },
 
-    OWNER_EMAIL: 'husseinbabsail@gmail.com',
+    OWNER_EMAILS: ['husseinbabsail@gmail.com', 'hbabsail@hotmail.com'],
 
     pagePermissions: {
         'public': ['guest', 'viewer', 'staff', 'member', 'chair', 'admin', 'owner'],
@@ -85,7 +85,7 @@ const AuthGuard = {
     },
 
     async loadUserRole(uid, email) {
-        if (email && email.toLowerCase() === this.OWNER_EMAIL.toLowerCase()) {
+        if (email && this.OWNER_EMAILS.some(e => e.toLowerCase() === email.toLowerCase())) {
             this.userRole = 'owner';
             this.userData = {
                 role: 'owner',
