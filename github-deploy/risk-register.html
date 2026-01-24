@@ -666,7 +666,13 @@
         let isSaving = false;
         
         async function loadMasterAndLibrary() {
-            if (!WEB_APP_URL) return;
+            if (!WEB_APP_URL) {
+                buildRiskDropdown();
+                fillSelect('owner', [], 'أدخل يدوياً...');
+                fillSelect('category', [], 'أدخل يدوياً...');
+                fillSelect('source', [], 'أدخل يدوياً...');
+                return;
+            }
             
             try {
                 const mRes = await fetch(WEB_APP_URL + '?action=master');
@@ -675,16 +681,22 @@
                     MASTER = mData;
                     fillSelect('owner', mData.owners || [], 'اختر المسؤول...');
                 }
-            } catch (e) { console.log('Master load failed'); }
+            } catch (e) { 
+                console.log('Master load failed');
+                fillSelect('owner', [], 'أدخل يدوياً...');
+            }
             
             try {
                 const lRes = await fetch(WEB_APP_URL + '?action=library');
                 const lData = await lRes.json();
                 if (lData.ok) {
                     LIBRARY = lData.items || [];
-                    buildRiskDropdown();
                 }
-            } catch (e) { console.log('Library load failed'); }
+            } catch (e) { 
+                console.log('Library load failed'); 
+            }
+            
+            buildRiskDropdown();
         }
         
         function fillSelect(selectId, items, placeholder) {
