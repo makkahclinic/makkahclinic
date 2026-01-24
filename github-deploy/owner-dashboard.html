@@ -2592,13 +2592,21 @@
             }
             
             try {
-                // البحث عن الموظف بالإيميل في staff_roles
-                const snapshot = await db.collection('staff_roles').where('email', '==', email).get();
+                // البحث عن الموظف بالإيميل في staff_roles (بحث غير حساس لحالة الحروف)
+                const snapshot = await db.collection('staff_roles').get();
+                let foundDoc = null;
                 
-                if (!snapshot.empty) {
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const storedEmail = (data.email || '').toLowerCase();
+                    if (storedEmail === email) {
+                        foundDoc = doc;
+                    }
+                });
+                
+                if (foundDoc) {
                     // تحديث صلاحية insurance
-                    const docRef = snapshot.docs[0].ref;
-                    await docRef.update({
+                    await foundDoc.ref.update({
                         'permissions.insurance': true,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
