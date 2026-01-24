@@ -893,6 +893,25 @@
                         <span class="value success" id="stat-risks-resolved">-</span>
                     </div>
                 </div>
+                <div class="stats-box" id="insuranceStatsBox" data-system="insurance" style="display:none;">
+                    <h4><i class="fas fa-file-invoice-dollar"></i> التأمين الطبي</h4>
+                    <div class="stats-row">
+                        <span class="label">في الانتظار</span>
+                        <span class="value danger" id="stat-insurance-pending">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">قيد التحليل</span>
+                        <span class="value warning" id="stat-insurance-analyzing">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">تحت الطباعة</span>
+                        <span class="value" id="stat-insurance-printing">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">تم التسليم</span>
+                        <span class="value success" id="stat-insurance-delivered">-</span>
+                    </div>
+                </div>
             </div>
 
             <!-- روابط سريعة -->
@@ -1419,6 +1438,57 @@
                 refreshBtn.classList.remove('loading');
             }
         }
+        
+        // دالة تحميل إحصائيات التأمين
+        async function loadInsuranceStats() {
+            try {
+                // جلب بيانات الحالات من Firestore
+                const casesSnapshot = await db.collection('insurance_cases').get();
+                let pending = 0, analyzing = 0, printing = 0, delivered = 0;
+                
+                casesSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    const status = data.status || 'pending';
+                    
+                    if (status === 'pending' || status === 'في الانتظار') pending++;
+                    else if (status === 'analyzing' || status === 'قيد التحليل') analyzing++;
+                    else if (status === 'printing' || status === 'تحت الطباعة') printing++;
+                    else if (status === 'delivered' || status === 'تم التسليم') delivered++;
+                });
+                
+                document.getElementById('stat-insurance-pending').textContent = pending;
+                document.getElementById('stat-insurance-analyzing').textContent = analyzing;
+                document.getElementById('stat-insurance-printing').textContent = printing;
+                document.getElementById('stat-insurance-delivered').textContent = delivered;
+                
+                console.log('Insurance stats loaded:', { pending, analyzing, printing, delivered });
+            } catch (e) {
+                console.error('Error loading insurance stats:', e);
+                // حاول من localStorage كبديل
+                try {
+                    const stored = localStorage.getItem('insuranceCases');
+                    if (stored) {
+                        const cases = JSON.parse(stored);
+                        let pending = 0, analyzing = 0, printing = 0, delivered = 0;
+                        
+                        cases.forEach(c => {
+                            const status = c.status || 'pending';
+                            if (status === 'pending' || status === 'في الانتظار') pending++;
+                            else if (status === 'analyzing' || status === 'قيد التحليل') analyzing++;
+                            else if (status === 'printing' || status === 'تحت الطباعة') printing++;
+                            else if (status === 'delivered' || status === 'تم التسليم') delivered++;
+                        });
+                        
+                        document.getElementById('stat-insurance-pending').textContent = pending;
+                        document.getElementById('stat-insurance-analyzing').textContent = analyzing;
+                        document.getElementById('stat-insurance-printing').textContent = printing;
+                        document.getElementById('stat-insurance-delivered').textContent = delivered;
+                    }
+                } catch (lsErr) {
+                    console.log('localStorage fallback also failed');
+                }
+            }
+        }
 
         // دالة تحديث أيقونة الطوارئ الذكية
         async function updateEocSmartCard() {
@@ -1885,6 +1955,9 @@
             if (roleData.role === 'admin' || roleData.role === 'owner' || (roleData.permissions && roleData.permissions.insurance === true)) {
                 const insuranceNav = document.getElementById('insuranceNavItem');
                 if (insuranceNav) insuranceNav.style.display = '';
+                const insuranceStats = document.getElementById('insuranceStatsBox');
+                if (insuranceStats) insuranceStats.style.display = '';
+                loadInsuranceStats();
             }
 
             document.body.classList.add('authenticated');
