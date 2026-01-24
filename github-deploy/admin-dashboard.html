@@ -1218,7 +1218,7 @@
                 const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
-                    fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
+                    fetch(APIs.risks + '?action=getRisks').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
                     apiCall(APIs.rounds, 'getMetrics', {}),
                     fetchJsonp(APIs.needlestick + '?action=data').catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
                     fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
@@ -1286,17 +1286,21 @@
                     console.warn('Incidents API failed:', incidentsRes);
                 }
 
-                // سجل المخاطر - يستخدم ok وليس success
-                if (risksRes.ok) {
-                    const r = risksRes;
-                    // ext = خارجي، total = الإجمالي، high/med/low = المستويات
-                    const activeRisks = r.total || (r.high || 0) + (r.med || 0) + (r.low || 0);
-                    document.getElementById('kpi-risks-active').textContent = activeRisks;
-                    document.getElementById('kpi-risks-high').textContent = r.high ? `${r.high} عالي` : (r.ext ? `${r.ext} خارجي` : '');
-                    document.getElementById('stat-risks-high').textContent = r.high || 0;
-                    document.getElementById('stat-risks-medium').textContent = r.med || r.medium || 0;
-                    document.getElementById('stat-risks-low').textContent = r.low || 0;
-                    document.getElementById('stat-risks-resolved').textContent = r.resolved || r.closed || 0;
+                // سجل المخاطر - يستخدم success و data
+                if (risksRes.success && risksRes.data) {
+                    const risks = risksRes.data;
+                    const openRisks = risks.filter(r => r.status !== 'مغلق');
+                    const high = openRisks.filter(r => r.level === 'حرج' || r.level === 'عالي').length;
+                    const med = openRisks.filter(r => r.level === 'متوسط').length;
+                    const low = openRisks.filter(r => r.level === 'منخفض').length;
+                    const closed = risks.filter(r => r.status === 'مغلق').length;
+                    
+                    document.getElementById('kpi-risks-active').textContent = openRisks.length;
+                    document.getElementById('kpi-risks-high').textContent = high ? `${high} عالي` : '';
+                    document.getElementById('stat-risks-high').textContent = high;
+                    document.getElementById('stat-risks-medium').textContent = med;
+                    document.getElementById('stat-risks-low').textContent = low;
+                    document.getElementById('stat-risks-resolved').textContent = closed;
                 } else {
                     console.warn('Risks API failed:', risksRes);
                 }
@@ -1850,7 +1854,13 @@
             }
 
             // تنبيهات المخاطر العالية
-            const risksHigh = risks.high || risks.data?.high || 0;
+            let risksHigh = 0;
+            if (risks.success && risks.data) {
+                const openRisks = risks.data.filter(r => r.status !== 'مغلق');
+                risksHigh = openRisks.filter(r => r.level === 'حرج' || r.level === 'عالي').length;
+            } else {
+                risksHigh = risks.high || 0;
+            }
             if (risksHigh > 0) {
                 alerts.push({
                     type: 'warning',
