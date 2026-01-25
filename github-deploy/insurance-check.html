@@ -6514,34 +6514,128 @@ function printAndTrack() {
         return;
       }
       
+      const doctorName = document.getElementById('doctorName')?.value || 'غير محدد';
+      const now = new Date();
+      const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(now);
+      const gregorianDate = new Intl.DateTimeFormat('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' }).format(now);
+      
       printWindow.document.write(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
           <meta charset="UTF-8">
           <title>طباعة التقرير - مجمع مكة الطبي</title>
-          <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+          <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
           <style>
-            * { font-family: 'Tajawal', sans-serif; direction: rtl; box-sizing: border-box; }
-            body { padding: 20px; background: white; color: #000; margin: 0; }
-            table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-            th, td { border: 1px solid #333; padding: 8px; text-align: right; }
-            th { background: #1e3a5f; color: white; }
-            h1, h2, h3, h4 { color: #1e3a5f; }
-            .print-header-bar { background: #1e3a5f; color: white; padding: 15px 20px; text-align: center; margin: -20px -20px 20px; }
-            .print-header-bar h2 { margin: 0; font-size: 20px; }
-            .print-btn { background: #c9a962; color: #1e3a5f; padding: 15px 50px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin: 20px auto; display: block; }
-            .print-btn:hover { background: #d4b872; }
-            @media print { .print-btn, .print-header-bar { display: none; } body { padding: 0; } }
+            * { font-family: 'Tajawal', sans-serif; direction: rtl; box-sizing: border-box; margin: 0; padding: 0; }
+            body { padding: 0; background: white; color: #000; }
+            
+            /* Header with Logo */
+            .report-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding: 20px 30px;
+              border-bottom: 4px solid #c9a962;
+              background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8a 100%);
+              color: white;
+            }
+            .header-logo { width: 80px; height: auto; }
+            .header-center { text-align: center; flex: 1; }
+            .header-center h1 { font-size: 22px; font-weight: 800; margin-bottom: 5px; color: #c9a962; }
+            .header-center p { font-size: 14px; opacity: 0.9; }
+            .header-dates { text-align: left; font-size: 12px; line-height: 1.8; }
+            
+            /* Doctor Info */
+            .doctor-info {
+              background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+              padding: 15px 30px;
+              border-bottom: 2px solid #c9a962;
+              text-align: center;
+            }
+            .doctor-info h2 { color: #1e3a5f; font-size: 18px; margin: 0; }
+            .doctor-info span { color: #c9a962; font-weight: 800; }
+            
+            /* Content */
+            .content { padding: 20px 30px; }
+            
+            /* Tables */
+            table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 11px; }
+            th, td { border: 1px solid #1e3a5f; padding: 10px 8px; text-align: right; }
+            th { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8a 100%); color: white; font-weight: 700; }
+            tr:nth-child(even) { background: #f8f9fa; }
+            
+            /* Status Colors */
+            td:has(✅), .status-approved { background: #d4edda !important; color: #155724; }
+            td:has(⚠️), .status-warning { background: #fff3cd !important; color: #856404; }
+            td:has(🚫), td:has(❌), .status-rejected { background: #f8d7da !important; color: #721c24; }
+            
+            /* Section Headers */
+            h2, h3, h4 { color: #1e3a5f; margin: 20px 0 10px; padding-bottom: 5px; border-bottom: 2px solid #c9a962; }
+            h2 { font-size: 16px; }
+            h3 { font-size: 14px; }
+            h4 { font-size: 13px; border-bottom: 1px solid #ddd; }
+            
+            /* Emoji styling */
+            .emoji { font-size: 14px; margin-left: 5px; }
+            
+            /* Footer */
+            .report-footer {
+              margin-top: 30px;
+              padding: 15px 30px;
+              background: #1e3a5f;
+              color: white;
+              text-align: center;
+              font-size: 11px;
+            }
+            .report-footer .gold { color: #c9a962; }
+            
+            /* Print Button */
+            .print-btn-container { padding: 20px; text-align: center; background: #f5f5f5; }
+            .print-btn { background: linear-gradient(135deg, #c9a962 0%, #d4b872 100%); color: #1e3a5f; padding: 18px 60px; border: none; border-radius: 10px; font-size: 20px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 15px rgba(201,169,98,0.4); }
+            .print-btn:hover { transform: scale(1.02); }
+            
+            @media print {
+              .print-btn-container { display: none !important; }
+              body { padding: 0; }
+              * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            }
           </style>
         </head>
         <body>
-          <div class="print-header-bar">
-            <h2>🖨️ تقرير مراجعة جودة الرعاية الطبية - مجمع مكة الطبي</h2>
+          <div class="print-btn-container">
+            <button class="print-btn" onclick="window.print()">🖨️ اضغط هنا للطباعة</button>
           </div>
-          <button class="print-btn" onclick="window.print()">🖨️ اضغط هنا للطباعة</button>
-          ${printContent}
-          <button class="print-btn" onclick="window.print()">🖨️ اضغط هنا للطباعة</button>
+          
+          <div class="report-header">
+            <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="شعار المجمع" class="header-logo">
+            <div class="header-center">
+              <h1>مجمع مكة الطبي بالزاهر</h1>
+              <p>قسم متابعة الجودة والتدقيق الطبي</p>
+            </div>
+            <div class="header-dates">
+              <div>${hijriDate}</div>
+              <div>${gregorianDate}</div>
+            </div>
+          </div>
+          
+          <div class="doctor-info">
+            <h2>تقرير مراجعة جودة الرعاية الطبية</h2>
+            <p style="margin-top:8px;">الطبيب المعالج: <span>${doctorName}</span></p>
+          </div>
+          
+          <div class="content">
+            ${printContent}
+          </div>
+          
+          <div class="report-footer">
+            <p>تقرير صادر عن <span class="gold">قسم متابعة الجودة والتدقيق الطبي</span> - مجمع مكة الطبي بالزاهر</p>
+            <p style="margin-top:5px;">موافق مع حوكمة المجمع ومتطلبات CBAHI</p>
+          </div>
+          
+          <div class="print-btn-container">
+            <button class="print-btn" onclick="window.print()">🖨️ اضغط هنا للطباعة</button>
+          </div>
         </body>
         </html>
       `);
