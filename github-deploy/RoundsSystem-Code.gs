@@ -1343,16 +1343,50 @@ function getChecklist(taskId, roundName) {
 function getTaskResponsibles(taskId, roundName) {
   const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
   
-  // Find matching task
-  const task = masterTasks.find(t => {
-    if (String(t.TaskID) === String(taskId)) return true;
-    if (t.Round_Name_AR === roundName) return true;
-    if (t.Round_Name_EN === roundName) return true;
-    if (t.Round_Name === roundName) return true;
-    return false;
-  });
+  // Normalize strings for comparison
+  function normalize(str) {
+    return String(str || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  }
   
-  if (!task) return [];
+  const searchTaskId = String(taskId || '').trim();
+  const searchRoundName = normalize(roundName);
+  
+  // Find matching task - try exact TaskID first
+  let task = null;
+  
+  // Priority 1: Exact TaskID match
+  if (searchTaskId) {
+    task = masterTasks.find(t => String(t.TaskID || '').trim() === searchTaskId);
+  }
+  
+  // Priority 2: Exact round name match
+  if (!task && searchRoundName) {
+    task = masterTasks.find(t => {
+      const nameAR = normalize(t.Round_Name_AR);
+      const nameEN = normalize(t.Round_Name_EN);
+      const name = normalize(t.Round_Name);
+      return nameAR === searchRoundName || nameEN === searchRoundName || name === searchRoundName;
+    });
+  }
+  
+  // Priority 3: Partial match (contains)
+  if (!task && searchRoundName) {
+    task = masterTasks.find(t => {
+      const nameAR = normalize(t.Round_Name_AR);
+      const nameEN = normalize(t.Round_Name_EN);
+      const name = normalize(t.Round_Name);
+      return nameAR.includes(searchRoundName) || searchRoundName.includes(nameAR) ||
+             nameEN.includes(searchRoundName) || searchRoundName.includes(nameEN) ||
+             name.includes(searchRoundName) || searchRoundName.includes(name);
+    });
+  }
+  
+  if (!task) {
+    Logger.log('getTaskResponsibles: No task found for taskId=' + taskId + ', roundName=' + roundName);
+    return [];
+  }
+  
+  Logger.log('getTaskResponsibles: Found task ' + (task.TaskID || task.Round_Name_AR) + ' for roundName=' + roundName);
   
   // Extract Responsible_1 through Responsible_19
   const responsibles = [];
@@ -1362,6 +1396,8 @@ function getTaskResponsibles(taskId, roundName) {
       responsibles.push(val.trim());
     }
   }
+  
+  Logger.log('getTaskResponsibles: Found ' + responsibles.length + ' responsibles: ' + responsibles.join(', '));
   
   return responsibles;
 }
