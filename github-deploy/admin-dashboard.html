@@ -1054,7 +1054,8 @@
             needlestick: "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec",
             calibration: "https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec",
             maintenance: "https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec",
-            eoc: "https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec"
+            eoc: "https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec",
+            insurance: "https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec"
         };
         
         // دالة حساب إحصائيات المعايرة (نفس منطق calibration.html)
@@ -1443,32 +1444,22 @@
             }
         }
         
-        // دالة تحميل إحصائيات التأمين
+        // دالة تحميل إحصائيات التأمين من Google Apps Script
         async function loadInsuranceStats() {
             try {
-                // جلب بيانات الحالات من Firestore (Firebase V9 modular syntax)
-                const casesSnapshot = await getDocs(collection(db, 'insurance_cases'));
-                let pending = 0, analyzing = 0, printing = 0, delivered = 0;
+                const result = await fetchJsonp(APIs.insurance + '?action=insuranceStats&callback=_');
                 
-                casesSnapshot.forEach(docSnap => {
-                    const data = docSnap.data();
-                    const status = data.status || 'pending';
-                    
-                    if (status === 'pending' || status === 'في الانتظار') pending++;
-                    else if (status === 'analyzing' || status === 'قيد التحليل') analyzing++;
-                    else if (status === 'printing' || status === 'تحت الطباعة') printing++;
-                    else if (status === 'delivered' || status === 'تم التسليم') delivered++;
-                });
-                
-                document.getElementById('stat-insurance-pending').textContent = pending;
-                document.getElementById('stat-insurance-analyzing').textContent = analyzing;
-                document.getElementById('stat-insurance-printing').textContent = printing;
-                document.getElementById('stat-insurance-delivered').textContent = delivered;
-                
-                console.log('Insurance stats loaded:', { pending, analyzing, printing, delivered });
+                if (result && result.ok) {
+                    document.getElementById('stat-insurance-pending').textContent = result.pending || 0;
+                    document.getElementById('stat-insurance-analyzing').textContent = result.analyzing || 0;
+                    document.getElementById('stat-insurance-printing').textContent = result.printing || 0;
+                    document.getElementById('stat-insurance-delivered').textContent = result.delivered || 0;
+                    console.log('Insurance stats loaded:', result);
+                } else {
+                    throw new Error('Invalid response');
+                }
             } catch (e) {
                 console.error('Error loading insurance stats:', e);
-                // إظهار أصفار بدلاً من شُرط عند فشل التحميل
                 document.getElementById('stat-insurance-pending').textContent = '0';
                 document.getElementById('stat-insurance-analyzing').textContent = '0';
                 document.getElementById('stat-insurance-printing').textContent = '0';

@@ -115,6 +115,9 @@ function handleRequest(e) {
       case 'getDeliveryLog':
         result = getDeliveryLog_();
         break;
+      case 'insuranceStats':
+        result = getInsuranceStats();
+        break;
       default:
         result = { success: false, error: 'Unknown action: ' + action };
     }
@@ -1303,4 +1306,58 @@ function resetDoctorStats() {
   
   Logger.log('✅ تم حذف كل بيانات DoctorStats');
   return { success: true, message: 'تم إعادة تعيين إحصائيات الأطباء' };
+}
+
+/**
+ * الحصول على إحصائيات التأمين الطبي للوحة التحكم
+ * تُستخدم لعرض بطاقات الإحصائيات في admin-dashboard
+ */
+function getInsuranceStats() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const tasksSheet = ss.getSheetByName('Tasks');
+  
+  if (!tasksSheet || tasksSheet.getLastRow() <= 1) {
+    return { ok: true, success: true, pending: 0, analyzing: 0, printing: 0, delivered: 0 };
+  }
+  
+  const data = tasksSheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  // البحث عن عمود الحالة
+  let statusIdx = headers.indexOf('الحالة');
+  if (statusIdx === -1) statusIdx = headers.indexOf('Status');
+  if (statusIdx === -1) statusIdx = headers.indexOf('status');
+  if (statusIdx === -1) statusIdx = 6; // العمود السابع افتراضياً
+  
+  let pending = 0, analyzing = 0, printing = 0, delivered = 0;
+  
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0]) continue; // تخطي الصفوف الفارغة
+    
+    const status = (row[statusIdx] || '').toString().toLowerCase().trim();
+    
+    if (status === 'pending' || status === 'في الانتظار' || status === 'جديد' || status === 'new') {
+      pending++;
+    } else if (status === 'analyzing' || status === 'قيد التحليل' || status === 'تحليل' || status === 'processing') {
+      analyzing++;
+    } else if (status === 'printing' || status === 'تحت الطباعة' || status === 'طباعة' || status === 'ready') {
+      printing++;
+    } else if (status === 'delivered' || status === 'تم التسليم' || status === 'مسلم' || status === 'completed' || status === 'done') {
+      delivered++;
+    } else {
+      // أي حالة أخرى تُعتبر في الانتظار
+      pending++;
+    }
+  }
+  
+  return { 
+    ok: true, 
+    success: true, 
+    pending: pending, 
+    analyzing: analyzing, 
+    printing: printing, 
+    delivered: delivered,
+    total: pending + analyzing + printing + delivered
+  };
 }
