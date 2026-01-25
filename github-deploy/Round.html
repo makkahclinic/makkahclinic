@@ -2291,28 +2291,44 @@
       try {
         const data = await callApi('getChecklist', { taskId });
         
-        // Get task-specific responsibles from Assigned_To field
+        // Get task-specific responsibles from Responsible_1 to Responsible_5 columns
         let taskResponsibles = [];
+        
+        // Helper function to extract responsibles from task object
+        function extractResponsibles(task) {
+          const responsibles = [];
+          if (!task) return responsibles;
+          
+          // Get from Responsible_1 through Responsible_5
+          for (let i = 1; i <= 5; i++) {
+            const val = task['Responsible_' + i];
+            if (val && typeof val === 'string' && val.trim()) {
+              responsibles.push(val.trim());
+            }
+          }
+          return responsibles;
+        }
         
         // Try to get from API response first
         if (data.responsibles && data.responsibles.length > 0) {
           taskResponsibles = data.responsibles;
-        } 
-        // Try to get from task data
-        else if (data.task && data.task.Assigned_To) {
-          // Assigned_To can be comma-separated names
-          taskResponsibles = data.task.Assigned_To.split(/[,،]/).map(s => s.trim()).filter(Boolean);
         }
+        // Try to extract from task data (Responsible_1 to Responsible_5)
+        else if (data.task) {
+          taskResponsibles = extractResponsibles(data.task);
+        }
+        
         // Try to find in MASTER_TASKS by taskId or roundName
-        else {
+        if (!taskResponsibles.length) {
           const matchingTask = MASTER_TASKS.find(t => 
-            t.TaskID === taskId || 
+            String(t.TaskID) === String(taskId) || 
             t.Round_Name_AR === roundName || 
             t.Round_Name === roundName ||
+            t.Round_Name_EN === roundName ||
             t.Area === roundName
           );
-          if (matchingTask && matchingTask.Assigned_To) {
-            taskResponsibles = matchingTask.Assigned_To.split(/[,،]/).map(s => s.trim()).filter(Boolean);
+          if (matchingTask) {
+            taskResponsibles = extractResponsibles(matchingTask);
           }
         }
         
