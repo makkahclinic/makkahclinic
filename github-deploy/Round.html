@@ -2291,7 +2291,39 @@
       try {
         const data = await callApi('getChecklist', { taskId });
         
-        currentChecklist = { taskId, roundName, task: data.task || {}, items: data.items || [], responsibles: data.responsibles || STAFF_LIST || [] };
+        // Get task-specific responsibles from Assigned_To field
+        let taskResponsibles = [];
+        
+        // Try to get from API response first
+        if (data.responsibles && data.responsibles.length > 0) {
+          taskResponsibles = data.responsibles;
+        } 
+        // Try to get from task data
+        else if (data.task && data.task.Assigned_To) {
+          // Assigned_To can be comma-separated names
+          taskResponsibles = data.task.Assigned_To.split(/[,،]/).map(s => s.trim()).filter(Boolean);
+        }
+        // Try to find in MASTER_TASKS by taskId or roundName
+        else {
+          const matchingTask = MASTER_TASKS.find(t => 
+            t.TaskID === taskId || 
+            t.Round_Name_AR === roundName || 
+            t.Round_Name === roundName ||
+            t.Area === roundName
+          );
+          if (matchingTask && matchingTask.Assigned_To) {
+            taskResponsibles = matchingTask.Assigned_To.split(/[,،]/).map(s => s.trim()).filter(Boolean);
+          }
+        }
+        
+        // Fallback to STAFF_LIST only if no specific responsibles found
+        if (!taskResponsibles.length) {
+          taskResponsibles = STAFF_LIST || [];
+        }
+        
+        console.log('Task responsibles for', roundName, ':', taskResponsibles);
+        
+        currentChecklist = { taskId, roundName, task: data.task || {}, items: data.items || [], responsibles: taskResponsibles };
         renderChecklistForm();
       } catch (err) {
         console.error('Checklist error:', err);
