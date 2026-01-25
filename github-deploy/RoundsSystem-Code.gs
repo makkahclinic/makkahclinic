@@ -1275,7 +1275,10 @@ function verifyPasscode(staffName, passcode, checkResolvePermission = false) {
 }
 
 function getChecklist(taskId, roundName) {
-  if (!taskId) return { items: [], responsibles: getStaffList() };
+  // Get task-specific responsibles from MASTER_TASKS
+  const taskResponsibles = getTaskResponsibles(taskId, roundName);
+  
+  if (!taskId) return { items: [], responsibles: taskResponsibles.length ? taskResponsibles : getStaffList() };
   
   const roundPrefix = `R${String(taskId).padStart(2, '0')}_`;
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -1294,7 +1297,7 @@ function getChecklist(taskId, roundName) {
   }
   
   const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return { items: [], responsibles: getStaffList() };
+  if (data.length < 2) return { items: [], responsibles: taskResponsibles.length ? taskResponsibles : getStaffList() };
   
   const headers = data[0].map(h => String(h || '').trim());
   
@@ -1333,15 +1336,43 @@ function getChecklist(taskId, roundName) {
     }
   }
   
-  return { items, responsibles: getStaffList() };
+  return { items, responsibles: taskResponsibles.length ? taskResponsibles : getStaffList() };
+}
+
+// Helper function to get task-specific responsibles from Responsible_1 to Responsible_19
+function getTaskResponsibles(taskId, roundName) {
+  const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
+  
+  // Find matching task
+  const task = masterTasks.find(t => {
+    if (String(t.TaskID) === String(taskId)) return true;
+    if (t.Round_Name_AR === roundName) return true;
+    if (t.Round_Name_EN === roundName) return true;
+    if (t.Round_Name === roundName) return true;
+    return false;
+  });
+  
+  if (!task) return [];
+  
+  // Extract Responsible_1 through Responsible_19
+  const responsibles = [];
+  for (let i = 1; i <= 19; i++) {
+    const val = task['Responsible_' + i];
+    if (val && typeof val === 'string' && val.trim()) {
+      responsibles.push(val.trim());
+    }
+  }
+  
+  return responsibles;
 }
 
 function getChecklistFromUnified(taskId, roundName) {
+  const taskResponsibles = getTaskResponsibles(taskId, roundName);
   const sheet = getSheet('Checklists');
-  if (!sheet) return { items: [], responsibles: getStaffList() };
+  if (!sheet) return { items: [], responsibles: taskResponsibles.length ? taskResponsibles : getStaffList() };
   
   const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return { items: [], responsibles: getStaffList() };
+  if (data.length < 2) return { items: [], responsibles: taskResponsibles.length ? taskResponsibles : getStaffList() };
   
   const headers = data[0];
   
@@ -1381,7 +1412,7 @@ function getChecklistFromUnified(taskId, roundName) {
     }
   }
   
-  return { items, responsibles: getStaffList() };
+  return { items, responsibles: taskResponsibles.length ? taskResponsibles : getStaffList() };
 }
 
 function getStaffList() {
