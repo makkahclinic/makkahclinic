@@ -6506,7 +6506,46 @@ function printAndTrack() {
   // تأخير بسيط للسماح للمتصفح بتطبيق الأنماط
   setTimeout(() => {
     try {
-      window.print();
+      // Try direct print first
+      if (window.print) {
+        window.print();
+      }
+      
+      // If inside iframe, try opening in new window
+      if (window.self !== window.top) {
+        console.log('[Print] Detected iframe, trying new window approach...');
+        const printContent = document.getElementById('reportContent').innerHTML;
+        const printWindow = window.open('', '_blank', 'width=900,height=700');
+        if (printWindow) {
+          printWindow.document.write(`
+            <!DOCTYPE html>
+            <html lang="ar" dir="rtl">
+            <head>
+              <meta charset="UTF-8">
+              <title>طباعة التقرير</title>
+              <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+              <style>
+                * { font-family: 'Tajawal', sans-serif; direction: rtl; }
+                body { padding: 20px; background: white; color: #000; }
+                table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+                th, td { border: 1px solid #333; padding: 8px; text-align: right; }
+                th { background: #1e3a5f; color: white; }
+                h1, h2, h3, h4 { color: #1e3a5f; }
+                .print-btn { background: #1e3a5f; color: white; padding: 15px 40px; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; margin: 20px auto; display: block; }
+                @media print { .print-btn { display: none; } }
+              </style>
+            </head>
+            <body>
+              <button class="print-btn" onclick="window.print()">🖨️ طباعة التقرير</button>
+              ${printContent}
+              <button class="print-btn" onclick="window.print()">🖨️ طباعة التقرير</button>
+            </body>
+            </html>
+          `);
+          printWindow.document.close();
+        }
+      }
+      
       console.log('[Print] Print dialog triggered successfully');
     } catch(e) {
       console.error('[Print] Error:', e);
