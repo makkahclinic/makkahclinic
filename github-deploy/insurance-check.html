@@ -3407,10 +3407,17 @@ function selectDoctor(name, specialty) {
   const selectedDiv = document.getElementById('doctorSelected');
   const optionsDiv = document.getElementById('doctorOptions');
   
-  hiddenInput.value = name;
+  if (!name || name.trim() === '') {
+    console.warn('[selectDoctor] Empty doctor name provided');
+    return;
+  }
+  
+  hiddenInput.value = name.trim();
   selectedDiv.querySelector('span').textContent = name + (specialty ? ` - ${specialty}` : '');
   selectedDiv.classList.remove('active');
   optionsDiv.classList.remove('show');
+  
+  console.log('[selectDoctor] Doctor selected:', name, '| Hidden input value:', hiddenInput.value);
   
   // Mark selected option
   optionsDiv.querySelectorAll('.custom-dropdown-option').forEach(opt => {
@@ -6433,6 +6440,15 @@ async function markTaskAsPrinted(taskId) {
 
 // Print and track
 function printAndTrack() {
+  console.log('[Print] Starting print process...');
+  
+  // Check if report exists
+  const reportContent = document.getElementById('reportContent');
+  if (!reportContent || !reportContent.innerHTML.trim()) {
+    showCustomAlert('لا يوجد تقرير للطباعة', 'warning');
+    return;
+  }
+  
   // === تحضير RTL للطباعة ===
   document.documentElement.setAttribute('dir', 'rtl');
   document.documentElement.setAttribute('lang', 'ar');
@@ -6485,10 +6501,18 @@ function printAndTrack() {
     markTaskAsPrinted(currentAnalyzingTaskId);
   }
   
+  console.log('[Print] Opening print dialog...');
+  
   // تأخير بسيط للسماح للمتصفح بتطبيق الأنماط
   setTimeout(() => {
-    window.print();
-  }, 100);
+    try {
+      window.print();
+      console.log('[Print] Print dialog triggered successfully');
+    } catch(e) {
+      console.error('[Print] Error:', e);
+      showCustomAlert('حدث خطأ أثناء الطباعة: ' + e.message, 'error');
+    }
+  }, 200);
 }
 
 // ============================================
