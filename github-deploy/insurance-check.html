@@ -4750,18 +4750,23 @@ async function handleFiles(files) {
           allData.push({ sheet: sheetName, data: cleanedData });
         });
         
-        const processedData = processExcelWithSmartMapping(allData);
+        // Convert Excel to pipe-separated format (matching backend expectation)
+        const textContent = allData.map(s => {
+          return `=== ${s.sheet} ===\n` + s.data.map(row => row.map(cell => cell ?? '').join(' | ')).join('\n');
+        }).join('\n\n');
+        
+        const totalRows = allData.reduce((sum, s) => sum + s.data.length, 0);
         
         // Log for debugging
-        console.log('Total rows:', allData.reduce((sum, s) => sum + s.data.length, 0), 'Sheets:', allData.length);
+        console.log('Total rows:', totalRows, 'Sheets:', allData.length);
         
         filesState.push({ 
           name: f.name, 
           mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           data: base64Excel,
-          textContent: processedData.textContent,
+          textContent: textContent,
           isExcel: true,
-          dataQualityWarnings: processedData.warnings
+          dataQualityWarnings: []
         });
         completedUnits++;
         if (hasProgressUI) fileProgress.value = Math.round((completedUnits / totalUnits) * 100);
