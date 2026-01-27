@@ -2645,6 +2645,73 @@ const TASKS_API_URL = BACKEND_URL;
 // Analysis API - Replit/Gemini endpoint for AI analysis
 const API_URL = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/patient-analyzer';
 
+// ✅ Health Check - إيقاظ الخادم قبل التحليل
+async function wakeUpServer() {
+  const healthUrl = API_URL.replace('/api/patient-analyzer', '/api/health');
+  const statusEl = document.getElementById('analysisStatus');
+  
+  try {
+    // First attempt - quick check
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(healthUrl, { 
+      method: 'GET',
+      signal: controller.signal 
+    });
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      console.log('[Health Check] Server is awake');
+      return true;
+    }
+  } catch (err) {
+    console.log('[Health Check] Server might be sleeping, attempting wake-up...');
+  }
+  
+  // Server is sleeping - show friendly message and retry
+  if (statusEl) {
+    statusEl.innerHTML = `
+      <div style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 30px; border-radius: 16px; text-align: center; box-shadow: 0 4px 20px rgba(139,92,246,0.4);">
+        <i class="fas fa-bed" style="font-size: 3rem; margin-bottom: 15px; animation: bounce 1s infinite;"></i>
+        <div style="font-size: 1.4rem; font-weight: bold; margin-bottom: 10px;">الخادم يستيقظ... ☕</div>
+        <div style="font-size: 1rem; opacity: 0.95;">انتظر لحظات قليلة وسيبدأ التحليل تلقائياً</div>
+        <div style="margin-top: 15px; font-size: 0.85rem; opacity: 0.8;">
+          <i class="fas fa-info-circle"></i> هذا طبيعي بعد فترة عدم استخدام
+        </div>
+      </div>
+      <style>
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+      </style>
+    `;
+  }
+  
+  // Wait and retry with longer timeout
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
+      const response = await fetch(healthUrl, { 
+        method: 'GET',
+        signal: controller.signal 
+      });
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        console.log('[Health Check] Server woke up after attempt ' + attempt);
+        return true;
+      }
+    } catch (err) {
+      console.log('[Health Check] Wake-up attempt ' + attempt + ' failed');
+    }
+  }
+  
+  return false; // Failed to wake up
+}
+
 // ✅ نظام إعادة المحاولة التلقائي عند نوم الخادم
 async function fetchWithRetry(url, options, maxRetries = 3) {
   let lastError;
@@ -4873,7 +4940,7 @@ analyzeBtn.addEventListener('click', async () => {
   
   isAnalyzing = true;
   analyzeBtn.disabled = true;
-  statusText.textContent = 'جاري التدقيق الطبي وفقاً لمعايير الصحة العالمية...';
+  statusText.textContent = 'جاري التحقق من الخادم...';
   statusMsg.style.display = 'flex';
   reportSection.classList.remove('show');
   currentLang = 'ar';
@@ -4882,6 +4949,34 @@ analyzeBtn.addEventListener('click', async () => {
   // Reset ratings
   insuranceRatingValue = 0;
   serviceRatingValue = 0;
+
+  // ✅ Health Check - إيقاظ الخادم أولاً
+  const serverReady = await wakeUpServer();
+  if (!serverReady) {
+    statusText.textContent = '';
+    statusMsg.style.display = 'none';
+    reportContent.innerHTML = `
+      <div style="background:#fee2e2;border:2px solid #ef4444;padding:2rem;border-radius:12px;text-align:center;">
+        <h3 style="color:#dc2626;margin:0 0 1rem;"><i class="fas fa-server"></i> الخادم غير متاح حالياً</h3>
+        <p style="color:#7f1d1d;">تعذر الاتصال بخادم التحليل بعد عدة محاولات</p>
+        <p style="margin-top:1rem;font-size:0.9rem;color:#7f1d1d;">الحلول المقترحة:</p>
+        <ul style="text-align:right;margin:0.5rem 1rem;font-size:0.85rem;color:#7f1d1d;">
+          <li>انتظر دقيقة ثم أعد المحاولة</li>
+          <li>تحقق من اتصال الإنترنت</li>
+          <li>تواصل مع الدعم الفني إذا استمرت المشكلة</li>
+        </ul>
+        <button onclick="document.getElementById('analyzeBtn').click()" style="margin-top:1rem;background:#dc2626;color:white;padding:0.5rem 1.5rem;border:none;border-radius:8px;cursor:pointer;font-family:inherit;">
+          <i class="fas fa-redo"></i> إعادة المحاولة
+        </button>
+      </div>
+    `;
+    reportSection.classList.add('show');
+    isAnalyzing = false;
+    analyzeBtn.disabled = false;
+    return;
+  }
+  
+  statusText.textContent = 'جاري التدقيق الطبي وفقاً لمعايير الصحة العالمية...';
 
   // إضافة النص المكتوب يدوياً كملف نصي
   let filesToSend = [...filesState];
