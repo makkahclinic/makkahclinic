@@ -385,9 +385,12 @@
         .badge-blood { background: #fff3cd; color: #856404; }
         .badge-mucosal { background: #d4edda; color: var(--success); }
         
-        .badge-yes { background: #ffe0e0; color: var(--danger); }
-        .badge-no { background: #d4edda; color: var(--success); }
+        .badge-yes { background: #d4edda; color: var(--success); }
+        .badge-no { background: #ffe0e0; color: var(--danger); }
         .badge-unknown { background: #e8e8e8; color: var(--gray); }
+        .badge-pending { background: #fff3cd; color: #856404; }
+        .text-success { color: var(--success); font-weight: bold; }
+        .text-danger { color: var(--danger); font-weight: bold; }
         
         .indicators-card {
             background: var(--white);
@@ -956,36 +959,60 @@
                 return;
             }
             
-            const recent = data.slice(-20).reverse();
+            const recent = data.slice(-50).reverse();
             
             let html = `<table class="data-table">
                 <thead>
                     <tr>
                         <th>التاريخ</th>
+                        <th>الموظف</th>
                         <th>القسم</th>
                         <th>النوع</th>
                         <th>ملوث</th>
+                        <th>غسل</th>
+                        <th>إبلاغ</th>
+                        <th>تقييم طبي</th>
                         <th>PEP</th>
+                        <th>حالة المتابعة</th>
                     </tr>
                 </thead>
                 <tbody>`;
             
-            recent.forEach(row => {
-                const date = row["تاريخ الحادث"] || row["التاريخ"] || "-";
-                const dept = row["القسم / الوحدة"] || row["القسم"] || "-";
-                const type = row["نوع التعرض"] || "-";
-                const contaminated = row["هل كانت ملوثة؟"] || "-";
-                const pep = (row["PEP"] || row["تم البدء بالعلاج الوقائي"] || "").includes("نعم") ? "نعم" : "لا";
+            recent.forEach((row, idx) => {
+                const date = row["تاريخ الحادث"] || row["التاريخ"] || row["Date"] || "-";
+                const name = row["اسم الموظف"] || row["الاسم"] || row["Name"] || "-";
+                const dept = row["القسم / الوحدة"] || row["القسم"] || row["Department"] || "-";
+                const type = row["نوع التعرض"] || row["نوع الحادث"] || row["Type"] || "-";
+                const contaminated = row["هل كانت ملوثة؟"] || row["ملوثة"] || "-";
+                const washed = (row["تم غسل المنطقة"] || row["غسل"] || "").includes("نعم") ? "✓" : "✗";
+                const reported = (row["تم الإبلاغ"] || row["إبلاغ"] || "").includes("نعم") ? "✓" : "✗";
+                const medical = (row["تم التقييم الطبي"] || row["تقييم طبي"] || "").includes("نعم") ? "✓" : "✗";
+                const pep = (row["PEP"] || row["تم البدء بالعلاج الوقائي"] || row["علاج وقائي"] || "").toLowerCase().includes("نعم") || (row["PEP"] || "").toLowerCase() === "yes" ? "✓" : "✗";
+                const followup = row["حالة المتابعة"] || row["متابعة"] || row["Status"] || "جارية";
                 
-                const typeBadge = type.includes('needle') ? 'needle' : type.includes('blood') ? 'blood' : 'mucosal';
-                const contBadge = contaminated === 'نعم' ? 'yes' : contaminated === 'لا' ? 'no' : 'unknown';
+                // Determine type badge
+                let typeBadge = 'mucosal';
+                if (type.includes('إبر') || type.includes('وخز') || type.toLowerCase().includes('needle')) typeBadge = 'needle';
+                else if (type.includes('دم') || type.toLowerCase().includes('blood')) typeBadge = 'blood';
                 
-                html += `<tr>
+                const contBadge = contaminated === 'نعم' || contaminated.toLowerCase() === 'yes' ? 'yes' : contaminated === 'لا' ? 'no' : 'unknown';
+                
+                // Follow-up status styling
+                let followupClass = 'badge-unknown';
+                if (followup.includes('مكتمل') || followup.includes('مغلق') || followup.toLowerCase().includes('closed')) followupClass = 'badge-yes';
+                else if (followup.includes('جاري') || followup.includes('قيد')) followupClass = 'badge-pending';
+                
+                html += `<tr data-idx="${idx}">
                     <td>${date}</td>
+                    <td>${name}</td>
                     <td>${dept}</td>
                     <td><span class="badge badge-${typeBadge}">${type}</span></td>
                     <td><span class="badge badge-${contBadge}">${contaminated}</span></td>
-                    <td><span class="badge badge-${pep === 'نعم' ? 'yes' : 'no'}">${pep}</span></td>
+                    <td class="${washed === '✓' ? 'text-success' : 'text-danger'}">${washed}</td>
+                    <td class="${reported === '✓' ? 'text-success' : 'text-danger'}">${reported}</td>
+                    <td class="${medical === '✓' ? 'text-success' : 'text-danger'}">${medical}</td>
+                    <td class="${pep === '✓' ? 'text-success' : 'text-danger'}">${pep}</td>
+                    <td><span class="badge ${followupClass}">${followup}</span></td>
                 </tr>`;
             });
             
