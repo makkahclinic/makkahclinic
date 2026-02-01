@@ -392,6 +392,115 @@
         .text-success { color: var(--success); font-weight: bold; }
         .text-danger { color: var(--danger); font-weight: bold; }
         
+        .data-table tbody tr { cursor: pointer; transition: all 0.2s; }
+        .data-table tbody tr:hover { background: #f5f5f5; transform: translateX(-3px); }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--white);
+            border-radius: 16px;
+            max-width: 700px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            background: linear-gradient(135deg, var(--maroon) 0%, var(--maroon-light) 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 16px 16px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h3 { margin: 0; font-size: 18px; }
+        .modal-close {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 35px; height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .modal-close:hover { background: rgba(255,255,255,0.3); }
+        .modal-body { padding: 25px; }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .detail-item {
+            background: #f8f9fa;
+            padding: 12px 15px;
+            border-radius: 10px;
+            border-right: 4px solid var(--maroon);
+        }
+        .detail-item.full { grid-column: 1 / -1; }
+        .detail-label { font-size: 12px; color: var(--gray); margin-bottom: 5px; }
+        .detail-value { font-weight: 700; color: var(--maroon); }
+        .followup-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+            border: 2px solid var(--gold);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .followup-section h4 {
+            color: var(--maroon);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 5px; color: var(--maroon); }
+        .form-control {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        .form-control:focus { border-color: var(--maroon); outline: none; }
+        .btn-save {
+            background: linear-gradient(135deg, var(--maroon) 0%, var(--maroon-light) 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        .btn-save:hover { opacity: 0.9; }
+        .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+        .checkbox-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--maroon); }
+        
         .indicators-card {
             background: var(--white);
             border-radius: 16px;
@@ -1002,7 +1111,9 @@
                 if (followup.includes('مكتمل') || followup.includes('مغلق') || followup.toLowerCase().includes('closed')) followupClass = 'badge-yes';
                 else if (followup.includes('جاري') || followup.includes('قيد')) followupClass = 'badge-pending';
                 
-                html += `<tr data-idx="${idx}">
+                row._rowNumber = idx + 2;
+                
+                html += `<tr data-idx="${idx}" onclick="openCaseModal(displayData[${idx}], ${idx})" title="اضغط لعرض التفاصيل والمتابعة">
                     <td>${date}</td>
                     <td>${name}</td>
                     <td>${dept}</td>
@@ -1018,6 +1129,8 @@
             
             html += '</tbody></table>';
             container.innerHTML = html;
+            
+            window.displayData = data;
         }
         
         function populateDeptFilter(deptCounts) {
@@ -1055,6 +1168,193 @@
             document.getElementById('tableContainer').innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>جاري التحديث...</p></div>';
             loadData();
         }
+        
+        let currentCaseData = null;
+        let currentCaseIndex = -1;
+        
+        function openCaseModal(caseData, idx) {
+            currentCaseData = caseData;
+            currentCaseIndex = idx;
+            
+            const date = caseData["تاريخ الحادث"] || caseData["التاريخ"] || caseData["Date"] || "-";
+            const name = caseData["اسم الموظف"] || caseData["الاسم"] || caseData["Name"] || "-";
+            const dept = caseData["القسم / الوحدة"] || caseData["القسم"] || caseData["Department"] || "-";
+            const type = caseData["نوع التعرض"] || caseData["نوع الحادث"] || caseData["Type"] || "-";
+            const location = caseData["موقع الإصابة"] || caseData["المنطقة المصابة"] || "-";
+            const contaminated = caseData["هل كانت ملوثة؟"] || caseData["ملوثة"] || "-";
+            const source = caseData["مصدر التعرض"] || caseData["المصدر"] || "-";
+            const description = caseData["وصف الحادث"] || caseData["الوصف"] || caseData["Description"] || "-";
+            
+            const washed = (caseData["تم غسل المنطقة"] || caseData["غسل"] || "").includes("نعم");
+            const reported = (caseData["تم الإبلاغ"] || caseData["إبلاغ"] || "").includes("نعم");
+            const medicalEval = (caseData["تم التقييم الطبي"] || caseData["تقييم طبي"] || "").includes("نعم");
+            const pepStarted = (caseData["PEP"] || caseData["تم البدء بالعلاج الوقائي"] || "").toLowerCase().includes("نعم") || (caseData["PEP"] || "").toLowerCase() === "yes";
+            const followupStatus = caseData["حالة المتابعة"] || caseData["متابعة"] || "جارية";
+            const followupNotes = caseData["ملاحظات المتابعة"] || caseData["ملاحظات"] || "";
+            const followupDate = caseData["تاريخ المتابعة"] || "";
+            const testResults = caseData["نتائج الفحوصات"] || "";
+            
+            const modalBody = document.getElementById('caseModalBody');
+            modalBody.innerHTML = `
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <div class="detail-label">التاريخ</div>
+                        <div class="detail-value">${date}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">اسم الموظف</div>
+                        <div class="detail-value">${name}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">القسم</div>
+                        <div class="detail-value">${dept}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">نوع التعرض</div>
+                        <div class="detail-value">${type}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">موقع الإصابة</div>
+                        <div class="detail-value">${location}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">ملوثة</div>
+                        <div class="detail-value">${contaminated}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">مصدر التعرض</div>
+                        <div class="detail-value">${source}</div>
+                    </div>
+                    <div class="detail-item full">
+                        <div class="detail-label">وصف الحادث</div>
+                        <div class="detail-value">${description}</div>
+                    </div>
+                </div>
+                
+                <div class="followup-section">
+                    <h4><i class="fas fa-clipboard-check"></i> متابعة الحالة</h4>
+                    
+                    <div class="form-group">
+                        <label>الإجراءات المتخذة</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="chkWashed" ${washed ? 'checked' : ''}>
+                                <span>غسل المنطقة</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="chkReported" ${reported ? 'checked' : ''}>
+                                <span>تم الإبلاغ</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="chkMedical" ${medicalEval ? 'checked' : ''}>
+                                <span>تقييم طبي</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="chkPEP" ${pepStarted ? 'checked' : ''}>
+                                <span>بدء PEP</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>حالة المتابعة</label>
+                        <select id="followupStatus" class="form-control">
+                            <option value="جارية" ${followupStatus === 'جارية' ? 'selected' : ''}>جارية</option>
+                            <option value="قيد المتابعة" ${followupStatus === 'قيد المتابعة' ? 'selected' : ''}>قيد المتابعة</option>
+                            <option value="مكتمل" ${followupStatus === 'مكتمل' || followupStatus === 'مغلق' ? 'selected' : ''}>مكتمل</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>تاريخ المتابعة القادمة</label>
+                        <input type="date" id="followupDate" class="form-control" value="${followupDate}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>نتائج الفحوصات</label>
+                        <textarea id="testResults" class="form-control" rows="2" placeholder="نتائج فحوصات HIV, HBV, HCV...">${testResults}</textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>ملاحظات المتابعة</label>
+                        <textarea id="followupNotes" class="form-control" rows="3" placeholder="أي ملاحظات إضافية...">${followupNotes}</textarea>
+                    </div>
+                    
+                    <button class="btn-save" onclick="saveFollowup()" id="saveBtn">
+                        <i class="fas fa-save"></i> حفظ المتابعة
+                    </button>
+                </div>
+            `;
+            
+            document.getElementById('caseModal').classList.add('active');
+        }
+        
+        function closeCaseModal() {
+            document.getElementById('caseModal').classList.remove('active');
+            currentCaseData = null;
+            currentCaseIndex = -1;
+        }
+        
+        async function saveFollowup() {
+            const btn = document.getElementById('saveBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+            
+            const updateData = {
+                "تم غسل المنطقة": document.getElementById('chkWashed').checked ? "نعم" : "لا",
+                "تم الإبلاغ": document.getElementById('chkReported').checked ? "نعم" : "لا",
+                "تم التقييم الطبي": document.getElementById('chkMedical').checked ? "نعم" : "لا",
+                "PEP": document.getElementById('chkPEP').checked ? "نعم" : "لا",
+                "حالة المتابعة": document.getElementById('followupStatus').value,
+                "تاريخ المتابعة": document.getElementById('followupDate').value,
+                "نتائج الفحوصات": document.getElementById('testResults').value,
+                "ملاحظات المتابعة": document.getElementById('followupNotes').value
+            };
+            
+            try {
+                const rowNumber = currentCaseData._rowNumber || (currentCaseIndex + 2);
+                
+                const response = await fetch(API_URL + '?action=updateNeedlestickFollowup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rowNumber, updateData })
+                });
+                
+                const result = await response.json();
+                
+                if (result.ok) {
+                    alert('تم حفظ المتابعة بنجاح ✓');
+                    closeCaseModal();
+                    refreshData();
+                } else {
+                    throw new Error(result.error || 'فشل في الحفظ');
+                }
+            } catch (error) {
+                console.error('Save error:', error);
+                alert('حدث خطأ: ' + error.message + '\n\nسيتم حفظ البيانات محلياً.');
+                
+                Object.assign(currentCaseData, updateData);
+                closeCaseModal();
+                renderTable(allData);
+            }
+            
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> حفظ المتابعة';
+        }
+        
+        document.getElementById('caseModal').addEventListener('click', function(e) {
+            if (e.target === this) closeCaseModal();
+        });
     </script>
+    
+    <div id="caseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-syringe"></i> تفاصيل حالة الوخز</h3>
+                <button class="modal-close" onclick="closeCaseModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="caseModalBody"></div>
+        </div>
+    </div>
 </body>
 </html>
