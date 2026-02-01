@@ -397,6 +397,97 @@
         .cell-ext { background: var(--ext); color: #fff; }
         .cell-high { background: var(--high); color: #fff; }
         .cell-med { background: var(--med); color: #000; }
+        
+        .risk-table tbody tr { cursor: pointer; transition: all 0.2s; }
+        .risk-table tbody tr:hover { background: rgba(201,169,98,0.15); transform: translateX(-3px); }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-radius: 16px;
+            max-width: 800px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 2px solid var(--gold);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal-header {
+            background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+            padding: 20px;
+            border-radius: 14px 14px 0 0;
+            border-bottom: 2px solid var(--gold);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h3 { margin: 0; font-size: 1.2rem; color: var(--gold); }
+        .modal-close {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            width: 35px; height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .modal-close:hover { background: rgba(255,255,255,0.2); }
+        .modal-body { padding: 25px; }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .detail-item {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 10px;
+            border-right: 4px solid var(--gold);
+        }
+        .detail-item.full { grid-column: 1 / -1; }
+        .detail-label { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 5px; text-transform: uppercase; }
+        .detail-value { font-weight: 700; color: #fff; font-size: 1rem; }
+        .detail-value.large { font-size: 1.3rem; }
+        .risk-score-display {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 15px;
+        }
+        .score-box {
+            width: 70px; height: 70px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 900;
+        }
+        .score-ext { background: var(--ext); }
+        .score-high { background: var(--high); }
+        .score-med { background: var(--med); color: #000; }
+        .score-low { background: var(--low); color: #000; }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
         .cell-low { background: var(--low); color: #000; }
         
         .toast {
@@ -945,7 +1036,7 @@
                         </thead>
                         <tbody>
                             ${risks.map(r => `
-                                <tr>
+                                <tr onclick="openRiskModal('${r.id}')" title="اضغط لعرض التفاصيل">
                                     <td class="risk-text">${r.risk || '-'}${r.localOnly ? ' <span class="badge" style="margin-right:6px;background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#93c5fd;font-size:0.65rem;">محلي</span>' : ''}</td>
                                     <td><span class="badge" style="background: rgba(201,169,98,0.2); color: var(--gold);">${r.category || '-'}</span></td>
                                     <td style="font-size: 0.8rem;">${r.owner || '-'}</td>
@@ -954,7 +1045,7 @@
                                     <td><span class="badge badge-${getLevelClass(r.level)}">${r.level || '-'}</span></td>
                                     <td><span class="badge badge-${getStatusClass(r.status)}">${r.status || '-'}</span></td>
                                     <td>
-                                        <div class="action-btns">
+                                        <div class="action-btns" onclick="event.stopPropagation()">
                                             <button class="btn btn-sm btn-primary" onclick="editRisk('${r.id}')">
                                                 <i class="fas fa-edit"></i>
                                             </button>
@@ -1247,7 +1338,85 @@
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
         
+        function openRiskModal(riskId) {
+            const risk = allRisks.find(r => r.id === riskId);
+            if (!risk) return;
+            
+            const scoreClass = risk.score >= 16 ? 'ext' : risk.score >= 12 ? 'high' : risk.score >= 6 ? 'med' : 'low';
+            
+            document.getElementById('riskModalBody').innerHTML = `
+                <div class="detail-grid">
+                    <div class="detail-item full">
+                        <div class="detail-label">وصف المخاطرة</div>
+                        <div class="detail-value large">${risk.risk || '-'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">التصنيف</div>
+                        <div class="detail-value">${risk.category || '-'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">المسؤول</div>
+                        <div class="detail-value">${risk.owner || '-'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">مصدر / دليل</div>
+                        <div class="detail-value">${risk.sourceEvidence || '-'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">الحالة</div>
+                        <div class="detail-value"><span class="badge badge-${getStatusClass(risk.status)}">${risk.status || '-'}</span></div>
+                    </div>
+                </div>
+                
+                <div class="risk-score-display">
+                    <div class="score-box score-${scoreClass}">${risk.score || '-'}</div>
+                    <div>
+                        <div style="font-size: 0.85rem; opacity: 0.7;">الاحتمالية × التأثير</div>
+                        <div style="font-size: 1.5rem; font-weight: 800;">${risk.probability || '-'} × ${risk.impact || '-'}</div>
+                        <div><span class="badge badge-${getLevelClass(risk.level)}" style="font-size: 1rem; padding: 5px 15px;">${risk.level || '-'}</span></div>
+                    </div>
+                </div>
+                
+                <div class="detail-item full" style="margin-top: 20px;">
+                    <div class="detail-label">خطة المعالجة / التخفيف</div>
+                    <div class="detail-value">${risk.mitigation || 'لم يتم تحديد خطة معالجة بعد'}</div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="btn btn-primary" onclick="editRisk('${risk.id}'); closeRiskModal();">
+                        <i class="fas fa-edit"></i> تعديل
+                    </button>
+                    <button class="btn btn-danger" onclick="deleteRisk('${risk.id}'); closeRiskModal();">
+                        <i class="fas fa-trash"></i> حذف
+                    </button>
+                    <button class="btn btn-light" onclick="closeRiskModal()">
+                        <i class="fas fa-times"></i> إغلاق
+                    </button>
+                </div>
+            `;
+            
+            document.getElementById('riskModal').classList.add('active');
+        }
+        
+        function closeRiskModal() {
+            document.getElementById('riskModal').classList.remove('active');
+        }
+        
+        document.getElementById('riskModal').addEventListener('click', function(e) {
+            if (e.target === this) closeRiskModal();
+        });
+        
         init();
     </script>
+    
+    <div id="riskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> تفاصيل المخاطرة</h3>
+                <button class="modal-close" onclick="closeRiskModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="riskModalBody"></div>
+        </div>
+    </div>
 </body>
 </html>
