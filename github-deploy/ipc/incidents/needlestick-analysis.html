@@ -743,27 +743,36 @@
             let reportCount = 0;
             let evalCount = 0;
             
-            const typeCounts = { needle: 0, blood: 0, mucosal: 0 };
+            const typeCounts = { 'وخز إبري': 0, 'تعرض للدم': 0, 'تعرض للأغشية': 0, 'أخرى': 0 };
             const deptCounts = {};
             const monthlyData = {};
             
             allData.forEach(row => {
-                const type = (row["نوع التعرض"] || "").trim().toLowerCase();
-                const contaminated = (row["هل كانت ملوثة؟"] || "").trim();
-                const dept = row["القسم / الوحدة"] || row["القسم"] || "غير محدد";
-                const dateStr = row["تاريخ الحادث"] || row["التاريخ"] || "";
-                const pep = (row["PEP"] || row["تم البدء بالعلاج الوقائي"] || "").includes("نعم");
-                const washed = (row["تم غسل المنطقة"] || "").includes("نعم");
-                const reported = (row["تم الإبلاغ"] || "").includes("نعم");
-                const medical = (row["تم التقييم الطبي"] || "").includes("نعم");
+                const typeRaw = (row["نوع التعرض"] || row["نوع الحادث"] || row["Type"] || "").trim();
+                const contaminated = (row["هل كانت ملوثة؟"] || row["ملوثة"] || "").trim();
+                const dept = row["القسم / الوحدة"] || row["القسم"] || row["Department"] || "غير محدد";
+                const dateStr = row["تاريخ الحادث"] || row["التاريخ"] || row["Date"] || "";
+                const pep = (row["PEP"] || row["تم البدء بالعلاج الوقائي"] || row["علاج وقائي"] || "").toLowerCase().includes("نعم") || (row["PEP"] || "").toLowerCase() === "yes";
+                const washed = (row["تم غسل المنطقة"] || row["غسل"] || "").includes("نعم");
+                const reported = (row["تم الإبلاغ"] || row["إبلاغ"] || "").includes("نعم");
+                const medical = (row["تم التقييم الطبي"] || row["تقييم طبي"] || "").includes("نعم");
                 
-                if (contaminated === "نعم") severe++;
+                if (contaminated === "نعم" || contaminated.toLowerCase() === "yes") severe++;
                 if (pep) pepCount++;
                 if (washed) washCount++;
                 if (reported) reportCount++;
                 if (medical) evalCount++;
                 
-                if (typeCounts.hasOwnProperty(type)) typeCounts[type]++;
+                // Map type to Arabic categories
+                let typeKey = 'أخرى';
+                if (typeRaw.includes('إبر') || typeRaw.includes('وخز') || typeRaw.toLowerCase().includes('needle')) {
+                    typeKey = 'وخز إبري';
+                } else if (typeRaw.includes('دم') || typeRaw.toLowerCase().includes('blood')) {
+                    typeKey = 'تعرض للدم';
+                } else if (typeRaw.includes('غشاء') || typeRaw.includes('مخاط') || typeRaw.toLowerCase().includes('mucos')) {
+                    typeKey = 'تعرض للأغشية';
+                }
+                typeCounts[typeKey]++;
                 
                 deptCounts[dept] = (deptCounts[dept] || 0) + 1;
                 
@@ -845,13 +854,32 @@
             const ctx = document.getElementById('typeChart').getContext('2d');
             if (typeChart) typeChart.destroy();
             
+            // Filter out zero values for cleaner chart
+            const labels = [];
+            const values = [];
+            const colors = {
+                'وخز إبري': '#dc3545',
+                'تعرض للدم': '#ffc107', 
+                'تعرض للأغشية': '#28a745',
+                'أخرى': '#6c757d'
+            };
+            const bgColors = [];
+            
+            Object.entries(data).forEach(([key, val]) => {
+                if (val > 0) {
+                    labels.push(key);
+                    values.push(val);
+                    bgColors.push(colors[key] || '#6c757d');
+                }
+            });
+            
             typeChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['وخزي', 'دموي', 'مخاطي'],
+                    labels: labels,
                     datasets: [{
-                        data: [data.needle, data.blood, data.mucosal],
-                        backgroundColor: ['#dc3545', '#ffc107', '#28a745'],
+                        data: values,
+                        backgroundColor: bgColors,
                         borderWidth: 0
                     }]
                 },
