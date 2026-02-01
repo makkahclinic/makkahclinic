@@ -487,6 +487,58 @@
             margin-top: 20px;
             padding-top: 20px;
             border-top: 1px solid rgba(255,255,255,0.1);
+            flex-wrap: wrap;
+        }
+        .modal-form .form-group { margin-bottom: 15px; }
+        .modal-form .form-group.full { grid-column: 1 / -1; }
+        .modal-form .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--gold);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        .modal-form .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+        .modal-form .form-input:focus {
+            outline: none;
+            border-color: var(--gold);
+            background: rgba(255,255,255,0.12);
+        }
+        .modal-form .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .modal-form .followup-section {
+            background: rgba(201,169,98,0.1);
+            border: 1px solid rgba(201,169,98,0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .modal-form .followup-section h4 {
+            color: var(--gold);
+            margin-bottom: 15px;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .modal-form select.form-input {
+            cursor: pointer;
+        }
+        .modal-form select.form-input option {
+            background: #1e293b;
+            color: #fff;
         }
         .cell-low { background: var(--low); color: #000; }
         
@@ -1338,37 +1390,17 @@
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
         
+        let currentRiskId = null;
+        
         function openRiskModal(riskId) {
             const risk = allRisks.find(r => r.id === riskId);
             if (!risk) return;
             
+            currentRiskId = riskId;
             const scoreClass = risk.score >= 16 ? 'ext' : risk.score >= 12 ? 'high' : risk.score >= 6 ? 'med' : 'low';
             
             document.getElementById('riskModalBody').innerHTML = `
-                <div class="detail-grid">
-                    <div class="detail-item full">
-                        <div class="detail-label">وصف المخاطرة</div>
-                        <div class="detail-value large">${risk.risk || '-'}</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">التصنيف</div>
-                        <div class="detail-value">${risk.category || '-'}</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">المسؤول</div>
-                        <div class="detail-value">${risk.owner || '-'}</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">مصدر / دليل</div>
-                        <div class="detail-value">${risk.sourceEvidence || '-'}</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">الحالة</div>
-                        <div class="detail-value"><span class="badge badge-${getStatusClass(risk.status)}">${risk.status || '-'}</span></div>
-                    </div>
-                </div>
-                
-                <div class="risk-score-display">
+                <div class="risk-score-display" style="margin-bottom: 20px;">
                     <div class="score-box score-${scoreClass}">${risk.score || '-'}</div>
                     <div>
                         <div style="font-size: 0.85rem; opacity: 0.7;">الاحتمالية × التأثير</div>
@@ -1377,25 +1409,142 @@
                     </div>
                 </div>
                 
-                <div class="detail-item full" style="margin-top: 20px;">
-                    <div class="detail-label">خطة المعالجة / التخفيف</div>
-                    <div class="detail-value">${risk.mitigation || 'لم يتم تحديد خطة معالجة بعد'}</div>
+                <div class="modal-form">
+                    <div class="form-group full">
+                        <label>وصف المخاطرة</label>
+                        <textarea id="modalRisk" class="form-input" rows="2">${risk.risk || ''}</textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>التصنيف</label>
+                            <input type="text" id="modalCategory" class="form-input" value="${risk.category || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>المسؤول</label>
+                            <input type="text" id="modalOwner" class="form-input" value="${risk.owner || ''}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>مصدر الخطر</label>
+                            <input type="text" id="modalSource" class="form-input" value="${risk.sourceEvidence || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>الحالة</label>
+                            <select id="modalStatus" class="form-input">
+                                <option value="مفتوح" ${risk.status === 'مفتوح' ? 'selected' : ''}>مفتوح</option>
+                                <option value="قيد المعالجة" ${risk.status === 'قيد المعالجة' ? 'selected' : ''}>قيد المعالجة</option>
+                                <option value="مغلق" ${risk.status === 'مغلق' ? 'selected' : ''}>مغلق</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group full">
+                        <label>خطة المعالجة / التخفيف</label>
+                        <textarea id="modalMitigation" class="form-input" rows="3" placeholder="خطوات التخفيف من المخاطرة...">${risk.mitigation || ''}</textarea>
+                    </div>
+                    
+                    <div class="followup-section">
+                        <h4><i class="fas fa-clipboard-check"></i> المتابعة والتطوير</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>تاريخ المراجعة القادمة</label>
+                                <input type="date" id="modalReviewDate" class="form-input" value="${risk.reviewDate || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>الإجراء المطلوب</label>
+                                <select id="modalAction" class="form-input">
+                                    <option value="">اختر...</option>
+                                    <option value="تطوير سياسة" ${risk.action === 'تطوير سياسة' ? 'selected' : ''}>تطوير سياسة</option>
+                                    <option value="تدريب الموظفين" ${risk.action === 'تدريب الموظفين' ? 'selected' : ''}>تدريب الموظفين</option>
+                                    <option value="تحديث إجراء" ${risk.action === 'تحديث إجراء' ? 'selected' : ''}>تحديث إجراء</option>
+                                    <option value="شراء معدات" ${risk.action === 'شراء معدات' ? 'selected' : ''}>شراء معدات</option>
+                                    <option value="متابعة دورية" ${risk.action === 'متابعة دورية' ? 'selected' : ''}>متابعة دورية</option>
+                                    <option value="إغلاق" ${risk.action === 'إغلاق' ? 'selected' : ''}>إغلاق</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group full">
+                            <label>ملاحظات المتابعة</label>
+                            <textarea id="modalNotes" class="form-input" rows="2" placeholder="ملاحظات إضافية...">${risk.notes || ''}</textarea>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="modal-actions">
-                    <button class="btn btn-primary" onclick="editRisk('${risk.id}'); closeRiskModal();">
-                        <i class="fas fa-edit"></i> تعديل
+                    <button class="btn btn-success" onclick="saveRiskModal()">
+                        <i class="fas fa-save"></i> حفظ التغييرات
+                    </button>
+                    <button class="btn btn-warning" onclick="closeRiskFromModal()">
+                        <i class="fas fa-check-circle"></i> إغلاق المخاطرة
                     </button>
                     <button class="btn btn-danger" onclick="deleteRisk('${risk.id}'); closeRiskModal();">
                         <i class="fas fa-trash"></i> حذف
                     </button>
                     <button class="btn btn-light" onclick="closeRiskModal()">
-                        <i class="fas fa-times"></i> إغلاق
+                        <i class="fas fa-times"></i> إلغاء
                     </button>
                 </div>
             `;
             
             document.getElementById('riskModal').classList.add('active');
+        }
+        
+        async function saveRiskModal() {
+            if (!currentRiskId) return;
+            
+            const risk = allRisks.find(r => r.id === currentRiskId);
+            if (!risk) return;
+            
+            risk.risk = document.getElementById('modalRisk').value;
+            risk.category = document.getElementById('modalCategory').value;
+            risk.owner = document.getElementById('modalOwner').value;
+            risk.sourceEvidence = document.getElementById('modalSource').value;
+            risk.status = document.getElementById('modalStatus').value;
+            risk.mitigation = document.getElementById('modalMitigation').value;
+            risk.reviewDate = document.getElementById('modalReviewDate').value;
+            risk.action = document.getElementById('modalAction').value;
+            risk.notes = document.getElementById('modalNotes').value;
+            
+            await saveRiskToSheet(risk);
+            renderTable(allRisks);
+            renderHeatmap();
+            showToast('تم حفظ التغييرات بنجاح', 'success');
+            closeRiskModal();
+        }
+        
+        function closeRiskFromModal() {
+            if (!currentRiskId) return;
+            
+            const risk = allRisks.find(r => r.id === currentRiskId);
+            if (!risk) return;
+            
+            if (confirm('هل تريد إغلاق هذه المخاطرة نهائياً؟')) {
+                risk.status = 'مغلق';
+                risk.closedDate = new Date().toISOString().split('T')[0];
+                saveRiskToSheet(risk);
+                renderTable(allRisks);
+                updateStats();
+                showToast('تم إغلاق المخاطرة', 'success');
+                closeRiskModal();
+            }
+        }
+        
+        async function saveRiskToSheet(risk) {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'saveRisk', risk })
+                });
+                const result = await response.json();
+                if (!result.ok) throw new Error(result.error);
+            } catch (error) {
+                console.error('Save error:', error);
+                localStorage.setItem('risks_' + risk.id, JSON.stringify(risk));
+            }
         }
         
         function closeRiskModal() {
