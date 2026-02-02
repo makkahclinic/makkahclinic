@@ -625,6 +625,16 @@
             font-size: 0.9rem;
             line-height: 1.5;
         }
+        .followup-decision {
+            font-size: 0.85rem;
+            color: var(--gold);
+            margin-bottom: 4px;
+        }
+        .followup-review {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            margin-bottom: 4px;
+        }
         .empty-history {
             text-align: center;
             padding: 20px;
@@ -1539,7 +1549,9 @@
                         <span class="followup-date">${f.date || ''}</span>
                     </div>
                     <div class="followup-owner"><i class="fas fa-user"></i> ${f.owner || '-'}</div>
-                    <div class="followup-note">${f.note || ''}</div>
+                    ${f.decision ? `<div class="followup-decision"><i class="fas fa-gavel"></i> القرار: ${f.decision}</div>` : ''}
+                    ${f.reviewDate ? `<div class="followup-review"><i class="fas fa-calendar-check"></i> المراجعة: ${f.reviewDate}</div>` : ''}
+                    ${f.note ? `<div class="followup-note">${f.note}</div>` : ''}
                 </div>
             `).join('');
         }
@@ -1551,6 +1563,8 @@
             
             const owner = document.getElementById('modalFollowupOwner').value;
             const action = document.getElementById('modalFollowupAction').value;
+            const decision = document.getElementById('modalFollowupDecision').value;
+            const reviewDate = document.getElementById('modalFollowupReviewDate').value;
             const note = document.getElementById('modalFollowupNote').value;
             
             if (!action) {
@@ -1564,17 +1578,25 @@
                 date: new Date().toLocaleDateString('ar-SA'),
                 owner: owner || 'غير محدد',
                 action,
+                decision: decision || '',
+                reviewDate: reviewDate || '',
                 note
             });
+            
+            if (reviewDate) {
+                risk.reviewDate = reviewDate;
+            }
             
             document.getElementById('followupHistory').innerHTML = renderFollowupHistory(risk.followups);
             document.querySelector('.pipeline-stages').innerHTML = renderPipelineStages(risk);
             
             document.getElementById('modalFollowupOwner').value = '';
             document.getElementById('modalFollowupAction').value = '';
+            document.getElementById('modalFollowupDecision').value = '';
+            document.getElementById('modalFollowupReviewDate').value = '';
             document.getElementById('modalFollowupNote').value = '';
             
-            if (action === 'إغلاق نهائي') {
+            if (action === 'إغلاق نهائي' || decision === 'تم الحل') {
                 risk.status = 'مغلق';
                 document.getElementById('modalStatus').value = 'مغلق';
             }
@@ -1656,15 +1678,53 @@
                             <div class="form-group">
                                 <label>نوع الإجراء</label>
                                 <select id="modalFollowupAction" class="form-input">
-                                    <option value="">اختر...</option>
-                                    <option value="تحديد المشكلة">📋 تحديد المشكلة</option>
-                                    <option value="تطوير سياسة">📝 تطوير سياسة</option>
-                                    <option value="اعتماد السياسة">✅ اعتماد السياسة</option>
-                                    <option value="تدريب الموظفين">👥 تدريب الموظفين</option>
-                                    <option value="تنفيذ التغيير">🔧 تنفيذ التغيير</option>
-                                    <option value="تحقق ومراجعة">🔍 تحقق ومراجعة</option>
-                                    <option value="إغلاق نهائي">🏁 إغلاق نهائي</option>
+                                    <option value="">اختر نوع الإجراء...</option>
+                                    <optgroup label="📚 التدريب والتوعية">
+                                        <option value="عمل محاضرة">📢 عمل محاضرة</option>
+                                        <option value="عمل تدريب">🎓 عمل تدريب</option>
+                                        <option value="ورشة عمل">🛠️ ورشة عمل</option>
+                                    </optgroup>
+                                    <optgroup label="🔧 الاستشارات الفنية">
+                                        <option value="استدعاء صيانة">🔧 استدعاء صيانة</option>
+                                        <option value="رأي هندسي">🏗️ استدعاء رأي هندسي</option>
+                                        <option value="رأي طبي">⚕️ استدعاء رأي طبي</option>
+                                        <option value="خبير خارجي">👨‍💼 استدعاء خبير خارجي</option>
+                                        <option value="رأي مالي">💰 استدعاء رأي مالي</option>
+                                    </optgroup>
+                                    <optgroup label="📋 الإدارة والسياسات">
+                                        <option value="بناء سياسة">📝 بناء سياسة</option>
+                                        <option value="تحديث إجراء">🔄 تحديث إجراء</option>
+                                        <option value="قرار إداري">📜 قرار إداري</option>
+                                        <option value="اعتماد رسمي">✅ اعتماد رسمي</option>
+                                    </optgroup>
+                                    <optgroup label="📊 المتابعة">
+                                        <option value="تحقق ومراجعة">🔍 تحقق ومراجعة</option>
+                                        <option value="تقرير تقدم">📈 تقرير تقدم</option>
+                                        <option value="إغلاق نهائي">🏁 إغلاق نهائي</option>
+                                    </optgroup>
+                                    <option value="أخرى">➕ أخرى</option>
                                 </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>القرار / النتيجة</label>
+                                <select id="modalFollowupDecision" class="form-input">
+                                    <option value="">اختر القرار...</option>
+                                    <option value="متابعة دورية">🔄 وضع متابعة دورية</option>
+                                    <option value="بناء سياسة جديدة">📝 بناء سياسة جديدة</option>
+                                    <option value="قرار إداري">📜 إصدار قرار إداري</option>
+                                    <option value="تأجيل - انتظار ميزانية">⏳ تأجيل (انتظار ميزانية)</option>
+                                    <option value="تأجيل - انتظار موافقة">⏳ تأجيل (انتظار موافقة)</option>
+                                    <option value="تأجيل - أخرى">⏳ تأجيل (سبب آخر)</option>
+                                    <option value="تنفيذ فوري">⚡ تنفيذ فوري</option>
+                                    <option value="إحالة لجهة أخرى">↗️ إحالة لجهة أخرى</option>
+                                    <option value="تم الحل">✅ تم الحل</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>تاريخ المراجعة القادمة</label>
+                                <input type="date" id="modalFollowupReviewDate" class="form-input">
                             </div>
                         </div>
                         <div class="form-group full">
