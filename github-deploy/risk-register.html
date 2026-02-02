@@ -985,8 +985,12 @@
                     <option value="انقطاع الكهرباء">انقطاع الكهرباء</option>
                     <option value="__other__">أخرى (إدخال يدوي)...</option>`;
             } else {
+                // API returns swapped fields: defaultOwner contains actual risk description
                 sel.innerHTML = `<option value="">اختر الخطر من المكتبة...</option>` +
-                    LIBRARY.map(x => `<option value="${escapeHtml(x.risk)}">${escapeHtml(x.risk)}</option>`).join('') +
+                    LIBRARY.map(x => {
+                        const riskDesc = x.defaultOwner || x.risk || '';
+                        return `<option value="${escapeHtml(riskDesc)}">${escapeHtml(riskDesc)}</option>`;
+                    }).join('') +
                     `<option value="__other__">أخرى (إدخال يدوي)...</option>`;
             }
             
@@ -1005,17 +1009,18 @@
         }
         
         function autoFillFromLibrary(riskText) {
-            const found = LIBRARY.find(x => x.risk === riskText);
+            // API fields are swapped: defaultOwner=risk, risk=owner, category=dept, defaultMitigation=category
+            const found = LIBRARY.find(x => (x.defaultOwner || x.risk) === riskText);
             if (!found) return;
             
             const cat = document.getElementById('category');
-            if (cat) cat.value = found.category || '';
+            if (cat) cat.value = found.defaultMitigation || ''; // defaultMitigation actually has category
             
             const mit = document.getElementById('mitigation');
-            if (mit) mit.value = found.defaultMitigation || '';
+            // No mitigation in swapped data, leave empty
             
             const owner = document.getElementById('owner');
-            if (owner && found.defaultOwner) owner.value = found.defaultOwner;
+            if (owner && found.risk) owner.value = found.risk; // risk field has owner name
         }
         
         function escapeHtml(str) {
