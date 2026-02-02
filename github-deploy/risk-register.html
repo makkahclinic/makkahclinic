@@ -1524,8 +1524,15 @@
         ];
         
         function getStaffOptions() {
-            const owners = MASTER?.owners || mData?.owners || ['عدنان الرفاعي', 'صابر عبده', 'بلال تتو', 'د.خالد الخطاب', 'هيثم', 'حسين بايصل'];
-            return owners.map(o => `<option value="${o}">${o}</option>`).join('');
+            // First try MASTER.owners, then extract from LIBRARY (risk field has owner names due to API swap)
+            let owners = MASTER?.owners || [];
+            if (owners.length === 0 && LIBRARY?.length > 0) {
+                owners = [...new Set(LIBRARY.map(x => x.risk).filter(Boolean))];
+            }
+            if (owners.length === 0) {
+                owners = ['عدنان الرفاعي', 'صابر عبده', 'بلال تتو', 'د.خالد الخطاب', 'هيثم', 'حسين بايصل'];
+            }
+            return owners.map(o => `<option value="${o.trim()}">${o.trim()}</option>`).join('');
         }
         
         function renderPipelineStages(risk) {
