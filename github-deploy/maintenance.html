@@ -1047,30 +1047,52 @@
   /*************** KPIs ****************/
   function updateKPIs(kpisData){
     const data = kpisData || {};
-    animateValue($('#kpiNotServiced'), data.notServiced ?? 0);
+
+    // حساب محلي دقيق من البيانات المحملة
+    const localCalc = calcComplianceFromState();
+
+    // "الأجهزة التي لم تتم صيانتها" = أجهزة ليس لها أي سجل صيانة
+    const allAssetIds = new Set();
+    Object.values(App.assetsMap || {}).forEach(list => {
+      if (!Array.isArray(list)) return;
+      list.forEach(a => {
+        const id = String(a.id || '').trim();
+        if (id) allAssetIds.add(id);
+      });
+    });
+    const devicesWithRecord = new Set();
+    (App.records || []).forEach(r => {
+      const assetId = String(r.AssetID || '').trim();
+      if (assetId) devicesWithRecord.add(assetId);
+    });
+    let localNotServiced = 0;
+    allAssetIds.forEach(id => {
+      if (!devicesWithRecord.has(id)) localNotServiced++;
+    });
+
+    animateValue($('#kpiNotServiced'), localNotServiced);
     animateValue($('#kpiOverdue'),      data.overdue      ?? 0);
     animateValue($('#kpiDueThisMonth'), data.dueThisMonth ?? 0);
     animateValue($('#kpiOutOfService'), data.outOfService ?? 0);
-    animateValue($('#kpiCompleted'),    data.servicedDevices ?? data.completed ?? 0);
+    animateValue($('#kpiCompleted'),    localCalc.servicedDevices);
     animateValue($('#kpiCritical'),     data.critical     ?? 0);
-    animateValue($('#kpiUncompleted'),  data.notServicedDevices ?? data.uncompleted ?? 0);
+    animateValue($('#kpiUncompleted'),  Math.max(localCalc.totalDevices - localCalc.servicedDevices, 0));
     animateValue($('#kpiDowntime'),     data.downtime     ?? 0);
 
-    // Compliance (محسوب من الـ Front-end)
-    const c = calcComplianceFromState();
+    // Compliance
     const el = $('#kpiCompliance');
     const hint = $('#kpiComplianceHint');
 
     if (el) {
-      animateValue(el, c.compliance, '%');
+      animateValue(el, localCalc.compliance, '%');
       el.style.color =
-        c.compliance >= 90 ? '#22c55e' :
-        c.compliance >= 75 ? '#f59e0b' :
+        localCalc.compliance >= 90 ? '#22c55e' :
+        localCalc.compliance >= 75 ? '#f59e0b' :
         '#ef4444';
     }
 
     if (hint) {
-      hint.textContent = `مصان ${c.servicedDevices} / إجمالي ${c.totalDevices}`;
+      hint.textContent = `مصان ${localCalc.servicedDevices} / إجمالي ${localCalc.totalDevices}`;
     }
 
     updateAlertsList();
