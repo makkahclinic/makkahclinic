@@ -1952,6 +1952,7 @@
         async function viewDetails(complaintId) {
             currentComplaintId = complaintId;
             const result = await apiCall('getComplaintDetails', { complaintId });
+            console.log('📋 API Response for', complaintId, ':', JSON.stringify(result.followups || 'NO FOLLOWUPS'));
             if (!result.ok || !result.complaint) {
                 alert('خطأ في تحميل التفاصيل');
                 return;
@@ -2298,10 +2299,13 @@
                         notes: notes
                     })
                 });
+                console.log('📝 addNote result:', JSON.stringify(result));
                 if (result.ok && result.success) {
-                    alert('تم إضافة الملاحظة بنجاح');
                     document.getElementById('actionModal').classList.remove('active');
-                    await new Promise(r => setTimeout(r, 1500));
+                    const debugResult = await apiCall('debugFollowups', { complaintId: currentComplaintId });
+                    console.log('🔍 Debug followups:', JSON.stringify(debugResult));
+                    alert('تم إضافة الملاحظة بنجاح\n\nفحص: ' + (debugResult.totalRows || 0) + ' صف، مطابق: ' + (debugResult.matchedForId || 0) + '\nHeaders: ' + JSON.stringify(debugResult.headers || []));
+                    await new Promise(r => setTimeout(r, 1000));
                     viewDetails(currentComplaintId);
                 } else {
                     alert('خطأ: ' + (result.error || 'فشل إضافة الملاحظة'));
