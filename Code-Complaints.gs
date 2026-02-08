@@ -45,6 +45,14 @@ function doPost(e) {
       case 'updateComplaint':
         result = updateComplaint(payload);
         break;
+      case 'addNote':
+        result = addComplaintFollowup({
+          complaintId: payload.complaintId,
+          action: payload.action || payload.noteAction || 'ملاحظة',
+          actionBy: payload.actionBy || 'النظام',
+          notes: payload.notes || ''
+        });
+        break;
       case 'getComplaintHistory':
         result = getComplaintHistory(payload.complaintId);
         break;
@@ -128,6 +136,15 @@ function doGet(e) {
       case 'updateComplaint':
         const updatePayload = p.payload ? JSON.parse(p.payload) : p;
         result = updateComplaint(updatePayload);
+        break;
+      case 'addNote':
+        const notePayload = p.payload ? JSON.parse(p.payload) : p;
+        result = addComplaintFollowup({
+          complaintId: notePayload.complaintId,
+          action: notePayload.action || notePayload.noteAction || 'ملاحظة',
+          actionBy: notePayload.actionBy || 'النظام',
+          notes: notePayload.notes || ''
+        });
         break;
       case 'assignComplaint':
         const assignPayload = p.payload ? JSON.parse(p.payload) : p;
@@ -854,19 +871,34 @@ function updateComplaint(payload) {
 
 function addComplaintFollowup(payload) {
   const sheet = getComplaintsSheet('Complaints_Followup');
+  
+  const expectedHeaders = ['Followup_ID', 'Complaint_ID', 'Date', 'Action', 'Action_By', 'Notes', 'Status'];
+  const lastRow = sheet.getLastRow();
+  if (lastRow === 0) {
+    sheet.appendRow(expectedHeaders);
+  } else {
+    const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (currentHeaders[0] !== 'Followup_ID') {
+      sheet.insertRowBefore(1);
+      sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
+    }
+  }
+  
   const now = getSaudiDate();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const followupId = `CF-${Date.now()}`;
   
   sheet.appendRow([
     followupId,
-    payload.complaintId,
+    payload.complaintId || '',
     dateStr,
     payload.action || '',
     payload.actionBy || '',
     payload.notes || '',
     'completed'
   ]);
+  
+  SpreadsheetApp.flush();
   
   return { success: true, followupId: followupId };
 }
