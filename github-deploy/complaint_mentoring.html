@@ -2472,31 +2472,37 @@
                 
                 if (noteAttachments.length > 0) {
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع المرفقات...';
-                    const payload = {
-                        action: 'uploadFollowupFiles',
-                        complaintId: currentComplaintId,
-                        files: noteAttachments.map(f => ({
-                            name: f.name,
-                            mimeType: f.mimeType,
-                            data: f.data
-                        }))
-                    };
-                    
-                    const uploadResp = await fetch(SCRIPT_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain' },
-                        body: JSON.stringify(payload),
-                        redirect: 'follow'
-                    });
-                    const uploadText = await uploadResp.text();
                     try {
+                        const postBody = {
+                            action: 'uploadFollowupFiles',
+                            complaintId: currentComplaintId,
+                            files: noteAttachments.map(f => ({
+                                name: f.name,
+                                mimeType: f.mimeType,
+                                data: f.data
+                            }))
+                        };
+                        
+                        const uploadResp = await fetch(SCRIPT_URL, {
+                            method: 'POST',
+                            body: JSON.stringify(postBody),
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            redirect: 'follow'
+                        });
+                        const uploadText = await uploadResp.text();
+                        console.log('Upload response:', uploadText.substring(0, 500));
                         const uploadResult = JSON.parse(uploadText);
-                        if (uploadResult.ok && uploadResult.files) {
+                        if (uploadResult.ok && uploadResult.files && uploadResult.files.length > 0) {
                             uploadedFiles = uploadResult.files;
                             fullNotes += '\n📎 المرفقات:\n' + uploadedFiles.map(f => `- ${f.name}: ${f.url}`).join('\n');
+                            console.log('Files uploaded successfully:', uploadedFiles.length);
+                        } else if (uploadResult.error) {
+                            console.error('Upload error:', uploadResult.error);
+                            showToast('تنبيه: فشل رفع المرفقات - ' + uploadResult.error, 'warning');
                         }
                     } catch(pe) {
-                        console.log('Upload parse error, saving note without files');
+                        console.error('Upload exception:', pe);
+                        showToast('تنبيه: فشل رفع المرفقات، سيتم حفظ الملاحظة بدون مرفقات', 'warning');
                     }
                 }
                 
