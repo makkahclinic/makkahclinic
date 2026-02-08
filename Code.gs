@@ -3,12 +3,29 @@
    * مجمع مكة الطبي بالزاهر
    * 
    * يشمل:
-   * - نظام جولات السلامة
    * - نظام الاجتماعات واللجان
    * - نظام حوادث سلامة المرضى
+   * - نظام MRIS للموارد الطبية
+   * - نظام الطوارئ EOC
    */
   
+  // ✅ ملف الإكسل المعتمد الموحد
+  const MASTER_SHEET_ID = '1aijUPpTqUGUaKmYAyohq0RHmk1CF0CzCm17gfixHKOg';
+  
+  // توحيد جميع معرفات الشيتات
   const SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
+  
+  // ✅ نظام الطوارئ EOC - ملف منفصل
+  const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
+  
+  // باقي الأنظمة تستخدم الملف المركزي
+  const PATIENTS_SPREADSHEET_ID = MASTER_SHEET_ID;
+  const INCIDENTS_SPREADSHEET_ID = MASTER_SHEET_ID;
+  const MRIS_SHEET_ID = MASTER_SHEET_ID;
+
+  // ✅ ملفات الأنظمة المنفصلة
+  const COMPLAINTS_SPREADSHEET_ID = '1DLBbSkBdfsdyxlXptaCNZsKVoJ-F3B6famr6_8V50Z0';
+  const ROUNDS_SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
 
   // ======== دوال الأمان المتقدمة ========
   
@@ -23,8 +40,26 @@
     'getRoomCodes',
     'getActiveCommand',
     'getEmergencyReports',
+    'submitEmergencyReport',
     'getTrainingLog',
-    'getEmergencyStatus'
+    'getEmergencyStatus',
+    // ✅ دوال التدريب
+    'getTrainingSessions',
+    'getTrainingRoster',
+    'addTrainingSession',
+    'updateTrainingSession',
+    'deleteTrainingSession',
+    'recordTrainingAttendance',
+    'getTrainingStats',
+    'importStaffToRoster',
+    'addTrainee',
+    'updateTrainee',
+    'deleteTrainee',
+    'logTrainingSession',
+    'saveTrainingSession',
+    // ✅ دوال تحديث حالة الطوارئ
+    'updateEmergencyStatus',
+    'updateEmergencyReportStatus'
   ]);
 
   /**
@@ -57,7 +92,343 @@
     return arr.map(v => safeCell_(v));
   }
 
+  // ======== Owner Bypass ========
+  
+  /**
+   * بريد المالك - يدخل بدون تحقق من التوكن
+   */
+  const OWNER_EMAIL = 'husseinbabsail@gmail.com';
+
+  function isOwnerByEmail_(email) {
+    return String(email || '').toLowerCase() === OWNER_EMAIL.toLowerCase();
+  }
+
   // ======== دوال الأمان ========
+
+  /**
+   * التحقق من مصادقة المريض باستخدام Firebase ID Token
+   * يتحقق من صحة التوكن ومطابقة الـ UID والـ email
+   */
+  function validatePatientAuth_(payload) {
+    // تحقق أساسي من وجود البيانات المطلوبة
+    if (!payload.patientId || !payload.patientEmail) {
+      throw new Error('غير مصرح - يجب تسجيل الدخول');
+    }
+    
+    // التحقق من Firebase ID Token إذا كان موجوداً
+    if (payload.idToken) {
+      const verified = verifyFirebaseIdToken_(payload.idToken);
+      if (!verified) {
+        throw new Error('غير مصرح - التوكن غير صالح');
+      }
+      // التأكد من تطابق الـ UID مع الـ patientId
+      if (verified.localId !== payload.patientId) {
+        throw new Error('غير مصرح - لا يمكنك الوصول لهذه البيانات');
+      }
+      // التأكد من تطابق الـ email
+      if (verified.email && verified.email !== payload.patientEmail) {
+        throw new Error('غير مصرح - البريد الإلكتروني غير متطابق');
+      }
+      return true;
+    }
+    
+    // Fallback: تحقق من السجلات (للتوافق مع الإصدارات السابقة)
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Patients");
+    if (sheet) {
+      const data = sheet.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][0] === payload.patientId) {
+          if (data[i][1] !== payload.patientEmail) {
+            throw new Error('غير مصرح - لا يمكنك الوصول لهذه البيانات');
+          }
+          return true;
+        }
+      }
+    }
+    // مريض جديد - السماح بالتسجيل
+    return true;
+  }
+  
+  /**
+   * ✅ Staff Auth (NO Owner bypass) - نسخة آمنة
+   * يعتمد على:
+   * - Firebase ID Token (مع FIREBASE_API_KEY)
+   * - ثم Role من Staff_Roles
+   * الأدوار المتاحة: owner, admin, staff, doctor, pharmacist, insurance, viewer
+   */
+  function validateStaffAuth_(payload, requiredRoles) {
+    if (!payload || !payload.staffEmail) {
+      throw new Error('غير مصرح - البريد مطلوب');
+    }
+
+    // 1) لازم idToken لكل staff endpoints
+    if (!payload.idToken || !payload.staffId) {
+      throw new Error('غير مصرح - يجب تسجيل الدخول');
+    }
+
+    // 2) تحقق من Firebase ID Token
+    const verified = verifyFirebaseIdToken_(payload.idToken);
+    if (!verified) throw new Error('غير مصرح - التوكن غير صالح');
+
+    // 3) تطابق UID + Email
+    const email = String(payload.staffEmail || '').trim().toLowerCase();
+    const vEmail = String(verified.email || '').trim().toLowerCase();
+    const vUid = String(verified.localId || '').trim();
+    const uid = String(payload.staffId || '').trim();
+
+    if (!vUid || vUid !== uid) throw new Error('غير مصرح - UID غير متطابق');
+    if (!vEmail || vEmail !== email) throw new Error('غير مصرح - البريد غير متطابق');
+
+    // 4) جلب الدور من Staff_Roles
+    const staffRole = getStaffRole_(email);
+    if (!staffRole) throw new Error('غير مصرح - لم يتم العثور على صلاحياتك');
+
+    // 5) تحقق role المطلوبة
+    if (requiredRoles && requiredRoles.length > 0 && !requiredRoles.includes(staffRole)) {
+      throw new Error('غير مصرح - ليس لديك صلاحية لهذا الإجراء');
+    }
+
+    return { verified: true, role: staffRole, email };
+  }
+  
+  /**
+   * جلب دور الموظف من جدول الصلاحيات
+   */
+  function getStaffRole_(email) {
+    try {
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      let sheet = ss.getSheetByName("Staff_Roles");
+      
+      // إنشاء الجدول إذا لم يكن موجوداً
+      if (!sheet) {
+        sheet = ss.insertSheet("Staff_Roles");
+        sheet.appendRow(["Email", "Role", "Name", "Department", "CreatedAt"]);
+        // إضافة المالك الافتراضي
+        sheet.appendRow(["husseinbabsail@gmail.com", "owner", "المالك", "الإدارة", new Date().toISOString()]);
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][0] === email) {
+          return data[i][1]; // الدور
+        }
+      }
+      return null;
+    } catch (e) {
+      console.log('Error getting staff role:', e.message);
+      return null;
+    }
+  }
+  
+  /**
+   * إضافة أو تحديث دور موظف (للمالك والإداريين فقط)
+   */
+  function setStaffRole(payload) {
+    // التحقق من صلاحية المنفذ
+    const auth = validateStaffAuth_(payload, ['owner', 'admin']);
+    
+    const { targetEmail, targetRole, targetName, targetDepartment } = payload;
+    
+    if (!targetEmail || !targetRole) {
+      throw new Error('البريد الإلكتروني والدور مطلوبان');
+    }
+    
+    // التحقق من صحة الدور
+    const validRoles = ['owner', 'admin', 'staff', 'doctor', 'pharmacist', 'insurance', 'viewer'];
+    if (!validRoles.includes(targetRole)) {
+      throw new Error('دور غير صالح');
+    }
+    
+    // فقط المالك يمكنه تعيين مالك آخر أو مدير
+    if (['owner', 'admin'].includes(targetRole) && auth.role !== 'owner') {
+      throw new Error('فقط المالك يمكنه تعيين مدراء');
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Staff_Roles");
+    const data = sheet.getDataRange().getValues();
+    
+    // البحث عن الموظف وتحديثه أو إضافته
+    let found = false;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === targetEmail) {
+        sheet.getRange(i + 1, 2).setValue(targetRole);
+        if (targetName) sheet.getRange(i + 1, 3).setValue(targetName);
+        if (targetDepartment) sheet.getRange(i + 1, 4).setValue(targetDepartment);
+        found = true;
+        break;
+      }
+    }
+    
+    if (!found) {
+      sheet.appendRow([
+        targetEmail,
+        targetRole,
+        targetName || '',
+        targetDepartment || '',
+        new Date().toISOString()
+      ]);
+    }
+    
+    return { success: true, message: 'تم تحديث الصلاحيات بنجاح' };
+  }
+  
+  /**
+   * جلب قائمة الموظفين وأدوارهم (للمالك والإداريين فقط)
+   */
+  function getStaffList(payload) {
+    validateStaffAuth_(payload, ['owner', 'admin']);
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Staff_Roles");
+    
+    if (!sheet) {
+      return { success: true, staff: [] };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const staff = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      staff.push({
+        email: data[i][0],
+        role: data[i][1],
+        name: data[i][2],
+        department: data[i][3],
+        createdAt: data[i][4]
+      });
+    }
+    
+    return { success: true, staff };
+  }
+
+  /**
+   * حذف/إلغاء صلاحية موظف (للمالك فقط)
+   */
+  function revokeStaffRole(payload) {
+    // التحقق من صلاحية المنفذ - للمالك فقط
+    const auth = validateStaffAuth_(payload, ['owner']);
+    
+    const { targetEmail } = payload;
+    
+    if (!targetEmail) {
+      throw new Error('البريد الإلكتروني مطلوب');
+    }
+    
+    // لا يمكن حذف المالك
+    const ownerEmail = "husseinbabsail@gmail.com";
+    if (targetEmail.toLowerCase() === ownerEmail.toLowerCase()) {
+      throw new Error('لا يمكن حذف المالك');
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Staff_Roles");
+    
+    if (!sheet) {
+      throw new Error('جدول الموظفين غير موجود');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    
+    // البحث عن الموظف وحذفه
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0].toLowerCase() === targetEmail.toLowerCase()) {
+        sheet.deleteRow(i + 1);
+        return { success: true, message: 'تم حذف المستخدم بنجاح' };
+      }
+    }
+    
+    throw new Error('المستخدم غير موجود');
+  }
+
+  /**
+   * ✅ جلب دور المستخدم (API عام للـ frontend) - نسخة آمنة
+   * لا يعطي owner تلقائياً بالبريد فقط
+   */
+  function getUserRole(payload) {
+    const { email, idToken } = payload;
+    
+    if (!email) {
+      return { success: false, error: 'البريد الإلكتروني مطلوب' };
+    }
+    
+    const normalizedEmail = String(email).trim().toLowerCase();
+    
+    // ✅ لا تعطي owner تلقائيًا بالبريد فقط - لازم idToken
+    if (idToken) {
+      const verified = verifyFirebaseIdToken_(idToken);
+      if (!verified) {
+        return { success: false, error: 'التوكن غير صالح' };
+      }
+      if (String(verified.email || '').toLowerCase() !== normalizedEmail) {
+        return { success: false, error: 'البريد غير متطابق' };
+      }
+    }
+    
+    // الدور من Staff_Roles فقط
+    const role = getStaffRole_(normalizedEmail);
+    
+    if (!role) {
+      // مستخدم جديد - دور افتراضي patient
+      return { success: true, role: 'patient', name: '' };
+    }
+    
+    // جلب الاسم من الجدول
+    try {
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const sheet = ss.getSheetByName("Staff_Roles");
+      if (sheet) {
+        const data = sheet.getDataRange().getValues();
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][0]).toLowerCase() === normalizedEmail) {
+            return { success: true, role: data[i][1], name: data[i][2] || '' };
+          }
+        }
+      }
+    } catch (e) {
+      console.log('Error getting name:', e);
+    }
+    
+    return { success: true, role: role, name: '' };
+  }
+
+  /**
+   * التحقق من صحة Firebase ID Token باستخدام Google Identity Toolkit API
+   */
+  function verifyFirebaseIdToken_(idToken) {
+    try {
+      const FIREBASE_API_KEY = PropertiesService.getScriptProperties().getProperty('FIREBASE_API_KEY');
+      if (!FIREBASE_API_KEY) {
+        console.log('Firebase API Key not configured - skipping token verification');
+        return null;
+      }
+      
+      const url = 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + FIREBASE_API_KEY;
+      const response = UrlFetchApp.fetch(url, {
+        method: 'POST',
+        contentType: 'application/json',
+        payload: JSON.stringify({ idToken: idToken }),
+        muteHttpExceptions: true
+      });
+      
+      const result = JSON.parse(response.getContentText());
+      
+      if (result.error) {
+        console.log('Firebase token verification failed:', result.error.message);
+        return null;
+      }
+      
+      if (result.users && result.users.length > 0) {
+        return result.users[0];
+      }
+      
+      return null;
+    } catch (e) {
+      console.log('Error verifying Firebase token:', e.message);
+      return null;
+    }
+  }
   
   /**
    * تنظيف المدخلات من الأكواد الخبيثة (XSS)
@@ -141,8 +512,63 @@
     cache.put(key, JSON.stringify(parsed), windowSec - (now - parsed.start));
     return true;
   }
+
+  // ✅ Role requirements per action (Gatekeeper)
+  const ACTION_ROLES = {
+    // Staff roles management
+    setStaffRole: ['owner', 'admin'],
+    getStaffList: ['owner', 'admin'],
+    revokeStaffRole: ['owner'],
+
+    // Owner dashboard
+    getOwnerDashboardStats: ['owner', 'admin'],
+
+    // Incidents
+    getIncidents: ['owner', 'admin'],
+    updateIncidentStatus: ['owner', 'admin'],
+    assignIncident: ['owner', 'admin'],
+    escalateIncident: ['owner', 'admin'],
+    closeIncident: ['owner', 'admin'],
+    saveRCA: ['owner', 'admin'],
+
+    // MRIS uploads
+    startUpload: ['owner', 'admin'],
+    uploadChunk: ['owner', 'admin'],
+    finishUpload: ['owner', 'admin'],
+    getUploadStatus: ['owner', 'admin'],
+    setAssignment: ['owner', 'admin'],
+    getAssignments: ['owner', 'admin'],
+  };
+
+  /**
+   * ✅ Gatekeeper: يقرر هل نطلب auth أم لا
+   * - Public actions = بدون auth
+   * - Protected actions = staffAuth أو API_TOKEN
+   */
+  function enforceAuthOrToken_(action, payload) {
+    // 1) Public actions = بدون auth
+    if (PUBLIC_ACTIONS.has(action)) return { ok: true, auth: null };
+
+    // 2) getUserRole استثناء خاص - يمكن استدعاؤه بدون auth كامل
+    if (action === 'getUserRole') return { ok: true, auth: null };
+
+    // 3) إذا مفعّل staffAuth
+    try {
+      if (payload && payload.staffId && payload.staffEmail && payload.idToken) {
+        const roles = ACTION_ROLES[action] || [];
+        const auth = validateStaffAuth_(payload, roles);
+        return { ok: true, auth };
+      }
+    } catch (e) {
+      // لو فشل staffAuth نكمّل ونحاول API_TOKEN
+    }
+
+    // 4) API_TOKEN fallback
+    requireToken_(payload);
+    return { ok: true, auth: { role: 'api_token' } };
+  }
   
-  function doPost(e) {
+function doPost(e) {
     try {
       const body = JSON.parse(e.postData.contents);
       const action = sanitizeInput(body.action);
@@ -156,49 +582,27 @@
         })).setMimeType(ContentService.MimeType.JSON);
       }
       
+      // ✅ enforce auth (public vs protected)
+      enforceAuthOrToken_(action, payload);
+      
       let result;
       
       switch (action) {
+        case 'getUserRole':
+          result = getUserRole(payload);
+          break;
+        case 'setStaffRole':
+          result = setStaffRole(payload);
+          break;
+        case 'getStaffList':
+          result = getStaffList(payload);
+          break;
+        case 'revokeStaffRole':
+          result = revokeStaffRole(payload);
+          break;
         case 'getHomeData':
           result = getHomeData();
           break;
-        case 'getRoundsLog':
-          result = getRoundsLog(payload.limit || 100);
-          break;
-        case 'logRound':
-          result = logRound(payload);
-          break;
-        case 'getMasterTasks':
-          result = getMasterTasks();
-          break;
-        case 'getStaff':
-          result = getStaff();
-          break;
-        case 'getStaffSummary':
-          result = getStaffSummary();
-          break;
-        case 'getDelayed':
-          result = getDelayed();
-          break;
-        case 'getViolations':
-          result = getViolations();
-          break;
-        case 'getHistory':
-          result = getHistory(payload);
-          break;
-        case 'getMetrics':
-          result = getMetrics(payload.days || 14);
-          break;
-        case 'getChecklist':
-          result = getChecklist(payload.taskId);
-          break;
-        case 'verifyPasscode':
-          result = verifyPasscode(payload.staffName, payload.passcode);
-          break;
-        case 'resolveViolation':
-          result = resolveViolation(payload);
-          break;
-        // debug action DISABLED for security
         // Committee Meeting APIs
         case 'getMeetingData':
           result = getMeetingData(payload.committee);
@@ -237,6 +641,9 @@
         case 'getIncidentStats':
           result = getIncidentStats(payload);
           break;
+        case 'getOwnerDashboardStats':
+          result = getOwnerDashboardStats(payload);
+          break;
         case 'addIncidentFollowup':
           result = addIncidentFollowup(payload);
           break;
@@ -261,36 +668,107 @@
         case 'saveRCA':
           result = saveRCA(payload);
           break;
-        // Complaints APIs
-        case 'submitComplaint':
-          result = submitComplaint(payload);
+        // Patient Portal APIs (Protected - require auth token)
+        case 'registerPatient':
+          validatePatientAuth_(payload);
+          result = registerPatient(payload);
           break;
-        case 'getComplaintStaff':
-          result = getComplaintStaff();
+        case 'getPatientProfile':
+          validatePatientAuth_(payload);
+          result = getPatientProfile(payload.patientId);
           break;
-        case 'verifyComplaintPasscode':
-          result = verifyComplaintPasscode(payload.staffName, payload.passcode);
+        case 'bookAppointment':
+          validatePatientAuth_(payload);
+          result = bookAppointment(payload);
           break;
-        case 'getComplaintStats':
-          result = getComplaintStats(payload);
+        case 'getPatientAppointments':
+          validatePatientAuth_(payload);
+          result = getPatientAppointments(payload.patientId);
           break;
-        case 'getComplaints':
-          result = getComplaints(payload);
+        case 'cancelAppointment':
+          validatePatientAuth_(payload);
+          result = cancelAppointment(payload);
           break;
-        case 'getComplaintDetails':
-          result = getComplaintDetails(payload.complaintId);
+        case 'getPatientResults':
+          validatePatientAuth_(payload);
+          result = getPatientResults(payload.patientId);
           break;
-        case 'updateComplaint':
-          result = updateComplaint(payload);
+        case 'submitPatientSymptoms':
+          validatePatientAuth_(payload);
+          result = submitPatientSymptoms(payload);
           break;
-        case 'getComplaintHistory':
-          result = getComplaintHistory(payload.complaintId);
+        case 'analyzeSymptoms':
+          validatePatientAuth_(payload);
+          result = analyzeSymptoms(payload);
           break;
-        case 'getComplaintAssignmentList':
-          result = getComplaintAssignmentList();
+        // ===== MRIS Chunk Upload APIs =====
+        case 'startUpload':
+          result = startMrisUpload_(payload);
           break;
-        case 'getComplaintEscalationList':
-          result = getComplaintEscalationList();
+        case 'uploadChunk':
+          result = uploadMrisChunk_(payload);
+          break;
+        case 'finishUpload':
+          result = finishMrisUpload_(payload);
+          break;
+        case 'getUploadStatus':
+          result = getMrisUploadStatus_(payload);
+          break;
+        // ===== MRIS Assignment & Data APIs =====
+        case 'setAssignment':
+          result = setMrisAssignment_(payload);
+          break;
+        case 'getAssignments':
+          result = getMrisAssignments_();
+          break;
+        case 'getHeatmap':
+          result = getMrisHeatmap_();
+          break;
+        case 'getKpis':
+          result = getMrisKpis_();
+          break;
+        case 'getEvidencePack':
+          result = getMrisEvidencePack_(payload);
+          break;
+        // ===== EOC Emergency Command APIs =====
+        case 'setActiveCommand':
+          result = setActiveCommand(payload);
+          break;
+        case 'closeActiveCommand':
+          result = closeActiveCommand(payload);
+          break;
+        case 'clearActiveCommand':
+          result = clearActiveCommand(payload);
+          break;
+        case 'addTrainingSession':
+          result = addTrainingSession(payload);
+          break;
+        case 'updateTrainingSession':
+          result = updateTrainingSession(payload);
+          break;
+        case 'deleteTrainingSession':
+          result = deleteTrainingSession(payload);
+          break;
+        case 'recordTrainingAttendance':
+          result = recordTrainingAttendance(payload);
+          break;
+        case 'importStaffToRoster':
+          result = importStaffToRoster();
+          break;
+        case 'addTrainee':
+          result = addTrainee(payload);
+          break;
+        case 'updateTrainee':
+          result = updateTrainee(payload);
+          break;
+        case 'deleteTrainee':
+          result = deleteTrainee(payload);
+          break;
+        case 'logTrainingSession':
+          result = logTrainingSession(payload);
+          break;
+        case 'saveTrainingSession':
+          result = logTrainingSession(payload);
           break;
         default:
           throw new Error('Unknown action: ' + action);
@@ -327,7 +805,11 @@
     
     function output_(obj) {
       const json = JSON.stringify(obj);
-      if (callback) {
+
+      // ✅ JSONP فقط للأكشنات العامة
+      const allowJsonp = callback && PUBLIC_ACTIONS.has(action);
+
+      if (allowJsonp) {
         const safe = String(callback).replace(/[^\w$.]/g, '');
         return ContentService.createTextOutput(safe + '(' + json + ');')
           .setMimeType(ContentService.MimeType.JAVASCRIPT);
@@ -492,12 +974,97 @@
       }
     }
     
+    // Staff Role APIs - للقراءة فقط عبر GET (بدون idToken لأنه عام)
+    if (action === 'getUserRole') {
+      try {
+        const result = getUserRole({ email: p.email });
+        return output_(result);
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
+    // ✅ Owner Dashboard APIs (GET/JSONP) - مع دعم Firebase Token
+    if (action === 'getStaffList') {
+      try {
+        const payload = p.payload ? JSON.parse(p.payload) : {
+          staffEmail: p.staffEmail,
+          staffId: p.staffId,
+          idToken: p.idToken
+        };
+        const result = getStaffList(payload);
+        return output_(result);
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
+    if (action === 'getOwnerDashboardStats') {
+      try {
+        const payload = p.payload ? JSON.parse(p.payload) : {
+          staffEmail: p.staffEmail,
+          staffId: p.staffId,
+          idToken: p.idToken
+        };
+        const result = getOwnerDashboardStats(payload);
+        return output_(result);
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
+    // ✅ Incidents API (GET/JSONP) - مع التحقق من الصلاحيات
+    if (action === 'getIncidents') {
+      try {
+        const payload = {
+          staffEmail: p.staffEmail,
+          staffId: p.staffId,
+          idToken: p.idToken,
+          limit: p.limit || 50,
+          status: p.status
+        };
+        validateStaffAuth_(payload, ['owner', 'admin']);
+        const result = getIncidents(payload);
+        return output_(result);
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
+        
+    // ✅ Risks API (GET/JSONP) - مع التحقق من الصلاحيات
+    if (action === 'getRisks') {
+      try {
+        const payload = {
+          staffEmail: p.staffEmail,
+          staffId: p.staffId,
+          idToken: p.idToken
+        };
+        validateStaffAuth_(payload, ['owner', 'admin']);
+        const ss = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID);
+        const riskSheet = ss.getSheetByName('Risks_Register');
+        if (!riskSheet) {
+          return output_({ success: true, risks: [] });
+        }
+        const data = sheetToObjects(riskSheet);
+        const risks = data.map(r => ({
+          ID: r.ID || r.الرقم || '',
+          Description: r.Description || r.الوصف || r.Risk || r.الخطر || '',
+          Department: r.Department || r.القسم || '',
+          Level: r.Level || r.المستوى || r.Severity || r.الشدة || 'medium',
+          Status: r.Status || r.الحالة || 'active'
+        }));
+        return output_({ success: true, risks: risks });
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
     return output_({ ok: false, error: 'Unknown action: ' + (action || '') });
   }
   
   // Emergency Report Functions
-  // الشيت الرئيسي للطوارئ والإخلاء
-  const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
+  // الشيت الرئيسي للطوارئ والإخلاء (تم تعريفه في أعلى الملف)
 
   /******************** EOC BOOTSTRAP ********************/
   const EOC_BOOTSTRAP_VERSION = 2;
@@ -945,6 +1512,8 @@
       const timeStr = Utilities.formatDate(now, 'Asia/Riyadh', 'HH:mm:ss');
 
       // حماية من Formula Injection
+      // إذا تم تمرير status (مثل "مغلق") نستخدمها، وإلا "جديد"
+      const initialStatus = String(params.status || 'جديد').trim();
       sheet.appendRow(safeCellArray_([
         reportId,
         dateStr,
@@ -952,7 +1521,7 @@
         String(params.disasterType || '').trim(),
         String(params.location || '').trim(),
         String(params.notes || '').trim(),
-        'جديد',
+        initialStatus,
         '',
         ''
       ]));
@@ -1389,306 +1958,6 @@
     return days[getSaudiDate().getDay()];
   }
   
-  function getHomeData() {
-    const todayStr = getTodayString();
-    const dayName = getDayNameAr();
-    
-    const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
-    const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
-    
-    const todayLog = roundsLog.filter(r => {
-      const logDate = parseLogDate(r.Date);
-      if (!logDate) return false;
-      const logStr = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
-      return logStr === todayStr;
-    });
-    
-    const staffMap = {};
-    masterTasks.forEach(task => {
-      const assignee = task.Assigned_To || '';
-      if (!assignee) return;
-      
-      const dayCol = task[dayName];
-      if (dayCol !== 'Yes' && dayCol !== true && dayCol !== 'yes') return;
-      
-      if (!staffMap[assignee]) {
-        staffMap[assignee] = {
-          name: assignee,
-          todayTasks: 0,
-          todayDone: 0,
-          todayRemaining: 0,
-          weeklyTotal: 0,
-          topRounds: []
-        };
-      }
-      
-      const rpd = parseInt(task.Rounds_Per_Day) || 1;
-      staffMap[assignee].todayTasks += rpd;
-      
-      staffMap[assignee].topRounds.push({
-        taskId: task.TaskID || '',
-        name: task.Round_Name_AR || task.Round_Name_EN || task.TaskID || 'غير محدد',
-        roundsRequired: rpd,
-        done: 0,
-        targetTime: formatTime(task.Target_Time)
-      });
-      
-      const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      weekDays.forEach(d => {
-        if (task[d] === 'Yes' || task[d] === true || task[d] === 'yes') {
-          staffMap[assignee].weeklyTotal += rpd;
-        }
-      });
-    });
-    
-    todayLog.forEach(log => {
-      const staff = log.Responsible_Role || log.Execution_Responsible || '';
-      const taskId = log.TaskID || '';
-      if (staffMap[staff]) {
-        staffMap[staff].todayDone++;
-        // Update done count for the specific round
-        const round = staffMap[staff].topRounds.find(r => r.taskId === taskId);
-        if (round) round.done++;
-      }
-    });
-    
-    Object.values(staffMap).forEach(s => {
-      s.todayRemaining = Math.max(0, s.todayTasks - s.todayDone);
-    });
-    
-    // تحقق إذا اليوم إجازة (لا توجد مهام مجدولة)
-    const staffList = Object.values(staffMap);
-    const isHoliday = staffList.length === 0;
-    const holidayMessage = isHoliday ? 'اليوم إجازة! 🎉 استمتع بيومك وارتح' : '';
-    
-    return {
-      todayDate: todayStr,
-      dayName: getDayNameArDisplay(),
-      staff: staffList,
-      isHoliday: isHoliday,
-      holidayMessage: holidayMessage
-    };
-  }
-  
-  function getRoundsLog(limit) {
-    const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
-    
-    roundsLog.sort((a, b) => {
-      const dateA = new Date(a.Date + ' ' + (a.Actual_Time || ''));
-      const dateB = new Date(b.Date + ' ' + (b.Actual_Time || ''));
-      return dateB - dateA;
-    });
-    
-    // Map to frontend expected format with formatted date/time
-    const entries = roundsLog.slice(0, limit).map(r => ({
-      Date: formatDate(r.Date),
-      Actual_Time: formatTime(r.Actual_Time),
-      TaskID: r.TaskID,
-      Round: r.TaskID,
-      Round_Name: r.Round_Name || r.Area || r.TaskID || '',
-      Area: r.Area || r.Round_Name || '',
-      Staff: r.Responsible_Role || '',
-      Exec_Responsible: r.Execution_Responsible || '',
-      Status: r.Status || '',
-      Negative_Notes: r.Negative_Notes || '',
-      Positive_Notes: r.Positive_Notes || '',
-      Is_Violation: r.Is_Violation || '',
-      Closed_YN: r.Closed_YN || ''
-    }));
-    
-    return { entries };
-  }
-  
-  function getMasterTasks() {
-    return { tasks: sheetToObjects(getSheet('MASTER_TASKS')) };
-  }
-  
-  function getStaff() {
-    const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
-    const staffSet = new Set();
-    masterTasks.forEach(t => {
-      if (t.Assigned_To) staffSet.add(t.Assigned_To);
-    });
-    return { staff: Array.from(staffSet) };
-  }
-  
-  function getStaffSummary() {
-    const homeData = getHomeData();
-    return { 
-      staff: homeData.staff,
-      isHoliday: homeData.isHoliday,
-      holidayMessage: homeData.holidayMessage,
-      dayName: homeData.dayName
-    };
-  }
-  
-  function getDelayed() {
-    const todayStr = getTodayString();
-    const dayName = getDayNameAr();
-    const now = getSaudiDate();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    
-    const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
-    const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
-    const schedule = sheetToObjects(getSheet('Round_Schedule'));
-    
-    const todayLog = roundsLog.filter(r => {
-      const logDate = parseLogDate(r.Date);
-      if (!logDate) return false;
-      const logStr = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
-      return logStr === todayStr;
-    });
-    
-    const delayed = [];
-    
-    masterTasks.forEach(task => {
-      const dayCol = task[dayName];
-      const dayVal = String(dayCol || '').toLowerCase().trim();
-      if (dayVal !== 'yes' && dayVal !== 'true' && dayVal !== 'نعم' && dayVal !== '1') return;
-      
-      const taskId = task.TaskID;
-      const rpd = parseInt(task.Rounds_Per_Day) || 1;
-      
-      const doneCount = todayLog.filter(l => l.TaskID === taskId).length;
-      
-      for (let roundNum = 1; roundNum <= rpd; roundNum++) {
-        if (roundNum <= doneCount) continue;
-        
-        // البحث بكلا الاسمين Task_ID و TaskID
-        const scheduleRow = schedule.find(s => s.Task_ID === taskId || s.TaskID === taskId);
-        if (!scheduleRow) continue;
-        
-        const endTimeStr = scheduleRow[`Round_${roundNum}_End`];
-        if (!endTimeStr) continue;
-        
-        const [h, m] = String(endTimeStr).split(':').map(Number);
-        const endMinutes = h * 60 + m;
-        
-        if (currentMinutes > endMinutes) {
-          const delayMinutes = currentMinutes - endMinutes;
-          
-          delayed.push({
-            taskId: taskId,
-            roundName: task.Round_Name_AR || taskId,
-            staff: task.Assigned_To || '',
-            roundNumber: roundNum,
-            expectedTime: endTimeStr,
-            delayMinutes: delayMinutes,
-            delayFormatted: Math.floor(delayMinutes / 60) + ':' + String(delayMinutes % 60).padStart(2, '0')
-          });
-        }
-      }
-    });
-    
-    return { delayed: delayed };
-  }
-  
-  function getViolations() {
-    const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
-  
-    // استخراج جميع المخالفات مع معلوماتها
-    const allViolations = roundsLog.filter(r => {
-      const isViolation = String(r.Is_Violation || '').toLowerCase();
-      if (isViolation === 'true' || isViolation === 'yes') return true;
-  
-      const status = String(r.Status || '').toLowerCase();
-      const notes = String(r.Negative_Notes || '').toLowerCase();
-      return status.includes('خلل') || notes.includes('نقاط الخلل') || notes.includes('❌');
-    }).map(r => {
-      let area = r.Area || r.Round_Name || '';
-      if (/^\d+$/.test(String(area).trim())) {
-        area = r.Round_Name || 'منطقة غير محددة';
-      }
-      
-      // استخراج البنود الفاشلة كـ Set للمقارنة
-      const failedItems = extractFailedItems(r.Negative_Notes);
-      
-      return {
-        _rowIndex: r._rowIndex,
-        Date: formatDate(r.Date),
-        Actual_Time: formatTime(r.Actual_Time),
-        Area: area,
-        Round_Name: r.Round_Name || area || '',
-        Responsible_Role: r.Responsible_Role || '',
-        Execution_Responsible: r.Execution_Responsible || '',
-        Status: r.Status || '',
-        Negative_Notes: r.Negative_Notes || r.Notes || '',
-        Is_Resolved: String(r.Closed_YN || r.Is_Resolved || 'no').toLowerCase(),
-        failedItems: failedItems
-      };
-    });
-  
-    // فصل المخالفات: مفتوحة vs معالجة
-    const openViolations = allViolations.filter(v => v.Is_Resolved !== 'yes');
-    const resolvedViolations = allViolations.filter(v => v.Is_Resolved === 'yes');
-  
-    // حساب التكرار الذكي: نفس المنطقة + نفس البند الفاشل = تكرار
-    // المفتاح: Area فقط - ونبحث عن تشابه في البنود
-    const repeatGroups = {};
-    
-    openViolations.forEach(v => {
-      const area = v.Area || v.Round_Name || 'غير محدد';
-      
-      // البحث عن مجموعة موجودة بنفس المنطقة وأي تشابه في البنود
-      let foundGroup = null;
-      
-      // نبحث في كل المجموعات الموجودة بنفس المنطقة
-      for (const key in repeatGroups) {
-        if (key.startsWith(area + '||')) {
-          const existingItems = repeatGroups[key].allFailedItems;
-          const overlap = v.failedItems.filter(item => existingItems.includes(item));
-          
-          // أي تشابه = تكرار (حتى لو بند واحد)
-          if (overlap.length > 0) {
-            foundGroup = repeatGroups[key];
-            break;
-          }
-        }
-      }
-      
-      if (foundGroup) {
-        foundGroup.count++;
-        if (v.Date && !foundGroup.dates.includes(v.Date)) foundGroup.dates.push(v.Date);
-        if (v._rowIndex) foundGroup.rowIndices.push(v._rowIndex);
-        // دمج البنود الفاشلة
-        v.failedItems.forEach(item => {
-          if (!foundGroup.allFailedItems.includes(item)) {
-            foundGroup.allFailedItems.push(item);
-          }
-        });
-        foundGroup.issue = v.Negative_Notes || foundGroup.issue;
-        // تحديث المكلف بآخر مخالفة
-        foundGroup.assignedTo = v.Execution_Responsible || foundGroup.assignedTo;
-      } else {
-        // مجموعة جديدة بمفتاح المنطقة + timestamp للتفريق
-        const groupKey = `${area}||${v._rowIndex || Date.now()}`;
-        repeatGroups[groupKey] = {
-          area: area,
-          issue: v.Negative_Notes || 'مخالفة',
-          assignedTo: v.Execution_Responsible || 'غير محدد',
-          detectedBy: v.Responsible_Role,
-          count: 1,
-          dates: v.Date ? [v.Date] : [],
-          rowIndices: v._rowIndex ? [v._rowIndex] : [],
-          allFailedItems: [...v.failedItems]
-        };
-      }
-    });
-  
-    // المخالفات المتكررة = count >= 2 (نفس المنطقة + نفس البند مكرر)
-    const repeated = Object.values(repeatGroups)
-      .filter(x => x.count >= 2)
-      .sort((a,b) => b.count - a.count);
-  
-    return {
-      violations: allViolations,
-      repeated,
-      resolved: resolvedViolations,
-      total: allViolations.length,
-      pending: openViolations.length
-    };
-  }
-  
   // دالة تحليل التواريخ بمختلف التنسيقات
   function parseLogDate(dateValue) {
     if (!dateValue) return null;
@@ -1711,452 +1980,6 @@
     // المحاولة العادية
     const d = new Date(dateValue);
     return isNaN(d.getTime()) ? null : d;
-  }
-  
-  // دالة مساعدة لاستخراج البنود الفاشلة من النص
-  function extractFailedItems(notes) {
-    if (!notes) return [];
-    
-    const items = String(notes)
-      .split(/[|\n]/)
-      .map(s => s.replace(/❌/g, '').replace(/نقاط الخلل[:\s]*/g, '').trim())
-      .filter(s => s && s.length > 5);
-    
-    // تطبيع النص (إزالة التشكيل والأحرف الخاصة)
-    return items.map(item => 
-      item.replace(/[\u064B-\u065F]/g, '') // إزالة التشكيل
-          .replace(/[^\u0621-\u064Aa-zA-Z0-9\s]/g, '') // إبقاء الحروف فقط
-          .trim()
-          .substring(0, 40) // أول 40 حرف للمقارنة
-    );
-  }
-  
-  function getHistory(params) {
-    const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
-    
-    let filtered = roundsLog;
-    
-    // دعم فلتر عدد الأيام
-    if (params.days && params.days > 0) {
-      const cutoff = getSaudiDate();
-      cutoff.setDate(cutoff.getDate() - parseInt(params.days));
-      filtered = filtered.filter(r => {
-        const logDate = parseLogDate(r.Date);
-        return logDate && logDate >= cutoff;
-      });
-    }
-    
-    if (params.startDate) {
-      filtered = filtered.filter(r => {
-        const logDate = parseLogDate(r.Date);
-        if (!logDate) return false;
-        return logDate >= new Date(params.startDate);
-      });
-    }
-    
-    if (params.endDate) {
-      filtered = filtered.filter(r => {
-        const logDate = parseLogDate(r.Date);
-        if (!logDate) return false;
-        return logDate <= new Date(params.endDate + 'T23:59:59');
-      });
-    }
-    
-    if (params.staff) {
-      filtered = filtered.filter(r => r.Responsible_Role === params.staff || r.Execution_Responsible === params.staff);
-    }
-    
-    if (params.round) {
-      filtered = filtered.filter(r => r.TaskID === params.round);
-    }
-    
-    filtered.sort((a, b) => {
-      const dateA = parseLogDate(a.Date);
-      const dateB = parseLogDate(b.Date);
-      if (!dateA && !dateB) return 0;
-      if (!dateA) return 1;
-      if (!dateB) return -1;
-      return dateB - dateA;
-    });
-    
-    // Map to frontend expected format - تضمين حقول المعالجة + حقول التأخير
-    const entries = filtered.map(r => {
-      // حساب وقت التأخير إذا كانت الحالة متأخر
-      let delayMin = 0;
-      const status = String(r.Status || '').toLowerCase();
-      if (status.includes('متأخر') || status.includes('تأخر')) {
-        // حساب التأخير من الفرق بين الوقت الفعلي والمخطط
-        if (r.Planned_Time && r.Actual_Time) {
-          try {
-            const planned = parseTime(r.Planned_Time);
-            const actual = parseTime(r.Actual_Time);
-            if (planned && actual) {
-              delayMin = Math.round((actual - planned) / 60000);
-              if (delayMin < 0) delayMin = 0;
-            }
-          } catch(e) {}
-        }
-        // إذا لم يمكن الحساب، استخدم قيمة افتراضية
-        if (delayMin === 0) delayMin = 15;
-      }
-      
-      return {
-        Date: formatDate(r.Date),
-        Actual_Time: formatTime(r.Actual_Time),
-        Time: formatTime(r.Actual_Time),
-        Planned_Time: formatTime(r.Planned_Time) || '',
-        Delay_Min: delayMin,
-        TaskID: r.TaskID,
-        Area: r.Area || r.Round_Name,
-        Round_Name: r.Round_Name,
-        Staff: r.Responsible_Role,
-        Responsible_Role: r.Responsible_Role,
-        Exec_Responsible: r.Execution_Responsible,
-        Execution_Responsible: r.Execution_Responsible,
-        Status: r.Status,
-        Negative_Notes: r.Negative_Notes,
-        Positive_Notes: r.Positive_Notes,
-        Is_Violation: r.Is_Violation,
-        Closed_YN: r.Closed_YN,
-        Is_Resolved: r.Closed_YN,
-        Resolved_By: r.Resolved_By,
-        Resolved_Date: r.Resolved_Date
-      };
-    });
-    
-    return { entries };
-  }
-  
-  // دالة تحويل نص الوقت إلى كائن Date
-  function parseTime(timeStr) {
-    if (!timeStr) return null;
-    const str = String(timeStr);
-    const match = str.match(/(\d{1,2}):(\d{2})/);
-    if (!match) return null;
-    const d = new Date();
-    d.setHours(parseInt(match[1]), parseInt(match[2]), 0, 0);
-    return d;
-  }
-  
-  function getMetrics(days) {
-    const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    
-    const filtered = roundsLog.filter(r => {
-      const logDate = parseLogDate(r.Date);
-      return logDate && logDate >= cutoff;
-    });
-    
-    const total = filtered.length;
-    
-    // تصنيف الحالات بشكل صحيح
-    const COMPLETED_STATUS = ['تم', 'مكتمل', 'مكتملة', 'OK', 'في الوقت', 'done', 'complete'];
-    const DELAYED_STATUS = ['متأخر', 'متأخرة', 'تأخر', 'delayed', 'late'];
-    const VIOLATION_STATUS = ['خلل', 'مخالفة', 'violation'];
-    
-    let completed = 0;
-    let delayed = 0;
-    let violations = 0;
-    
-    filtered.forEach(r => {
-      const status = String(r.Status || '').toLowerCase().trim();
-      const notes = String(r.Negative_Notes || '').toLowerCase();
-      const isViol = String(r.Is_Violation || '').toLowerCase();
-      
-      // تحقق من المخالفات أولاً
-      const isViolation = isViol === 'true' || isViol === 'yes' || 
-          VIOLATION_STATUS.some(s => status.includes(s.toLowerCase())) ||
-          notes.includes('نقاط الخلل') || notes.includes('❌');
-      
-      if (isViolation) {
-        violations++;
-        // المخالفات لا تُحسب كمكتملة
-      } else if (COMPLETED_STATUS.some(s => status.includes(s.toLowerCase()))) {
-        completed++;
-      } else if (DELAYED_STATUS.some(s => status.includes(s.toLowerCase()))) {
-        delayed++;
-      } else {
-        // جولة مسجلة بدون حالة واضحة = مكتملة
-        completed++;
-      }
-    });
-    
-    const byDate = {};
-    const byStaff = {};
-    const byArea = {};
-    const byStatus = {};
-    
-    filtered.forEach(r => {
-      const parsedDate = parseLogDate(r.Date);
-      const dateKey = parsedDate ? `${parsedDate.getFullYear()}-${String(parsedDate.getMonth()+1).padStart(2,'0')}-${String(parsedDate.getDate()).padStart(2,'0')}` : 'unknown';
-      const status = String(r.Status || '').toLowerCase().trim();
-      const notes = String(r.Negative_Notes || '').toLowerCase();
-      const isViol = String(r.Is_Violation || '').toLowerCase();
-      
-      // تحديد التصنيف
-      const isViolation = isViol === 'true' || isViol === 'yes' || 
-          VIOLATION_STATUS.some(s => status.includes(s.toLowerCase())) ||
-          notes.includes('نقاط الخلل') || notes.includes('❌');
-      const isCompleted = !isViolation && COMPLETED_STATUS.some(s => status.includes(s.toLowerCase()));
-      const isDelayed = !isViolation && DELAYED_STATUS.some(s => status.includes(s.toLowerCase()));
-      
-      // تجميع حسب التاريخ مع التفصيل
-      if (!byDate[dateKey]) byDate[dateKey] = { total: 0, completed: 0, delayed: 0, violations: 0 };
-      byDate[dateKey].total++;
-      if (isViolation) byDate[dateKey].violations++;
-      else if (isCompleted) byDate[dateKey].completed++;
-      else if (isDelayed) byDate[dateKey].delayed++;
-      else byDate[dateKey].completed++;
-      
-      // تجميع حسب الموظف مع التفصيل
-      const staff = r.Responsible_Role || r.Execution_Responsible || 'غير محدد';
-      if (!byStaff[staff]) byStaff[staff] = { total: 0, completed: 0, delayed: 0, violations: 0 };
-      byStaff[staff].total++;
-      if (isViolation) byStaff[staff].violations++;
-      else if (isCompleted) byStaff[staff].completed++;
-      else if (isDelayed) byStaff[staff].delayed++;
-      else byStaff[staff].completed++;
-      
-      // تجميع حسب المنطقة مع التفصيل
-      const area = r.Area || r.Round_Name || r.TaskID || 'غير محدد';
-      if (!byArea[area]) byArea[area] = { total: 0, completed: 0, delayed: 0, violations: 0 };
-      byArea[area].total++;
-      if (isViolation) byArea[area].violations++;
-      else if (isCompleted) byArea[area].completed++;
-      else if (isDelayed) byArea[area].delayed++;
-      else byArea[area].completed++;
-      
-      // تجميع حسب الحالة
-      const statusKey = r.Status || 'غير محدد';
-      byStatus[statusKey] = (byStatus[statusKey] || 0) + 1;
-    });
-    
-    return {
-      total: total,
-      completed: completed,
-      violations: violations,
-      delayed: delayed,
-      compliance: total > 0 ? Math.round((completed / total) * 100) : 0,
-      byDate: byDate,
-      byStaff: byStaff,
-      byArea: byArea,
-      byStatus: byStatus
-    };
-  }
-  
-  function getChecklist(taskId) {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  
-    const id = String(taskId || '').trim();
-    const pad = id.padStart(2, '0');
-    const prefix = `R${pad}_`; // R01_, R02_ ...
-  
-    // دور على أي شيت اسمه يبدأ بـ R01_ مثلا
-    const sheet = ss.getSheets().find(sh => sh.getName().startsWith(prefix));
-  
-    if (!sheet) {
-      return { items: [], error: 'Checklist sheet not found for TaskID=' + id + ' (expected prefix ' + prefix + ')' };
-    }
-  
-    const data = sheet.getDataRange().getValues();
-    if (data.length < 2) return { items: [] };
-  
-    // هيكل الشيت الصحيح:
-    // A: TaskID, B: Round_Name_AR, C: Item_No, D: Item_Description_AR (البند الحقيقي)
-    const items = [];
-    for (let i = 1; i < data.length; i++) {
-      // العمود D (index 3) = Item_Description_AR = البند الفعلي
-      const desc = data[i][3];
-      if (desc && String(desc).trim()) {
-        items.push({
-          id: i,
-          text: String(desc).trim(),
-          item: String(desc).trim()
-        });
-      }
-    }
-    
-    // جلب المسؤولين من MASTER_TASKS للمهمة المحددة
-    const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
-    const task = masterTasks.find(t => String(t.TaskID) === id);
-    
-    const responsibles = [];
-    if (task) {
-      for (let i = 1; i <= 5; i++) {
-        const resp = task[`Responsible_${i}`];
-        if (resp && String(resp).trim()) {
-          responsibles.push(String(resp).trim());
-        }
-      }
-    }
-  
-    return { items: items, sheetName: sheet.getName(), responsibles: responsibles };
-  }
-  
-  function verifyPasscode(staffName, passcode) {
-    const passcodes = sheetToObjects(getSheet('Staff_Passcodes'));
-    
-    // البحث عن أي موظف لديه هذا الرمز السري
-    const staffByPasscode = passcodes.find(p => 
-      String(p.Passcode) === String(passcode) || String(p.Code) === String(passcode)
-    );
-    
-    if (staffByPasscode) {
-      // الرمز صحيح - نرجع اسم الموظف صاحب الرمز
-      return { 
-        valid: true, 
-        staffName: staffByPasscode.Staff_Name || staffByPasscode.Name || staffName 
-      };
-    }
-    
-    return { valid: false, error: 'الرمز السري غير صحيح' };
-  }
-  
-  function resolveViolation(params) {
-    const sheet = getSheet('Rounds_Log');
-    if (!sheet) return { success: false, error: 'Sheet not found' };
-    
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    
-    const rowIndex = params.rowIndex;
-    if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row' };
-    
-    // Use correct column names from Sheet
-    const closedYNCol = headers.indexOf('Closed_YN');
-    const closedDateCol = headers.indexOf('Closed_Date');
-    const resolvedByCol = headers.indexOf('Resolved_By');
-    
-    if (closedYNCol === -1) return { success: false, error: 'Closed_YN column not found' };
-    
-    const now = new Date();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    
-    sheet.getRange(rowIndex, closedYNCol + 1).setValue('Yes');
-    
-    if (closedDateCol !== -1) {
-      sheet.getRange(rowIndex, closedDateCol + 1).setValue(dateStr);
-    }
-    
-    if (resolvedByCol !== -1) {
-      sheet.getRange(rowIndex, resolvedByCol + 1).setValue(params.resolvedBy || '');
-    }
-    
-    return { success: true };
-  }
-  
-  function logRound(payload) {
-    const sheet = getSheet('Rounds_Log');
-    if (!sheet) return { success: false, error: 'Rounds_Log sheet not found' };
-    
-    const now = new Date();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    
-    const row = headers.map(h => {
-      switch(h) {
-        case 'Date': return dateStr;
-        case 'Actual_Time': return payload.time || timeStr;
-        case 'Planned_Time': return payload.plannedTime || '';
-        case 'TaskID': return payload.taskId || '';
-        case 'RoundNo': return payload.roundNo || '';
-        case 'Round_Name': return payload.roundName || payload.area || '';
-        case 'Area': return payload.area || payload.roundName || '';
-        case 'Domain': return payload.domain || '';
-        case 'Responsible_Role': return payload.staff || '';
-        case 'Execution_Responsible': return payload.execResponsible || '';
-        case 'Status': return payload.status || 'تم';
-        case 'Positive_Notes': return payload.positiveNotes || '';
-        case 'Negative_Notes': return payload.negativeNotes || payload.notes || '';
-        case 'Is_Violation': return payload.isViolation ? 'TRUE' : 'FALSE';
-        case 'Closed_YN': return 'No';
-        case 'Alert': return '';
-        case 'Delay_Min': return '';
-        case 'MaxDelay_Min': return '';
-        default: return '';
-      }
-    });
-    
-    sheet.appendRow(row);
-    
-    return { success: true };
-  }
-  
-  // دالة تشخيصية لفحص البيانات
-  function debugInfo() {
-    const saudiNow = getSaudiDate();
-    const todayStr = getTodayString();
-    const dayName = getDayNameAr();
-    const currentMinutes = saudiNow.getHours() * 60 + saudiNow.getMinutes();
-    
-    const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
-    const schedule = sheetToObjects(getSheet('Round_Schedule'));
-    const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
-    
-    // أسماء أعمدة الأيام في MASTER_TASKS
-    const masterHeaders = masterTasks.length > 0 ? Object.keys(masterTasks[0]) : [];
-    const dayColumns = masterHeaders.filter(h => 
-      ['Sun','Mon','Tue','Wed','Thu','Fri','Sat','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].includes(h)
-    );
-    
-    // المهام المجدولة اليوم (بكل القيم الممكنة)
-    const todayTasks = masterTasks.filter(t => {
-      const dayCol = t[dayName];
-      const val = String(dayCol || '').toLowerCase().trim();
-      return val === 'yes' || val === 'true' || val === 'نعم' || val === '1';
-    });
-    
-    // عينة من قيم عمود اليوم
-    const dayColumnValues = masterTasks.slice(0, 10).map(t => ({
-      TaskID: t.TaskID,
-      dayValue: t[dayName],
-      dayValueType: typeof t[dayName]
-    }));
-    
-    // أسماء الأعمدة في Round_Schedule
-    const scheduleHeaders = schedule.length > 0 ? Object.keys(schedule[0]) : [];
-    
-    // أول 3 صفوف من الجدول الزمني
-    const scheduleSample = schedule.slice(0, 3);
-    
-    // سجل اليوم
-    const todayLog = roundsLog.filter(r => {
-      const logDate = parseLogDate(r.Date);
-      if (!logDate) return false;
-      const logStr = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
-      return logStr === todayStr;
-    });
-    
-    return {
-      debug: {
-        saudiTime: saudiNow.toISOString(),
-        todayStr: todayStr,
-        dayName: dayName,
-        dayNameDisplay: getDayNameArDisplay(),
-        currentMinutes: currentMinutes,
-        currentTimeFormatted: Math.floor(currentMinutes/60) + ':' + String(currentMinutes%60).padStart(2,'0'),
-        masterTasksCount: masterTasks.length,
-        masterHeaders: masterHeaders,
-        dayColumns: dayColumns,
-        todayTasksCount: todayTasks.length,
-        todayTasksSample: todayTasks.slice(0, 5).map(t => ({
-          TaskID: t.TaskID,
-          name: t.Round_Name_AR,
-          assignee: t.Assigned_To,
-          rpd: t.Rounds_Per_Day,
-          dayValue: t[dayName]
-        })),
-        dayColumnValues: dayColumnValues,
-        scheduleRowsCount: schedule.length,
-        scheduleHeaders: scheduleHeaders,
-        scheduleSample: scheduleSample,
-        roundsLogCount: roundsLog.length,
-        todayLogCount: todayLog.length
-      }
-    };
   }
   
   // ==================== COMMITTEE MEETINGS APIs ====================
@@ -2530,9 +2353,8 @@
   // ============================================================
   // نظام بلاغات حوادث سلامة المرضى
   // Patient Safety Incidents System
+  // (تم تعريف INCIDENTS_SPREADSHEET_ID في أعلى الملف)
   // ============================================================
-  
-  const INCIDENTS_SPREADSHEET_ID = '12SS-Nn_TpvIsIoUfdOPRzC_tgLqmb2hfZZi53_dSyVI';
   
   const INCIDENT_TYPES = {
     'medication_error': 'خطأ دوائي',
@@ -2938,6 +2760,196 @@
     };
   }
 
+  // ==================== إحصائيات لوحة المالك ====================
+  function getOwnerDashboardStats(params) {
+    try {
+      // التحقق من الصلاحيات باستخدام Firebase Token - فقط owner أو admin
+      if (!params) {
+        return { success: false, error: 'البيانات مطلوبة' };
+      }
+      
+      // التحقق من الهوية عبر Firebase
+      try {
+        validateStaffAuth_(params, ['owner', 'admin']);
+      } catch (authError) {
+        return { success: false, error: authError.message || 'غير مصرح لك بالوصول لهذه البيانات' };
+      }
+      
+      const now = getSaudiDate();
+      const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      
+      // جلب حالة الطوارئ من EOC_SPREADSHEET_ID
+      let emergency = { active: false };
+      try {
+        const eocSheet = SpreadsheetApp.openById(EOC_SPREADSHEET_ID).getSheetByName('EOC_Status');
+        if (eocSheet) {
+          const eocData = sheetToObjects(eocSheet);
+          const activeEmergency = eocData.find(e => 
+            String(e.Status || e.الحالة || '').toLowerCase() === 'active' ||
+            String(e.Status || e.الحالة || '') === 'نشط'
+          );
+          if (activeEmergency) {
+            emergency = {
+              active: true,
+              type: activeEmergency.Type || activeEmergency.النوع || 'حالة طوارئ',
+              message: activeEmergency.Message || activeEmergency.الرسالة || 'تنبيه طوارئ نشط!'
+            };
+          }
+        }
+      } catch(e) {}
+      
+      // جلب إحصائيات الحوادث
+      let incidents = { open: 0, new: 0, investigation: 0, escalated: 0, closed: 0 };
+      try {
+        const incSheet = getIncidentsSheet('Incidents_Log');
+        if (incSheet) {
+          const incData = sheetToObjects(incSheet);
+          incData.forEach(i => {
+            const status = String(i.Status || '').toLowerCase();
+            if (status === 'new' || status === '') {
+              incidents.new++;
+            } else if (status === 'under_investigation') {
+              incidents.investigation++;
+            } else if (status === 'escalated') {
+              incidents.escalated++;
+            } else if (status === 'closed') {
+              incidents.closed++;
+            }
+          });
+          incidents.open = incidents.new + incidents.investigation + incidents.escalated;
+        }
+      } catch(e) {}
+      
+      // جلب إحصائيات المخاطر
+      let risks = { active: 0, high: 0, medium: 0, low: 0, resolved: 0 };
+      try {
+        const riskSheet = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID).getSheetByName('Risks_Register');
+        if (riskSheet) {
+          const riskData = sheetToObjects(riskSheet);
+          riskData.forEach(r => {
+            const level = String(r.Risk_Level || r.مستوى_الخطر || '').toLowerCase();
+            const status = String(r.Status || r.الحالة || '').toLowerCase();
+            if (status === 'resolved' || status === 'معالج') {
+              risks.resolved++;
+            } else {
+              if (level === 'high' || level === 'عالي') risks.high++;
+              else if (level === 'medium' || level === 'متوسط') risks.medium++;
+              else if (level === 'low' || level === 'منخفض') risks.low++;
+            }
+          });
+          risks.active = risks.high + risks.medium + risks.low;
+        }
+      } catch(e) {}
+      
+      // ✅ جلب إحصائيات الشكاوى من ملف الشكاوى
+      let complaints = { open: 0, new: 0, inProgress: 0, escalated: 0, closed: 0 };
+      try {
+        const complaintSheet = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID).getSheetByName('Complaints_Log');
+        if (complaintSheet) {
+          const compData = sheetToObjects(complaintSheet);
+          compData.forEach(c => {
+            const status = String(c.Status || '').toLowerCase();
+            if (status === 'new' || status === '') {
+              complaints.new++;
+            } else if (status === 'in_progress') {
+              complaints.inProgress++;
+            } else if (status === 'closed') {
+              complaints.closed++;
+            }
+            // المصعدة النشطة فقط (لها escalatedTo وليست مغلقة)
+            const hasEscalation = (c.Escalated_To || '').trim() !== '';
+            if (hasEscalation && status !== 'closed') {
+              complaints.escalated++;
+            }
+          });
+          complaints.open = complaints.new + complaints.inProgress;
+        }
+      } catch(e) {}
+      
+      // ✅ جلب إحصائيات الجولات من ملف الجولات
+      let rounds = { today: 0, completed: 0, delayed: 0, violations: 0 };
+      try {
+        const roundsSheet = SpreadsheetApp.openById(ROUNDS_SPREADSHEET_ID).getSheetByName('Safety_Rounds') || 
+                             SpreadsheetApp.openById(ROUNDS_SPREADSHEET_ID).getSheetByName('Rounds_Log');
+        if (roundsSheet) {
+          const roundsData = sheetToObjects(roundsSheet);
+          roundsData.forEach(r => {
+            const roundDate = String(r.Round_Date || r.Date || '');
+            const status = String(r.Status || '').toLowerCase();
+            if (roundDate === today) {
+              rounds.today++;
+              if (status === 'completed' || status === 'مكتملة') rounds.completed++;
+            }
+            if (status === 'delayed' || status === 'متأخرة') rounds.delayed++;
+            if ((r.Violations_Count || 0) > 0) rounds.violations++;
+          });
+        }
+      } catch(e) {}
+      
+      // ✅ جلب إحصائيات المستخدمين
+      let users = { total: 0, active: 0, suspended: 0 };
+      try {
+        const usersSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('AuthorizedUsers');
+        if (usersSheet) {
+          const usersData = sheetToObjects(usersSheet);
+          users.total = usersData.length;
+          usersData.forEach(u => {
+            const status = String(u.Status || u.الحالة || 'active').toLowerCase();
+            if (status === 'suspended' || status === 'معلق') {
+              users.suspended++;
+            } else {
+              users.active++;
+            }
+          });
+        }
+      } catch(e) {}
+      
+      // بناء قائمة التنبيهات
+      let alerts = [];
+      if (emergency.active) {
+        alerts.push({ type: 'danger', message: emergency.message, count: null });
+      }
+      if (complaints.escalated > 0) {
+        alerts.push({ type: 'danger', message: 'شكاوى مصعدة تحتاج مراجعة', count: complaints.escalated });
+      }
+      if (incidents.escalated > 0) {
+        alerts.push({ type: 'danger', message: 'حوادث مصعدة تحتاج تدخل', count: incidents.escalated });
+      }
+      if (risks.high > 0) {
+        alerts.push({ type: 'warning', message: 'مخاطر عالية المستوى', count: risks.high });
+      }
+      if (rounds.delayed > 0) {
+        alerts.push({ type: 'warning', message: 'جولات متأخرة', count: rounds.delayed });
+      }
+      if (incidents.new > 3) {
+        alerts.push({ type: 'warning', message: 'حوادث جديدة تنتظر التحقيق', count: incidents.new });
+      }
+      
+      return {
+        success: true,
+        stats: {
+          emergency,
+          complaints,
+          incidents,
+          risks,
+          rounds,
+          users,
+          alerts
+        },
+        emergency,
+        complaints,
+        incidents,
+        risks,
+        rounds,
+        users,
+        alerts,
+        lastUpdate: now.toISOString()
+      };
+    } catch(e) {
+      return { success: false, error: e.message };
+    }
+  }
+
   // ==================== نظام المتابعين والتعيين ====================
   // يقرأ من شيت On_Charge: عمود A=الاسم, B=الرمز, C=التصعيد
 
@@ -3173,428 +3185,6 @@
     return { success: true, message: 'تم حفظ تحليل السبب الجذري بنجاح' };
   }
 
-  // ============================================
-  // نظام الشكاوى - Complaints System
-  // ============================================
-  
-  const COMPLAINTS_SPREADSHEET_ID = '1d4BRDY6qAa2u7zKRwwhtXKHIjDn16Yf0NuWA0FWLdMQ';
-  
-  function getComplaintsSheet(sheetName) {
-    const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(sheetName);
-    
-    if (!sheet) {
-      sheet = ss.insertSheet(sheetName);
-      if (sheetName === 'Complaints_Log') {
-        sheet.appendRow([
-          'Complaint_ID', 'Submit_Date', 'Submit_Time', 'Complaint_Type', 'Complainant_Name',
-          'Complainant_Phone', 'Complainant_Email', 'Complaint_DateTime', 'Locations',
-          'Description', 'Complaint_Against', 'Attachments', 'Additional_Notes',
-          'Status', 'Priority', 'Assigned_To', 'Assigned_Date', 'Resolution',
-          'Resolution_Date', 'Closed_By', 'Response_Sent', 'Days_Open'
-        ]);
-      } else if (sheetName === 'Complaints_Followup') {
-        sheet.appendRow(['Followup_ID', 'Complaint_ID', 'Date', 'Action', 'Action_By', 'Notes', 'Status']);
-      } else if (sheetName === 'Complaints_Staff') {
-        sheet.appendRow(['Name', 'Passcode', 'Role', 'Active']);
-        sheet.appendRow(['مدير الجودة', '1234', 'admin', 'نعم']);
-        sheet.appendRow(['مسؤول الشكاوى', '5678', 'analyst', 'نعم']);
-      }
-    }
-    
-    return sheet;
-  }
-  
-  function submitComplaint(payload) {
-    const sheet = getComplaintsSheet('Complaints_Log');
-    const now = getSaudiDate();
-    
-    const complaintId = `CMP-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${Date.now().toString().slice(-6)}`;
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    
-    const locations = Array.isArray(payload.locations) ? payload.locations.join(', ') : (payload.locations || '');
-    
-    sheet.appendRow([
-      complaintId,
-      dateStr,
-      timeStr,
-      payload.complaintType || '',
-      payload.complainantName || '',
-      payload.complainantPhone || '',
-      payload.complainantEmail || '',
-      payload.complaintDateTime || '',
-      locations,
-      payload.description || '',
-      payload.complaintAgainst || '',
-      '', // Attachments
-      payload.additionalNotes || '',
-      'new', // Status
-      'medium', // Priority
-      '', // Assigned_To
-      '', // Assigned_Date
-      '', // Resolution
-      '', // Resolution_Date
-      '', // Closed_By
-      'no', // Response_Sent
-      0  // Days_Open
-    ]);
-    
-    return { 
-      success: true, 
-      complaintId: complaintId,
-      message: 'تم استلام شكواك بنجاح'
-    };
-  }
-  
-  function getComplaintStaff() {
-    const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
-    const sheet = ss.getSheetByName('Master');
-    
-    if (!sheet) {
-      return { staff: [], assignment: [], escalation: [] };
-    }
-    
-    const data = sheet.getDataRange().getValues();
-    const staff = [];
-    const assignment = [];
-    const escalation = [];
-    
-    // بدءاً من الصف الثاني (بعد العناوين)
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      // عمود A: أسماء مديري الشكاوى
-      if (row[0] && String(row[0]).trim()) {
-        staff.push({
-          name: String(row[0]).trim(),
-          hasCode: row[1] ? true : false
-        });
-      }
-      // عمود C: أسماء التكليف
-      if (row[2] && String(row[2]).trim()) {
-        const assignName = String(row[2]).trim();
-        if (!assignment.includes(assignName)) {
-          assignment.push(assignName);
-        }
-      }
-      // عمود D: أسماء التصعيد
-      if (row[3] && String(row[3]).trim()) {
-        const escalateName = String(row[3]).trim();
-        if (!escalation.includes(escalateName)) {
-          escalation.push(escalateName);
-        }
-      }
-    }
-    
-    return { staff, assignment, escalation };
-  }
-  
-  function verifyComplaintPasscode(staffName, passcode) {
-    const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
-    const sheet = ss.getSheetByName('Master');
-    
-    if (!sheet) {
-      return { verified: false, error: 'ورقة Master غير موجودة' };
-    }
-    
-    const data = sheet.getDataRange().getValues();
-    
-    // البحث في عمود A (الاسم) وعمود B (الرمز)
-    for (let i = 1; i < data.length; i++) {
-      const name = String(data[i][0] || '').trim();
-      const code = String(data[i][1] || '').trim();
-      
-      if (name === staffName && code === String(passcode)) {
-        return { verified: true, name: name };
-      }
-    }
-    
-    return { verified: false, error: 'الاسم أو الرمز السري غير صحيح' };
-  }
-  
-  function getComplaintAssignmentList() {
-    const result = getComplaintStaff();
-    return { assignment: result.assignment || [] };
-  }
-  
-  function getComplaintEscalationList() {
-    const result = getComplaintStaff();
-    return { escalation: result.escalation || [] };
-  }
-  
-  function getComplaintStats(params) {
-    const sheet = getComplaintsSheet('Complaints_Log');
-    const data = sheetToObjects(sheet);
-    
-    const now = getSaudiDate();
-    let filtered = data;
-    
-    // فلترة حسب الفترة
-    if (params && params.days) {
-      const cutoff = new Date(now);
-      cutoff.setDate(cutoff.getDate() - parseInt(params.days));
-      filtered = data.filter(c => {
-        const d = parseLogDate(c.Submit_Date);
-        return d && d >= cutoff;
-      });
-    }
-    
-    const total = filtered.length;
-    const newCount = filtered.filter(c => c.Status === 'new').length;
-    const inProgress = filtered.filter(c => c.Status === 'in_progress').length;
-    const closed = filtered.filter(c => c.Status === 'closed').length;
-    
-    // حساب متوسط أيام الحل
-    const closedWithDays = filtered.filter(c => c.Status === 'closed' && c.Days_Open);
-    const avgDays = closedWithDays.length > 0 
-      ? Math.round(closedWithDays.reduce((sum, c) => sum + (parseInt(c.Days_Open) || 0), 0) / closedWithDays.length)
-      : 0;
-    
-    // توزيع حسب النوع
-    const byType = {};
-    filtered.forEach(c => {
-      const type = c.Complaint_Type || 'غير محدد';
-      byType[type] = (byType[type] || 0) + 1;
-    });
-    
-    // توزيع حسب الحالة
-    const byStatus = {
-      new: newCount,
-      in_progress: inProgress,
-      closed: closed
-    };
-    
-    return {
-      total,
-      new: newCount,
-      inProgress,
-      closed,
-      avgResolution: avgDays,
-      byType,
-      byStatus
-    };
-  }
-  
-  function getComplaints(params) {
-    const sheet = getComplaintsSheet('Complaints_Log');
-    const data = sheetToObjects(sheet);
-    
-    let filtered = data;
-    
-    // فلترة حسب الحالة
-    if (params && params.status && params.status !== 'all') {
-      filtered = filtered.filter(c => c.Status === params.status);
-    }
-    
-    // فلترة حسب النوع
-    if (params && params.type && params.type !== 'all') {
-      filtered = filtered.filter(c => c.Complaint_Type === params.type);
-    }
-    
-    // فلترة حسب التاريخ
-    if (params && params.startDate) {
-      filtered = filtered.filter(c => {
-        const d = parseLogDate(c.Submit_Date);
-        return d && d >= new Date(params.startDate);
-      });
-    }
-    
-    if (params && params.endDate) {
-      filtered = filtered.filter(c => {
-        const d = parseLogDate(c.Submit_Date);
-        return d && d <= new Date(params.endDate + 'T23:59:59');
-      });
-    }
-    
-    // ترتيب من الأحدث للأقدم
-    filtered.sort((a, b) => {
-      const dateA = parseLogDate(a.Submit_Date);
-      const dateB = parseLogDate(b.Submit_Date);
-      if (!dateA) return 1;
-      if (!dateB) return -1;
-      return dateB - dateA;
-    });
-    
-    // تحديث أيام الفتح للشكاوى المفتوحة
-    const now = getSaudiDate();
-    const complaints = filtered.map(c => {
-      let daysOpen = parseInt(c.Days_Open) || 0;
-      if (c.Status !== 'closed') {
-        const submitDate = parseLogDate(c.Submit_Date);
-        if (submitDate) {
-          daysOpen = Math.floor((now - submitDate) / (1000 * 60 * 60 * 24));
-        }
-      }
-      
-      return {
-        id: c.Complaint_ID,
-        _rowIndex: c._rowIndex,
-        submitDate: formatDate(c.Submit_Date),
-        submitTime: c.Submit_Time || '',
-        type: c.Complaint_Type,
-        complainantName: c.Complainant_Name,
-        complainantPhone: c.Complainant_Phone || '',
-        locations: c.Locations,
-        description: (c.Description || '').substring(0, 100) + ((c.Description || '').length > 100 ? '...' : ''),
-        complaintAgainst: c.Complaint_Against || '',
-        status: c.Status,
-        priority: c.Priority || 'medium',
-        assignedTo: c.Assigned_To || '',
-        daysOpen: daysOpen
-      };
-    });
-    
-    return { complaints };
-  }
-  
-  function getComplaintDetails(complaintId) {
-    const sheet = getComplaintsSheet('Complaints_Log');
-    const data = sheetToObjects(sheet);
-    
-    const complaint = data.find(c => c.Complaint_ID === complaintId);
-    
-    if (!complaint) {
-      return { error: 'الشكوى غير موجودة' };
-    }
-    
-    // حساب أيام الفتح
-    const now = getSaudiDate();
-    let daysOpen = parseInt(complaint.Days_Open) || 0;
-    if (complaint.Status !== 'closed') {
-      const submitDate = parseLogDate(complaint.Submit_Date);
-      if (submitDate) {
-        daysOpen = Math.floor((now - submitDate) / (1000 * 60 * 60 * 24));
-      }
-    }
-    
-    // جلب سجل المتابعة
-    const followupSheet = getComplaintsSheet('Complaints_Followup');
-    const followups = sheetToObjects(followupSheet)
-      .filter(f => f.Complaint_ID === complaintId)
-      .map(f => ({
-        date: formatDate(f.Date),
-        action: f.Action,
-        actionBy: f.Action_By,
-        notes: f.Notes,
-        status: f.Status
-      }))
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    return {
-      complaint: {
-        id: complaint.Complaint_ID,
-        _rowIndex: complaint._rowIndex,
-        submitDate: formatDate(complaint.Submit_Date),
-        submitTime: complaint.Submit_Time || '',
-        type: complaint.Complaint_Type,
-        complainantName: complaint.Complainant_Name,
-        complainantPhone: complaint.Complainant_Phone || '',
-        complainantEmail: complaint.Complainant_Email || '',
-        complaintDateTime: complaint.Complaint_DateTime || '',
-        locations: complaint.Locations,
-        description: complaint.Description,
-        complaintAgainst: complaint.Complaint_Against || '',
-        additionalNotes: complaint.Additional_Notes || '',
-        status: complaint.Status,
-        priority: complaint.Priority || 'medium',
-        assignedTo: complaint.Assigned_To || '',
-        assignedDate: formatDate(complaint.Assigned_Date),
-        resolution: complaint.Resolution || '',
-        resolutionDate: formatDate(complaint.Resolution_Date),
-        closedBy: complaint.Closed_By || '',
-        responseSent: complaint.Response_Sent || 'no',
-        daysOpen: daysOpen
-      },
-      followups
-    };
-  }
-  
-  function updateComplaint(params) {
-    const sheet = getComplaintsSheet('Complaints_Log');
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    
-    const rowIndex = params.rowIndex;
-    if (!rowIndex || rowIndex < 2) {
-      return { success: false, error: 'صف غير صالح' };
-    }
-    
-    const now = getSaudiDate();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    
-    // تحديث الحقول المطلوبة
-    const updates = {
-      'Status': params.status,
-      'Priority': params.priority,
-      'Assigned_To': params.assignedTo,
-      'Resolution': params.resolution,
-      'Response_Sent': params.responseSent
-    };
-    
-    // إذا تم تعيين مسؤول
-    if (params.assignedTo && !params.skipAssignDate) {
-      updates['Assigned_Date'] = dateStr;
-    }
-    
-    // إذا تم الإغلاق
-    if (params.status === 'closed') {
-      updates['Resolution_Date'] = dateStr;
-      updates['Closed_By'] = params.closedBy || params.actionBy || '';
-      
-      // حساب أيام الفتح
-      const submitDateCol = headers.indexOf('Submit_Date');
-      if (submitDateCol !== -1) {
-        const submitDate = parseLogDate(data[rowIndex - 1][submitDateCol]);
-        if (submitDate) {
-          updates['Days_Open'] = Math.floor((now - submitDate) / (1000 * 60 * 60 * 24));
-        }
-      }
-    }
-    
-    // تطبيق التحديثات
-    for (const [field, value] of Object.entries(updates)) {
-      if (value !== undefined) {
-        const colIndex = headers.indexOf(field);
-        if (colIndex !== -1) {
-          sheet.getRange(rowIndex, colIndex + 1).setValue(value);
-        }
-      }
-    }
-    
-    // إضافة سجل متابعة
-    const followupSheet = getComplaintsSheet('Complaints_Followup');
-    const followupId = `CF-${Date.now()}`;
-    followupSheet.appendRow([
-      followupId,
-      params.complaintId,
-      dateStr,
-      params.action || 'تحديث الشكوى',
-      params.actionBy || 'النظام',
-      params.notes || '',
-      'completed'
-    ]);
-    
-    return { success: true, message: 'تم تحديث الشكوى بنجاح' };
-  }
-  
-  function getComplaintHistory(complaintId) {
-    const followupSheet = getComplaintsSheet('Complaints_Followup');
-    const data = sheetToObjects(followupSheet);
-    
-    const history = data
-      .filter(f => f.Complaint_ID === complaintId)
-      .map(f => ({
-        date: formatDate(f.Date),
-        action: f.Action,
-        actionBy: f.Action_By,
-        notes: f.Notes,
-        status: f.Status
-      }))
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    return { history };
-  }
-  
   /******************************************************
    * قائمة فحص جاهزية الطوارئ - Readiness Checklist
    ******************************************************/
@@ -3769,3 +3359,623 @@
     }
   }
   
+
+// ======== Patient Portal Functions ========
+// (تم تعريف PATIENTS_SPREADSHEET_ID في أعلى الملف)
+
+/**
+ * تسجيل مريض جديد
+ */
+function registerPatient(payload) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName("Patients");
+    
+    if (!sheet) {
+      sheet = ss.insertSheet("Patients");
+      sheet.appendRow(["UID", "Email", "Name", "Phone", "Role", "CreatedAt", "LastLogin"]);
+    }
+    
+    const existingData = sheet.getDataRange().getValues();
+    const uidCol = 0;
+    for (let i = 1; i < existingData.length; i++) {
+      if (existingData[i][uidCol] === payload.uid) {
+        sheet.getRange(i + 1, 7).setValue(new Date().toISOString());
+        return { success: true, message: "تم تحديث آخر دخول" };
+      }
+    }
+    
+    sheet.appendRow(safeCellArray_([
+      payload.uid,
+      payload.email,
+      payload.name || "مريض جديد",
+      payload.phone || "",
+      "patient",
+      payload.createdAt || new Date().toISOString(),
+      new Date().toISOString()
+    ]));
+    
+    return { success: true, message: "تم تسجيل المريض بنجاح" };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * جلب ملف المريض
+ */
+function getPatientProfile(patientId) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Patients");
+    if (!sheet) return { profile: null };
+    
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === patientId) {
+        return {
+          profile: {
+            uid: data[i][0],
+            email: data[i][1],
+            name: data[i][2],
+            phone: data[i][3],
+            role: data[i][4],
+            createdAt: data[i][5]
+          }
+        };
+      }
+    }
+    return { profile: null };
+  } catch (err) {
+    return { profile: null, error: err.message };
+  }
+}
+
+/**
+ * حجز موعد جديد
+ */
+function bookAppointment(payload) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName("Appointments");
+    
+    if (!sheet) {
+      sheet = ss.insertSheet("Appointments");
+      sheet.appendRow(["ID", "PatientID", "PatientName", "PatientEmail", "Department", "DoctorID", "DoctorName", "Date", "Time", "Notes", "Status", "CreatedAt"]);
+    }
+    
+    const appointmentId = "APT-" + Date.now();
+    
+    sheet.appendRow(safeCellArray_([
+      appointmentId,
+      payload.patientId,
+      payload.patientName,
+      payload.patientEmail,
+      payload.department,
+      payload.doctorId,
+      payload.doctorName,
+      payload.date,
+      payload.time,
+      payload.notes || "",
+      payload.status || "pending",
+      new Date().toISOString()
+    ]));
+    
+    return { success: true, appointmentId: appointmentId, message: "تم حجز الموعد بنجاح" };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * جلب مواعيد المريض
+ */
+function getPatientAppointments(patientId) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Appointments");
+    if (!sheet) return { appointments: [] };
+    
+    const data = sheet.getDataRange().getValues();
+    const appointments = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === patientId) {
+        appointments.push({
+          id: data[i][0],
+          department: data[i][4],
+          doctorName: data[i][6],
+          date: data[i][7],
+          time: data[i][8],
+          notes: data[i][9],
+          status: data[i][10],
+          createdAt: data[i][11]
+        });
+      }
+    }
+    
+    appointments.sort((a, b) => new Date(b.date) - new Date(a.date));
+    return { appointments: appointments };
+  } catch (err) {
+    return { appointments: [], error: err.message };
+  }
+}
+
+/**
+ * إلغاء موعد
+ */
+function cancelAppointment(payload) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Appointments");
+    if (!sheet) return { success: false, error: "لا توجد مواعيد" };
+    
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === payload.appointmentId && data[i][1] === payload.patientId) {
+        sheet.getRange(i + 1, 11).setValue("cancelled");
+        return { success: true, message: "تم إلغاء الموعد" };
+      }
+    }
+    return { success: false, error: "الموعد غير موجود" };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * جلب نتائج فحوصات المريض
+ */
+function getPatientResults(patientId) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("LabResults");
+    if (!sheet) return { results: [] };
+    
+    const data = sheet.getDataRange().getValues();
+    const results = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === patientId) {
+        results.push({
+          id: data[i][0],
+          testType: data[i][2],
+          result: data[i][3],
+          date: data[i][4],
+          fileUrl: data[i][5] || null
+        });
+      }
+    }
+    
+    return { results: results };
+  } catch (err) {
+    return { results: [], error: err.message };
+  }
+}
+
+/**
+ * حفظ أعراض المريض
+ */
+function submitPatientSymptoms(payload) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName("PatientSymptoms");
+    
+    if (!sheet) {
+      sheet = ss.insertSheet("PatientSymptoms");
+      sheet.appendRow(["ID", "PatientID", "Symptoms", "Duration", "ChronicDiseases", "AIResponse", "CreatedAt"]);
+    }
+    
+    const symptomId = "SYM-" + Date.now();
+    
+    sheet.appendRow(safeCellArray_([
+      symptomId,
+      payload.patientId,
+      payload.symptoms,
+      payload.duration,
+      payload.chronic || "",
+      payload.aiResponse || "",
+      new Date().toISOString()
+    ]));
+    
+    return { success: true, symptomId: symptomId };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * تحليل الأعراض بالذكاء الاصطناعي
+ */
+function analyzeSymptoms(payload) {
+  try {
+    const symptoms = payload.symptoms || "";
+    const duration = payload.duration || "";
+    const chronic = payload.chronic || "";
+    
+    const specialtyMap = {
+      "صداع|رأس|دوخة|غثيان": "الباطنية أو الطب العام",
+      "عين|نظر|رؤية|ضبابية": "طب العيون",
+      "أسنان|ضرس|لثة|فم": "طب الأسنان",
+      "حمل|دورة|نساء|ولادة": "النساء والولادة",
+      "عظام|مفاصل|ظهر|ركبة": "العظام والمفاصل",
+      "سكري|ضغط|قلب|كلى": "الباطنية"
+    };
+    
+    let recommendedDept = "الطب العام";
+    for (const [pattern, dept] of Object.entries(specialtyMap)) {
+      if (new RegExp(pattern, "i").test(symptoms)) {
+        recommendedDept = dept;
+        break;
+      }
+    }
+    
+    submitPatientSymptoms(payload);
+    
+    return {
+      success: true,
+      recommendation: recommendedDept,
+      message: "بناءً على الأعراض المذكورة، ننصحك بزيارة قسم " + recommendedDept
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ==================== MRIS Chunk Upload Backend ====================
+// (تم تعريف MRIS_SHEET_ID في أعلى الملف)
+
+// ⚠️ مهم: استبدل هذا بـ Folder ID حقيقي من Google Drive
+const MRIS_UPLOAD_FOLDER_ID = 'PUT_YOUR_DRIVE_FOLDER_ID_HERE';
+const MRIS_TEMP_FOLDER_NAME = 'MRIS_TEMP_UPLOADS';
+
+function requireMrisToken_(token) {
+  const expected = PropertiesService.getScriptProperties().getProperty('MRIS_TOKEN');
+  if (!expected) return;
+  const got = String(token || '').trim();
+  if (got !== expected) throw new Error('Unauthorized: invalid token');
+}
+
+function mrisMonthKey_(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${yyyy}-${mm}`;
+}
+
+function ensureMrisUploadSheet_() {
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
+  let sh = ss.getSheetByName('MRIS_Upload_Log');
+  if (!sh) {
+    sh = ss.insertSheet('MRIS_Upload_Log');
+    sh.appendRow([
+      'Timestamp', 'MonthKey', 'ReportType', 'FileName', 'MimeType',
+      'FileSizeBytes', 'DriveFileId', 'DriveUrl', 'UploadedBy',
+      'UploadedByEmail', 'Notes', 'SessionId'
+    ]);
+  }
+  return sh;
+}
+
+function ensureMrisTempRootFolder_() {
+  const root = DriveApp.getRootFolder();
+  const it = root.getFoldersByName(MRIS_TEMP_FOLDER_NAME);
+  if (it.hasNext()) return it.next();
+  return root.createFolder(MRIS_TEMP_FOLDER_NAME);
+}
+
+function ensureMrisSessionFolder_(sessionId) {
+  const tempRoot = ensureMrisTempRootFolder_();
+  const it = tempRoot.getFoldersByName(sessionId);
+  if (it.hasNext()) return it.next();
+  return tempRoot.createFolder(sessionId);
+}
+
+function startMrisUpload_(payload) {
+  requireMrisToken_(payload.token);
+  
+  const reportType = String(payload.reportType || '').trim();
+  const fileName = String(payload.fileName || '').trim();
+  const mimeType = String(payload.mimeType || 'application/octet-stream').trim();
+  const fileSize = Number(payload.fileSize || 0);
+  
+  if (!reportType) throw new Error('reportType is required');
+  if (!fileName) throw new Error('fileName is required');
+  
+  const now = new Date();
+  const sessionId = `MRIS_${now.getTime()}_${Math.random().toString(36).slice(2,10)}`;
+  const folder = ensureMrisSessionFolder_(sessionId);
+  
+  const meta = {
+    sessionId,
+    createdAt: now.toISOString(),
+    reportType,
+    fileName,
+    mimeType,
+    fileSize,
+    uploadedBy: payload.uploadedBy || '',
+    uploadedByEmail: payload.uploadedByEmail || '',
+    notes: payload.notes || ''
+  };
+  folder.createFile('meta.json', JSON.stringify(meta, null, 2), MimeType.PLAIN_TEXT);
+  
+  return { sessionId };
+}
+
+function uploadMrisChunk_(payload) {
+  requireMrisToken_(payload.token);
+  
+  const sessionId = String(payload.sessionId || '').trim();
+  const index = Number(payload.index);
+  const total = Number(payload.total);
+  const chunkBase64 = String(payload.chunkBase64 || '').trim();
+  
+  if (!sessionId) throw new Error('sessionId is required');
+  if (!Number.isFinite(index) || index < 0) throw new Error('index invalid');
+  if (!Number.isFinite(total) || total <= 0) throw new Error('total invalid');
+  if (!chunkBase64) throw new Error('chunkBase64 is required');
+  
+  const folder = ensureMrisSessionFolder_(sessionId);
+  const name = `chunk_${String(index).padStart(6,'0')}.b64`;
+  folder.createFile(name, chunkBase64, MimeType.PLAIN_TEXT);
+  
+  return { received: index, total };
+}
+
+function finishMrisUpload_(payload) {
+  requireMrisToken_(payload.token);
+  
+  const sessionId = String(payload.sessionId || '').trim();
+  if (!sessionId) throw new Error('sessionId is required');
+  
+  const folder = ensureMrisSessionFolder_(sessionId);
+  
+  let meta = null;
+  const metaIt = folder.getFilesByName('meta.json');
+  if (metaIt.hasNext()) {
+    meta = JSON.parse(metaIt.next().getBlob().getDataAsString('UTF-8'));
+  }
+  if (!meta) throw new Error('meta.json not found');
+  
+  const files = [];
+  const it = folder.getFiles();
+  while (it.hasNext()) {
+    const f = it.next();
+    const n = f.getName();
+    if (n.startsWith('chunk_') && n.endsWith('.b64')) files.push(f);
+  }
+  if (!files.length) throw new Error('No chunks found');
+  
+  files.sort((a,b) => a.getName().localeCompare(b.getName()));
+  
+  let totalLen = 0;
+  const byteParts = [];
+  for (const f of files) {
+    const b64 = f.getBlob().getDataAsString('UTF-8');
+    const bytes = Utilities.base64Decode(b64);
+    byteParts.push(bytes);
+    totalLen += bytes.length;
+  }
+  
+  const all = new Array(totalLen);
+  let offset = 0;
+  for (const part of byteParts) {
+    for (let i = 0; i < part.length; i++) {
+      all[offset + i] = part[i];
+    }
+    offset += part.length;
+  }
+  
+  const finalFolder = DriveApp.getFolderById(MRIS_UPLOAD_FOLDER_ID);
+  const blob = Utilities.newBlob(all, meta.mimeType || 'application/octet-stream', meta.fileName || 'upload.bin');
+  const finalFile = finalFolder.createFile(blob);
+  
+  const sh = ensureMrisUploadSheet_();
+  const now = new Date();
+  sh.appendRow(safeCellArray_([
+    now.toISOString(),
+    mrisMonthKey_(now),
+    meta.reportType,
+    meta.fileName,
+    meta.mimeType,
+    Number(meta.fileSize || totalLen),
+    finalFile.getId(),
+    finalFile.getUrl(),
+    meta.uploadedBy || '',
+    meta.uploadedByEmail || '',
+    meta.notes || '',
+    sessionId
+  ]));
+  
+  folder.setTrashed(true);
+  
+  return {
+    fileId: finalFile.getId(),
+    fileUrl: finalFile.getUrl(),
+    bytes: totalLen,
+    sessionId,
+    timestamp: now.toISOString()
+  };
+}
+
+function getMrisUploadStatus_(payload) {
+  requireMrisToken_(payload.token);
+  
+  const sh = ensureMrisUploadSheet_();
+  const data = sh.getDataRange().getValues();
+  const mk = mrisMonthKey_(new Date());
+  
+  const lastByType = {};
+  for (let i = data.length - 1; i >= 1; i--) {
+    const row = data[i];
+    const rowMonth = String(row[1] || '');
+    if (rowMonth !== mk) continue;
+    const type = String(row[2] || '');
+    if (!type || lastByType[type]) continue;
+    
+    lastByType[type] = {
+      timestamp: row[0] || '',
+      fileName: row[3] || '',
+      driveUrl: row[7] || '',
+      uploadedBy: row[8] || ''
+    };
+  }
+  
+  const assignments = getMrisAssignments_().assignments || {};
+  return { monthKey: mk, lastByType, assignments };
+}
+
+// ===== MRIS Assignment Functions =====
+const MRIS_SHEET_ASSIGNMENTS = 'MRIS_Assignments';
+
+function ensureMrisAssignmentsSheet_() {
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
+  let sh = ss.getSheetByName(MRIS_SHEET_ASSIGNMENTS);
+  if (!sh) {
+    sh = ss.insertSheet(MRIS_SHEET_ASSIGNMENTS);
+    sh.appendRow(['reportType', 'assigneeName', 'assigneeEmail', 'deadlineDay', 'updatedAt', 'updatedBy']);
+  }
+  return sh;
+}
+
+function setMrisAssignment_(payload) {
+  requireMrisToken_(payload.token);
+  
+  const reportType = String(payload.reportType || '').trim();
+  const name = String(payload.name || '').trim();
+  const email = String(payload.email || '').trim();
+  const deadlineDay = Number(payload.deadlineDay || 5);
+  
+  if (!reportType) throw new Error('reportType required');
+  if (!name) throw new Error('name required');
+  
+  const sh = ensureMrisAssignmentsSheet_();
+  const data = sh.getDataRange().getValues();
+  const updatedAt = new Date().toISOString();
+  const updatedBy = String(payload.actor || payload.staffEmail || payload.email || 'system');
+  
+  let found = false;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === reportType) {
+      sh.getRange(i + 1, 2).setValue(name);
+      sh.getRange(i + 1, 3).setValue(email);
+      sh.getRange(i + 1, 4).setValue(deadlineDay);
+      sh.getRange(i + 1, 5).setValue(updatedAt);
+      sh.getRange(i + 1, 6).setValue(updatedBy);
+      found = true;
+      break;
+    }
+  }
+  
+  if (!found) {
+    sh.appendRow([reportType, name, email, deadlineDay, updatedAt, updatedBy]);
+  }
+  
+  return { saved: true };
+}
+
+function getMrisAssignments_() {
+  const sh = ensureMrisAssignmentsSheet_();
+  const data = sh.getDataRange().getValues();
+  
+  const assignments = {};
+  for (let i = 1; i < data.length; i++) {
+    const rt = String(data[i][0] || '').trim();
+    if (!rt) continue;
+    assignments[rt] = {
+      name: String(data[i][1] || '').trim(),
+      email: String(data[i][2] || '').trim(),
+      deadlineDay: Number(data[i][3] || 5),
+      updatedAt: data[i][4] || '',
+      updatedBy: data[i][5] || ''
+    };
+  }
+  
+  return { assignments };
+}
+
+// ===== MRIS Heatmap / KPIs / Evidence =====
+const MRIS_SHEET_HEATMAP = 'MRIS_Heatmap';
+const MRIS_SHEET_KPIS = 'MRIS_KPIs';
+const MRIS_SHEET_EVIDENCE = 'MRIS_EvidencePack';
+
+function getMrisHeatmap_() {
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
+  const sh = ss.getSheetByName(MRIS_SHEET_HEATMAP);
+  if (!sh || sh.getLastRow() < 2) {
+    return { data: [
+      { deptId:'reception', name:'الاستقبال', floor:1, required:2, actual:2 },
+      { deptId:'dental', name:'الأسنان', floor:2, required:4, actual:3 },
+      { deptId:'emergency', name:'الطوارئ', floor:1, required:3, actual:3 }
+    ]};
+  }
+  const values = sh.getDataRange().getValues();
+  const headers = values[0];
+  const data = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    data.push({
+      deptId: String(row[headers.indexOf('deptId')] || row[0] || '').trim(),
+      name: String(row[headers.indexOf('name')] || row[1] || '').trim(),
+      floor: Number(row[headers.indexOf('floor')] || row[2] || 1),
+      required: Number(row[headers.indexOf('required')] || row[3] || 0),
+      actual: Number(row[headers.indexOf('actual')] || row[4] || 0)
+    });
+  }
+  return { data: data.filter(x => x.deptId && x.name) };
+}
+
+function getMrisKpis_() {
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
+  const sh = ss.getSheetByName(MRIS_SHEET_KPIS);
+  if (!sh || sh.getLastRow() < 2) {
+    return { data: { stressIndex: 25, consumptionIntegrity: 92, riskLevel: 'low' } };
+  }
+  const values = sh.getDataRange().getValues();
+  const obj = {};
+  for (let i = 1; i < values.length; i++) {
+    const k = String(values[i][0] || '').trim();
+    const v = values[i][1];
+    if (k) obj[k] = v;
+  }
+  return { data: {
+    stressIndex: Number(obj.stressIndex || 25),
+    consumptionIntegrity: Number(obj.consumptionIntegrity || 92),
+    riskLevel: String(obj.riskLevel || 'low')
+  }};
+}
+
+function getMrisEvidencePack_(payload) {
+  requireMrisToken_(payload.token);
+  const standardRef = String(payload.standardRef || 'LD4.5').trim();
+  const deptId = String(payload.deptId || '').trim();
+  
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
+  const sh = ss.getSheetByName(MRIS_SHEET_EVIDENCE);
+  if (!sh || sh.getLastRow() < 2) return { data: [] };
+  
+  const values = sh.getDataRange().getValues();
+  const headers = values[0];
+  const items = [];
+  
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const sr = String(row[headers.indexOf('standardRef')] || row[0] || '').trim();
+    const d = String(row[headers.indexOf('deptId')] || row[1] || '').trim();
+    
+    if (standardRef && sr !== standardRef) continue;
+    if (deptId && d !== deptId) continue;
+    
+    items.push({
+      standardRef: sr,
+      deptId: d,
+      evidenceType: String(row[headers.indexOf('evidenceType')] || row[2] || ''),
+      summary: String(row[headers.indexOf('summary')] || row[3] || ''),
+      status: String(row[headers.indexOf('status')] || row[4] || 'Ready'),
+      evidenceLink: String(row[headers.indexOf('evidenceLink')] || row[5] || ''),
+      attachments: []
+    });
+  }
+  
+  return { data: items };
+}
+

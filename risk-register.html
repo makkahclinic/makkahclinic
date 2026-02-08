@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>سجل المخاطر - Risk Register</title>
+    
+    <!-- نظام الحماية الموحد -->
+    <script src="auth-guard.js"></script>
+    <script>
+        (async function() {
+            const allowed = await AuthGuard.protectPage('risk');
+            if (!allowed) return;
+        })();
+    </script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -387,6 +397,265 @@
         .cell-ext { background: var(--ext); color: #fff; }
         .cell-high { background: var(--high); color: #fff; }
         .cell-med { background: var(--med); color: #000; }
+        
+        .risk-table tbody tr { cursor: pointer; transition: all 0.2s; }
+        .risk-table tbody tr:hover { background: rgba(201,169,98,0.15); transform: translateX(-3px); }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-radius: 16px;
+            max-width: 800px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 2px solid var(--gold);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal-header {
+            background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+            padding: 20px;
+            border-radius: 14px 14px 0 0;
+            border-bottom: 2px solid var(--gold);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h3 { margin: 0; font-size: 1.2rem; color: var(--gold); }
+        .modal-close {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            width: 35px; height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .modal-close:hover { background: rgba(255,255,255,0.2); }
+        .modal-body { padding: 25px; }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .detail-item {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 10px;
+            border-right: 4px solid var(--gold);
+        }
+        .detail-item.full { grid-column: 1 / -1; }
+        .detail-label { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 5px; text-transform: uppercase; }
+        .detail-value { font-weight: 700; color: #fff; font-size: 1rem; }
+        .detail-value.large { font-size: 1.3rem; }
+        .risk-score-display {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 15px;
+        }
+        .score-box {
+            width: 70px; height: 70px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 900;
+        }
+        .score-ext { background: var(--ext); }
+        .score-high { background: var(--high); }
+        .score-med { background: var(--med); color: #000; }
+        .score-low { background: var(--low); color: #000; }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            flex-wrap: wrap;
+        }
+        .modal-form .form-group { margin-bottom: 15px; }
+        .modal-form .form-group.full { grid-column: 1 / -1; }
+        .modal-form .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--gold);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        .modal-form .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+        .modal-form .form-input:focus {
+            outline: none;
+            border-color: var(--gold);
+            background: rgba(255,255,255,0.12);
+        }
+        .modal-form .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .modal-form .followup-section {
+            background: rgba(201,169,98,0.1);
+            border: 1px solid rgba(201,169,98,0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .modal-form .followup-section h4 {
+            color: var(--gold);
+            margin-bottom: 15px;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .modal-form select.form-input {
+            cursor: pointer;
+        }
+        .modal-form select.form-input option {
+            background: #1e293b;
+            color: #fff;
+        }
+        .pipeline-stages {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            overflow-x: auto;
+        }
+        .pipeline-stage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            min-width: 50px;
+        }
+        .pipeline-stage .stage-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            border: 2px solid rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+        .pipeline-stage.completed .stage-icon {
+            background: var(--gold);
+            border-color: var(--gold);
+            color: #000;
+            font-weight: bold;
+        }
+        .pipeline-stage .stage-label {
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+        .pipeline-stage.completed .stage-label {
+            color: var(--gold);
+            opacity: 1;
+        }
+        .pipeline-connector {
+            flex: 1;
+            height: 3px;
+            background: rgba(255,255,255,0.15);
+            margin: 0 3px;
+            border-radius: 2px;
+        }
+        .pipeline-connector.completed {
+            background: var(--gold);
+        }
+        .followup-history {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .followup-entry {
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-right: 3px solid var(--gold);
+        }
+        .followup-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .followup-action {
+            font-weight: 600;
+            color: var(--gold);
+        }
+        .followup-date {
+            font-size: 0.8rem;
+            opacity: 0.6;
+        }
+        .followup-owner {
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+            opacity: 0.8;
+        }
+        .followup-note {
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        .followup-decision {
+            font-size: 0.85rem;
+            color: var(--gold);
+            margin-bottom: 4px;
+        }
+        .followup-review {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            margin-bottom: 4px;
+        }
+        .empty-history {
+            text-align: center;
+            padding: 20px;
+            opacity: 0.5;
+        }
+        .btn-gold {
+            background: var(--gold);
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .btn-gold:hover {
+            background: #b8983e;
+        }
+        .btn-sm {
+            font-size: 0.85rem;
+            padding: 6px 12px;
+        }
         .cell-low { background: var(--low); color: #000; }
         
         .toast {
@@ -407,143 +676,6 @@
         .toast.error { background: var(--danger); color: #fff; }
         
         .risk-text { max-width: 180px; font-size: 0.8rem; }
-        
-        .comment-item {
-            background: rgba(255,255,255,0.05);
-            border-radius: 8px;
-            padding: 0.6rem 0.8rem;
-            margin-bottom: 0.5rem;
-            border-right: 3px solid var(--gold);
-        }
-        
-        .comment-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.3rem;
-        }
-        
-        .comment-author {
-            font-weight: 700;
-            color: var(--gold);
-            font-size: 0.8rem;
-        }
-        
-        .comment-date {
-            font-size: 0.7rem;
-            opacity: 0.6;
-        }
-        
-        .comment-text {
-            font-size: 0.85rem;
-            line-height: 1.5;
-        }
-        
-        .no-comments {
-            text-align: center;
-            padding: 1rem;
-            opacity: 0.5;
-            font-size: 0.85rem;
-        }
-        
-        .form-logo-section {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-            padding: 1.25rem;
-            background: linear-gradient(135deg, rgba(201,169,98,0.15) 0%, rgba(30,58,95,0.3) 100%);
-            border-bottom: 2px solid var(--gold);
-        }
-        
-        .form-logo {
-            width: 70px;
-            height: 70px;
-            object-fit: contain;
-            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
-        }
-        
-        .form-logo-text {
-            display: flex;
-            flex-direction: column;
-            text-align: right;
-        }
-        
-        .form-logo-text span {
-            font-family: 'Cairo', sans-serif;
-            font-weight: 800;
-            font-size: 1.1rem;
-            color: var(--gold);
-        }
-        
-        .form-logo-text small {
-            font-size: 0.8rem;
-            opacity: 0.8;
-            color: #fff;
-        }
-        
-        .decision-input-group {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-        
-        .decision-item {
-            background: rgba(245,158,11,0.1);
-            border-radius: 10px;
-            padding: 0.75rem 1rem;
-            margin-bottom: 0.6rem;
-            border-right: 4px solid var(--warning);
-            position: relative;
-        }
-        
-        .decision-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 0.4rem;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-        
-        .decision-type {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.3rem;
-            padding: 0.2rem 0.6rem;
-            border-radius: 20px;
-            font-size: 0.7rem;
-            font-weight: 700;
-        }
-        
-        .decision-type.إداري { background: rgba(59,130,246,0.3); color: #93c5fd; }
-        .decision-type.إجرائي { background: rgba(16,185,129,0.3); color: #86efac; }
-        .decision-type.تصحيحي { background: rgba(239,68,68,0.3); color: #fca5a5; }
-        .decision-type.وقائي { background: rgba(168,85,247,0.3); color: #d8b4fe; }
-        .decision-type.تدريبي { background: rgba(245,158,11,0.3); color: #fcd34d; }
-        .decision-type.مالي { background: rgba(201,169,98,0.3); color: var(--gold); }
-        .decision-type.فني { background: rgba(99,102,241,0.3); color: #a5b4fc; }
-        .decision-type.آخر { background: rgba(156,163,175,0.3); color: #d1d5db; }
-        
-        .decision-meta {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.7rem;
-            opacity: 0.7;
-        }
-        
-        .decision-text {
-            font-size: 0.9rem;
-            line-height: 1.6;
-            color: #fff;
-        }
-        
-        .no-decisions {
-            text-align: center;
-            padding: 1.5rem;
-            opacity: 0.5;
-            font-size: 0.85rem;
-        }
     </style>
 </head>
 <body>
@@ -608,13 +740,6 @@
         
         <div class="main-grid">
             <div class="card" id="formCard">
-                <div class="form-logo-section">
-                    <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-transparent.png" alt="مجمع مكة الطبي" class="form-logo" onerror="this.src='https://www.m2020m.org/logo-transparent.png'">
-                    <div class="form-logo-text">
-                        <span>مجمع مكة الطبي بالزاهر</span>
-                        <small>إدارة المخاطر والجودة</small>
-                    </div>
-                </div>
                 <div class="card-header">
                     <h3><i class="fas fa-plus-circle"></i> <span id="formTitle">إضافة خطر جديد</span></h3>
                 </div>
@@ -646,12 +771,12 @@
                         </div>
                         
                         <div class="form-group">
-                            <label class="form-label">مُقدّم الطلب</label>
+                            <label class="form-label">المالك/المسؤول</label>
                             <select class="form-control" id="owner">
-                                <option value="">اختر مُقدّم الطلب...</option>
+                                <option value="">اختر المسؤول...</option>
                                 <option value="د.خالد الخطاب">د.خالد الخطاب</option>
                                 <option value="صابر عبده">صابر عبده</option>
-                                <option value="بلال نتو">بلال نتو</option>
+                                <option value="بلال نذر">بلال نذر</option>
                                 <option value="عدنان الرفاعي">عدنان الرفاعي</option>
                                 <option value="هيثم">هيثم</option>
                                 <option value="منسق سلامة المرضى">منسق سلامة المرضى</option>
@@ -704,13 +829,8 @@
                         </div>
                         
                         <div class="form-group" style="margin-top: 1rem;">
-                            <label class="form-label">شرح الأثر السلبي</label>
-                            <textarea class="form-control" id="negativeImpact" rows="2" placeholder="وصف الأثر السلبي المحتمل للخطر..."></textarea>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">خطط المعالجة الأولية</label>
-                            <textarea class="form-control" id="mitigation" placeholder="الخطط المقترحة للمعالجة..."></textarea>
+                            <label class="form-label">إجراءات التخفيف</label>
+                            <textarea class="form-control" id="mitigation" placeholder="الإجراءات المقترحة..."></textarea>
                         </div>
                         
                         <div class="form-group">
@@ -723,43 +843,8 @@
                         </div>
                         
                         <div class="form-group">
-                            <label class="form-label">الموعد النهائي للمعالجة</label>
+                            <label class="form-label">تاريخ المراجعة</label>
                             <input type="date" class="form-control" id="reviewDate">
-                        </div>
-                        
-                        <div class="form-group comments-section" id="commentsSection" style="display: none;">
-                            <label class="form-label"><i class="fas fa-comments"></i> سجل التعليقات</label>
-                            <div id="commentsList" style="max-height: 200px; overflow-y: auto; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 8px;"></div>
-                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                <select class="form-control" id="commentAuthor" style="width: 160px;">
-                                    <option value="">من وضع التعليق...</option>
-                                </select>
-                                <input type="text" class="form-control" id="newComment" placeholder="أضف تعليقاً..." style="flex: 1; min-width: 200px;">
-                                <button type="button" class="btn btn-primary btn-sm" onclick="addComment()">
-                                    <i class="fas fa-paper-plane"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group decisions-section" id="decisionsSection" style="display: none;">
-                            <label class="form-label"><i class="fas fa-gavel"></i> القرارات المنبثقة</label>
-                            <div id="decisionsList" style="max-height: 250px; overflow-y: auto; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 8px;"></div>
-                            <div class="decision-input-group">
-                                <select class="form-control" id="decisionType" style="width: 140px;">
-                                    <option value="إداري">إداري</option>
-                                    <option value="إجرائي">إجرائي</option>
-                                    <option value="تصحيحي">تصحيحي</option>
-                                    <option value="وقائي">وقائي</option>
-                                    <option value="تدريبي">تدريبي</option>
-                                    <option value="مالي">مالي</option>
-                                    <option value="فني">فني</option>
-                                    <option value="آخر">آخر</option>
-                                </select>
-                                <input type="text" class="form-control" id="newDecision" placeholder="نص القرار..." style="flex: 1;">
-                                <button type="button" class="btn btn-warning btn-sm" onclick="addDecision()">
-                                    <i class="fas fa-plus"></i> إضافة
-                                </button>
-                            </div>
                         </div>
                         
                         <div style="display: flex; gap: 0.5rem; margin-top: 1.25rem;">
@@ -768,9 +853,6 @@
                             </button>
                             <button type="button" class="btn btn-light" onclick="resetForm()" id="cancelBtn" style="display: none;">
                                 <i class="fas fa-times"></i> إلغاء
-                            </button>
-                            <button type="button" class="btn btn-primary" onclick="startNewRisk()" id="newRiskBtn" style="display: none;">
-                                <i class="fas fa-plus"></i> سجل جديد
                             </button>
                         </div>
                     </form>
@@ -832,359 +914,6 @@
     
     <div class="toast" id="toast"></div>
 
-    <!-- Risk Details Modal -->
-    <div class="risk-modal-overlay" id="riskModalOverlay" onclick="closeRiskModal()">
-        <div class="risk-modal" onclick="event.stopPropagation()">
-            <button class="risk-modal-close" onclick="closeRiskModal()"><i class="fas fa-times"></i></button>
-            <div class="risk-modal-header" id="riskModalHeader">
-                <div class="risk-modal-badge" id="modalBadge">FMS</div>
-                <h2 id="modalRiskTitle">عنوان الخطر</h2>
-            </div>
-            <div class="risk-modal-body">
-                <div class="risk-modal-grid">
-                    <div class="risk-modal-section">
-                        <h4><i class="fas fa-info-circle"></i> المعلومات الأساسية</h4>
-                        <div class="risk-info-row">
-                            <span class="info-label">المسؤول:</span>
-                            <span class="info-value" id="modalOwner">-</span>
-                        </div>
-                        <div class="risk-info-row">
-                            <span class="info-label">مصدر الخطر:</span>
-                            <span class="info-value" id="modalSource">-</span>
-                        </div>
-                        <div class="risk-info-row">
-                            <span class="info-label">الحالة:</span>
-                            <span class="info-value" id="modalStatus">-</span>
-                        </div>
-                        <div class="risk-info-row">
-                            <span class="info-label">الموعد النهائي:</span>
-                            <span class="info-value" id="modalDueDate">-</span>
-                        </div>
-                    </div>
-                    <div class="risk-modal-section">
-                        <h4><i class="fas fa-chart-line"></i> مؤشرات الخطورة</h4>
-                        <div class="risk-metrics">
-                            <div class="metric-box">
-                                <span class="metric-label">الاحتمالية</span>
-                                <span class="metric-value" id="modalProb">3</span>
-                            </div>
-                            <div class="metric-operator">×</div>
-                            <div class="metric-box">
-                                <span class="metric-label">الأثر</span>
-                                <span class="metric-value" id="modalImpact">3</span>
-                            </div>
-                            <div class="metric-operator">=</div>
-                            <div class="metric-box metric-score" id="modalScoreBox">
-                                <span class="metric-label">الدرجة</span>
-                                <span class="metric-value" id="modalScore">9</span>
-                            </div>
-                        </div>
-                        <div class="risk-level-display" id="modalLevelDisplay">متوسط</div>
-                    </div>
-                </div>
-                <div class="risk-modal-section full-width">
-                    <h4><i class="fas fa-exclamation-triangle"></i> الأثر السلبي المحتمل</h4>
-                    <p id="modalNegativeImpact" class="modal-text-content">-</p>
-                </div>
-                <div class="risk-modal-section full-width">
-                    <h4><i class="fas fa-tools"></i> خطط المعالجة</h4>
-                    <p id="modalMitigation" class="modal-text-content">-</p>
-                </div>
-                <div class="risk-modal-section full-width">
-                    <h4><i class="fas fa-comments"></i> التعليقات</h4>
-                    <div id="modalComments" class="modal-list-content">لا توجد تعليقات</div>
-                </div>
-                <div class="risk-modal-section full-width">
-                    <h4><i class="fas fa-gavel"></i> القرارات الإدارية</h4>
-                    <div id="modalDecisions" class="modal-list-content">لا توجد قرارات</div>
-                </div>
-            </div>
-            <!-- Edit Mode Form (hidden by default) -->
-            <div id="modalEditMode" style="display:none;">
-                <div class="risk-modal-body">
-                    <div class="risk-modal-section full-width">
-                        <h4><i class="fas fa-exclamation-triangle"></i> الأثر السلبي المحتمل</h4>
-                        <textarea id="modalEditNegativeImpact" class="form-control" rows="3" placeholder="وصف الأثر السلبي المحتمل..."></textarea>
-                    </div>
-                    <div class="risk-modal-section full-width">
-                        <h4><i class="fas fa-tools"></i> خطط المعالجة</h4>
-                        <textarea id="modalEditMitigation" class="form-control" rows="3" placeholder="خطط المعالجة المقترحة..."></textarea>
-                    </div>
-                    <div class="risk-modal-grid">
-                        <div class="risk-modal-section">
-                            <h4><i class="fas fa-user"></i> المسؤول</h4>
-                            <select id="modalEditOwner" class="form-control"></select>
-                        </div>
-                        <div class="risk-modal-section">
-                            <h4><i class="fas fa-flag"></i> الحالة</h4>
-                            <select id="modalEditStatus" class="form-control">
-                                <option value="مفتوح">مفتوح</option>
-                                <option value="قيد المعالجة">قيد المعالجة</option>
-                                <option value="مغلق">مغلق</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="risk-modal-grid">
-                        <div class="risk-modal-section">
-                            <h4><i class="fas fa-calendar"></i> الموعد النهائي</h4>
-                            <input type="date" id="modalEditDueDate" class="form-control">
-                        </div>
-                        <div class="risk-modal-section">
-                            <h4><i class="fas fa-chart-bar"></i> الاحتمالية × الأثر</h4>
-                            <div style="display:flex;gap:1rem;align-items:center;">
-                                <select id="modalEditProb" class="form-control" style="width:80px;">
-                                    <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-                                </select>
-                                <span style="color:var(--gold);font-size:1.2rem;">×</span>
-                                <select id="modalEditImpact" class="form-control" style="width:80px;">
-                                    <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="risk-modal-section full-width">
-                        <h4><i class="fas fa-comments"></i> إضافة تعليق جديد</h4>
-                        <div style="display:flex;gap:0.5rem;">
-                            <input type="text" id="modalNewComment" class="form-control" placeholder="اكتب تعليقك...">
-                            <button type="button" class="btn btn-primary btn-sm" onclick="addCommentFromModal()"><i class="fas fa-plus"></i></button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="risk-modal-footer" id="modalViewFooter">
-                <button class="btn btn-primary" onclick="switchToEditMode()"><i class="fas fa-edit"></i> تعديل</button>
-                <button class="btn btn-secondary" onclick="closeRiskModal()">إغلاق</button>
-            </div>
-            <div class="risk-modal-footer" id="modalEditFooter" style="display:none;">
-                <button class="btn btn-success" onclick="saveFromModal()"><i class="fas fa-save"></i> حفظ التعديلات</button>
-                <button class="btn btn-secondary" onclick="switchToViewMode()">إلغاء</button>
-            </div>
-        </div>
-    </div>
-
-    <style>
-        .risk-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(8px);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            padding: 1rem;
-        }
-        .risk-modal-overlay.show {
-            display: flex;
-            animation: fadeIn 0.3s ease;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        .risk-modal {
-            background: linear-gradient(145deg, #1a2d4a, #152238);
-            border-radius: 20px;
-            width: 100%;
-            max-width: 800px;
-            max-height: 90vh;
-            overflow: hidden;
-            box-shadow: 0 25px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,169,98,0.2);
-            position: relative;
-            animation: slideUp 0.4s ease;
-        }
-        @keyframes slideUp {
-            from { transform: translateY(50px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        .risk-modal-close {
-            position: absolute;
-            top: 1rem;
-            left: 1rem;
-            background: rgba(255,255,255,0.1);
-            border: none;
-            color: #fff;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            cursor: pointer;
-            transition: all 0.3s;
-            z-index: 10;
-        }
-        .risk-modal-close:hover {
-            background: rgba(220,20,60,0.8);
-            transform: rotate(90deg);
-        }
-        .risk-modal-header {
-            background: linear-gradient(135deg, var(--dark-blue), #0d1929);
-            padding: 2rem;
-            text-align: center;
-            border-bottom: 2px solid var(--gold);
-        }
-        .risk-modal-badge {
-            display: inline-block;
-            background: linear-gradient(135deg, var(--gold), #b8962e);
-            color: var(--dark-blue);
-            padding: 0.5rem 1.5rem;
-            border-radius: 30px;
-            font-weight: 700;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-        }
-        .risk-modal-header h2 {
-            color: #fff;
-            font-size: 1.3rem;
-            line-height: 1.6;
-            margin: 0;
-        }
-        .risk-modal-body {
-            padding: 1.5rem;
-            max-height: 55vh;
-            overflow-y: auto;
-        }
-        .risk-modal-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        @media (max-width: 600px) {
-            .risk-modal-grid { grid-template-columns: 1fr; }
-        }
-        .risk-modal-section {
-            background: rgba(0,0,0,0.2);
-            border-radius: 12px;
-            padding: 1.25rem;
-            border: 1px solid rgba(201,169,98,0.15);
-        }
-        .risk-modal-section.full-width {
-            margin-bottom: 1rem;
-        }
-        .risk-modal-section h4 {
-            color: var(--gold);
-            margin: 0 0 1rem 0;
-            font-size: 0.95rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .risk-info-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.6rem 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .risk-info-row:last-child { border-bottom: none; }
-        .info-label { color: rgba(255,255,255,0.6); font-size: 0.85rem; }
-        .info-value { color: #fff; font-weight: 600; font-size: 0.9rem; }
-        .risk-metrics {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-        }
-        .metric-box {
-            background: rgba(0,0,0,0.3);
-            border-radius: 12px;
-            padding: 0.75rem 1rem;
-            text-align: center;
-            min-width: 60px;
-        }
-        .metric-label { display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem; }
-        .metric-value { display: block; font-size: 1.5rem; font-weight: 800; color: #fff; }
-        .metric-operator { font-size: 1.5rem; font-weight: 300; color: var(--gold); }
-        .metric-score { border: 2px solid var(--gold); }
-        .metric-score.critical { border-color: #ef4444; background: rgba(239,68,68,0.2); }
-        .metric-score.high { border-color: #f97316; background: rgba(249,115,22,0.2); }
-        .metric-score.medium { border-color: #eab308; background: rgba(234,179,8,0.2); }
-        .metric-score.low { border-color: #22c55e; background: rgba(34,197,94,0.2); }
-        .risk-level-display {
-            text-align: center;
-            padding: 0.75rem;
-            border-radius: 10px;
-            font-weight: 700;
-            font-size: 1.1rem;
-        }
-        .risk-level-display.critical { background: linear-gradient(135deg, #dc2626, #991b1b); color: #fff; }
-        .risk-level-display.high { background: linear-gradient(135deg, #ea580c, #c2410c); color: #fff; }
-        .risk-level-display.medium { background: linear-gradient(135deg, #ca8a04, #a16207); color: #fff; }
-        .risk-level-display.low { background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; }
-        .modal-text-content {
-            color: rgba(255,255,255,0.85);
-            line-height: 1.7;
-            font-size: 0.9rem;
-            white-space: pre-wrap;
-        }
-        .modal-list-content {
-            color: rgba(255,255,255,0.7);
-            font-size: 0.85rem;
-        }
-        .modal-comment, .modal-decision {
-            background: rgba(0,0,0,0.2);
-            border-radius: 8px;
-            padding: 0.75rem;
-            margin-bottom: 0.5rem;
-            border-right: 3px solid var(--gold);
-        }
-        .modal-decision { border-right-color: #3b82f6; }
-        .modal-item-header {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.75rem;
-            color: rgba(255,255,255,0.5);
-            margin-bottom: 0.25rem;
-        }
-        .modal-item-text { color: #fff; }
-        .decision-type-badge {
-            display: inline-block;
-            background: rgba(59,130,246,0.2);
-            color: #93c5fd;
-            padding: 0.15rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            margin-left: 0.5rem;
-        }
-        .risk-modal-footer {
-            padding: 1.25rem;
-            background: rgba(0,0,0,0.2);
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            border-top: 1px solid rgba(201,169,98,0.15);
-        }
-        .btn-secondary {
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        .btn-secondary:hover {
-            background: rgba(255,255,255,0.2);
-        }
-        tr.clickable-row {
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        tr.clickable-row:hover {
-            background: rgba(201,169,98,0.1) !important;
-        }
-        .btn-saving {
-            background: linear-gradient(135deg, #6b7280, #4b5563) !important;
-            pointer-events: none;
-            opacity: 0.8;
-        }
-        .btn-saving i {
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-    </style>
-
     <script>
         const STORAGE_KEY = 'makkah_risk_register';
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec";
@@ -1196,26 +925,37 @@
         let isSaving = false;
         
         async function loadMasterAndLibrary() {
-            if (!WEB_APP_URL) return;
+            if (!WEB_APP_URL) {
+                buildRiskDropdown();
+                fillSelect('owner', [], 'أدخل يدوياً...');
+                fillSelect('category', [], 'أدخل يدوياً...');
+                fillSelect('source', [], 'أدخل يدوياً...');
+                return;
+            }
             
             try {
                 const mRes = await fetch(WEB_APP_URL + '?action=master');
                 const mData = await mRes.json();
-                if (mData.success && mData.data) {
-                    MASTER = mData.data;
-                    fillSelect('owner', mData.data.owners || [], 'اختر المسؤول...');
-                    fillSelect('category', mData.data.categories || [], 'اختر التصنيف...');
+                if (mData.success || mData.ok) {
+                    MASTER = mData.data || mData;
+                    fillSelect('owner', MASTER.owners || mData.owners || [], 'اختر المسؤول...');
                 }
-            } catch (e) { console.log('Master load failed', e); }
+            } catch (e) { 
+                console.log('Master load failed');
+                fillSelect('owner', [], 'أدخل يدوياً...');
+            }
             
             try {
                 const lRes = await fetch(WEB_APP_URL + '?action=library');
                 const lData = await lRes.json();
-                if (lData.success) {
-                    LIBRARY = lData.data || [];
-                    buildRiskDropdown();
+                if (lData.success || lData.ok) {
+                    LIBRARY = lData.data || lData.items || [];
                 }
-            } catch (e) { console.log('Library load failed', e); }
+            } catch (e) { 
+                console.log('Library load failed'); 
+            }
+            
+            buildRiskDropdown();
         }
         
         function fillSelect(selectId, items, placeholder) {
@@ -1232,11 +972,25 @@
             if (!sel) return;
             
             if (LIBRARY.length === 0) {
-                sel.innerHTML = `<option value="">لا توجد مخاطر في المكتبة</option>
-                    <option value="__other__">إدخال يدوي...</option>`;
+                sel.innerHTML = `<option value="">اختر أو أدخل يدوياً...</option>
+                    <option value="سقوط المريض">سقوط المريض</option>
+                    <option value="خطأ دوائي">خطأ دوائي</option>
+                    <option value="عدوى مكتسبة">عدوى مكتسبة</option>
+                    <option value="تأخر في التشخيص">تأخر في التشخيص</option>
+                    <option value="خطأ في تحديد هوية المريض">خطأ في تحديد هوية المريض</option>
+                    <option value="عطل في الأجهزة الطبية">عطل في الأجهزة الطبية</option>
+                    <option value="نقص في الكوادر">نقص في الكوادر</option>
+                    <option value="مخاطر الحريق">مخاطر الحريق</option>
+                    <option value="تسرب مواد خطرة">تسرب مواد خطرة</option>
+                    <option value="انقطاع الكهرباء">انقطاع الكهرباء</option>
+                    <option value="__other__">أخرى (إدخال يدوي)...</option>`;
             } else {
+                // API returns swapped fields: defaultOwner contains actual risk description
                 sel.innerHTML = `<option value="">اختر الخطر من المكتبة...</option>` +
-                    LIBRARY.map(x => `<option value="${escapeHtml(x.risk)}">${escapeHtml(x.risk)}</option>`).join('') +
+                    LIBRARY.map(x => {
+                        const riskDesc = x.defaultOwner || x.risk || '';
+                        return `<option value="${escapeHtml(riskDesc)}">${escapeHtml(riskDesc)}</option>`;
+                    }).join('') +
                     `<option value="__other__">أخرى (إدخال يدوي)...</option>`;
             }
             
@@ -1255,17 +1009,18 @@
         }
         
         function autoFillFromLibrary(riskText) {
-            const found = LIBRARY.find(x => x.risk === riskText);
+            // API fields are swapped: defaultOwner=risk, risk=owner, category=dept, defaultMitigation=category
+            const found = LIBRARY.find(x => (x.defaultOwner || x.risk) === riskText);
             if (!found) return;
             
             const cat = document.getElementById('category');
-            if (cat) cat.value = found.category || '';
+            if (cat) cat.value = found.defaultMitigation || ''; // defaultMitigation actually has category
             
             const mit = document.getElementById('mitigation');
-            if (mit) mit.value = found.defaultMitigation || '';
+            // No mitigation in swapped data, leave empty
             
             const owner = document.getElementById('owner');
-            if (owner && found.defaultOwner) owner.value = found.defaultOwner;
+            if (owner && found.risk) owner.value = found.risk; // risk field has owner name
         }
         
         function escapeHtml(str) {
@@ -1277,25 +1032,11 @@
                 .replaceAll("'", '&#039;');
         }
         
-        function fillCommentAuthors() {
-            if (!MASTER || !MASTER.owners) return;
-            const select = document.getElementById('commentAuthor');
-            if (!select) return;
-            select.innerHTML = '<option value="">من وضع التعليق...</option>';
-            MASTER.owners.forEach(name => {
-                const opt = document.createElement('option');
-                opt.value = name;
-                opt.textContent = name;
-                select.appendChild(opt);
-            });
-        }
-        
         async function init() {
             setupRatingButtons();
             
             try {
                 await loadMasterAndLibrary();
-                fillCommentAuthors();
             } catch (e) { console.log('Loading master/library failed'); }
             
             await loadRisks();
@@ -1351,14 +1092,13 @@
                     if (data.success) {
                         allRisks = data.data || [];
                         useLocalStorage = false;
-                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> متصل بـ Google Sheets');
+                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> متصل');
                         localStorage.setItem(STORAGE_KEY, JSON.stringify(allRisks));
                     } else {
-                        console.log('API error:', data.error);
                         loadFromLocalStorage();
                     }
                 } catch (err) {
-                    console.log('API unavailable, using localStorage:', err);
+                    console.log('API unavailable, using localStorage');
                     loadFromLocalStorage();
                 }
             } else {
@@ -1469,7 +1209,7 @@
                         </thead>
                         <tbody>
                             ${risks.map(r => `
-                                <tr class="clickable-row" onclick="openRiskModal('${r.id}')">
+                                <tr onclick="openRiskModal('${r.id}')" title="اضغط لعرض التفاصيل">
                                     <td class="risk-text">${r.risk || '-'}${r.localOnly ? ' <span class="badge" style="margin-right:6px;background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#93c5fd;font-size:0.65rem;">محلي</span>' : ''}</td>
                                     <td><span class="badge" style="background: rgba(201,169,98,0.2); color: var(--gold);">${r.category || '-'}</span></td>
                                     <td style="font-size: 0.8rem;">${r.owner || '-'}</td>
@@ -1551,14 +1291,7 @@
             isSaving = true;
             
             const submitBtn = e.submitter || document.querySelector('#riskForm button[type="submit"]');
-            const submitText = document.getElementById('submitText');
-            const originalText = submitText ? submitText.innerHTML : 'حفظ';
-            
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.classList.add('btn-saving');
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
-            }
+            if (submitBtn) submitBtn.disabled = true;
             
             setSaveBadge('warn', '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...');
             
@@ -1574,7 +1307,6 @@
                     owner: document.getElementById('owner').value,
                     probability: probability,
                     impact: impact,
-                    negativeImpact: document.getElementById('negativeImpact').value,
                     mitigation: document.getElementById('mitigation').value,
                     status: document.getElementById('status').value,
                     reviewDate: document.getElementById('reviewDate').value,
@@ -1584,7 +1316,7 @@
                 
                 if (editId) payload.id = editId;
                 
-                const action = editId ? 'updateRisk' : 'saveRisk';
+                const action = editId ? 'update' : 'add';
                 
                 if (WEB_APP_URL) {
                     const res = await fetch(WEB_APP_URL, {
@@ -1594,20 +1326,17 @@
                     });
                     const data = await res.json();
                     
-                    if (!data.success) throw new Error(data.error || 'Save failed');
+                    if (!data.ok) throw new Error(data.error || 'Save failed');
                     
-                    setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحفظ في Google Sheets ✓');
+                    setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحفظ ✓');
                     await loadRisks();
                 } else {
-                    const existingRisk = editId ? allRisks.find(r => r.id === editId) : null;
                     const localData = {
                         ...payload,
                         id: editId || 'R-' + Date.now(),
                         score: score,
                         level: getLevel(score),
-                        lastUpdated: new Date().toISOString(),
-                        comments: existingRisk?.comments || [],
-                        decisions: existingRisk?.decisions || []
+                        lastUpdated: new Date().toISOString()
                     };
                     
                     if (editId) {
@@ -1632,11 +1361,7 @@
                 setSaveBadge('err', '<i class="fas fa-triangle-exclamation"></i> تعذر الحفظ');
             } finally {
                 isSaving = false;
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.classList.remove('btn-saving');
-                    submitBtn.innerHTML = '<i class="fas fa-save"></i> <span id="submitText">حفظ</span>';
-                }
+                if (submitBtn) submitBtn.disabled = false;
             }
         });
         
@@ -1667,7 +1392,6 @@
             
             document.getElementById('category').value = risk.category || '';
             document.getElementById('owner').value = risk.owner || '';
-            document.getElementById('negativeImpact').value = risk.negativeImpact || '';
             document.getElementById('mitigation').value = risk.mitigation || '';
             document.getElementById('status').value = risk.status || 'مفتوح';
             document.getElementById('reviewDate').value = risk.reviewDate || '';
@@ -1685,169 +1409,11 @@
             
             updateScore();
             
-            currentEditingRiskId = id;
-            renderComments(risk.comments || []);
-            renderDecisions(risk.decisions || []);
-            document.getElementById('commentsSection').style.display = 'block';
-            document.getElementById('decisionsSection').style.display = 'block';
-            
             document.getElementById('formTitle').textContent = 'تعديل الخطر';
             document.getElementById('submitText').textContent = 'تحديث';
             document.getElementById('cancelBtn').style.display = 'block';
-            document.getElementById('newRiskBtn').style.display = 'block';
             
             document.getElementById('riskForm').scrollIntoView({ behavior: 'smooth' });
-        }
-        
-        let currentEditingRiskId = null;
-        
-        function renderComments(comments) {
-            const container = document.getElementById('commentsList');
-            if (!comments || comments.length === 0) {
-                container.innerHTML = '<div class="no-comments">لا توجد تعليقات بعد</div>';
-                return;
-            }
-            
-            const sorted = [...comments].sort((a, b) => new Date(b.date) - new Date(a.date));
-            
-            container.innerHTML = sorted.map(c => {
-                const date = new Date(c.date);
-                const dateStr = date.toLocaleDateString('ar-SA') + ' ' + date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-                return '<div class="comment-item">' +
-                    '<div class="comment-header">' +
-                        '<span class="comment-author"><i class="fas fa-user"></i> ' + (c.author || 'مجهول') + '</span>' +
-                        '<span class="comment-date">' + dateStr + '</span>' +
-                    '</div>' +
-                    '<div class="comment-text">' + c.text + '</div>' +
-                '</div>';
-            }).join('');
-        }
-        
-        async function addComment() {
-            const input = document.getElementById('newComment');
-            const text = input.value.trim();
-            if (!text || !currentEditingRiskId) return;
-            
-            const risk = allRisks.find(r => r.id === currentEditingRiskId);
-            if (!risk) return;
-            
-            const authorSelect = document.getElementById('commentAuthor');
-            const author = authorSelect.value || 'مستخدم';
-            if (!author || author === '') {
-                showToast('الرجاء اختيار من وضع التعليق', 'error');
-                return;
-            }
-            const comment = {
-                text: text,
-                author: author,
-                date: new Date().toISOString()
-            };
-            
-            if (!risk.comments) risk.comments = [];
-            risk.comments.push(comment);
-            
-            saveToLocalStorage();
-            renderComments(risk.comments);
-            input.value = '';
-            
-            if (WEB_APP_URL) {
-                try {
-                    const res = await fetch(WEB_APP_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action: 'addComment', payload: { id: currentEditingRiskId, comment } })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        showToast('تم حفظ التعليق في Google Sheets', 'success');
-                    } else {
-                        console.log('Comment save failed:', data.error);
-                        showToast('تم حفظ التعليق محلياً', 'success');
-                    }
-                } catch (err) {
-                    console.log('Comment saved locally:', err);
-                    showToast('تم حفظ التعليق محلياً', 'success');
-                }
-            } else {
-                showToast('تم إضافة التعليق', 'success');
-            }
-        }
-        
-        function renderDecisions(decisions) {
-            const container = document.getElementById('decisionsList');
-            if (!decisions || decisions.length === 0) {
-                container.innerHTML = '<div class="no-decisions"><i class="fas fa-gavel"></i><br>لا توجد قرارات مسجلة</div>';
-                return;
-            }
-            
-            const sorted = [...decisions].sort((a, b) => new Date(b.date) - new Date(a.date));
-            
-            container.innerHTML = sorted.map(d => {
-                const date = new Date(d.date);
-                const dateStr = date.toLocaleDateString('ar-SA') + ' ' + date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-                return '<div class="decision-item">' +
-                    '<div class="decision-header">' +
-                        '<span class="decision-type ' + d.type + '"><i class="fas fa-tag"></i> ' + d.type + '</span>' +
-                        '<div class="decision-meta">' +
-                            '<span><i class="fas fa-user"></i> ' + (d.author || 'مجهول') + '</span>' +
-                            '<span><i class="fas fa-clock"></i> ' + dateStr + '</span>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="decision-text">' + d.text + '</div>' +
-                '</div>';
-            }).join('');
-        }
-        
-        async function addDecision() {
-            const typeSelect = document.getElementById('decisionType');
-            const textInput = document.getElementById('newDecision');
-            const text = textInput.value.trim();
-            const type = typeSelect.value;
-            
-            if (!text || !currentEditingRiskId) {
-                showToast('الرجاء كتابة نص القرار', 'error');
-                return;
-            }
-            
-            const risk = allRisks.find(r => r.id === currentEditingRiskId);
-            if (!risk) return;
-            
-            const author = document.getElementById('owner').value || 'مستخدم';
-            const decision = {
-                text: text,
-                type: type,
-                author: author,
-                date: new Date().toISOString()
-            };
-            
-            if (!risk.decisions) risk.decisions = [];
-            risk.decisions.push(decision);
-            
-            saveToLocalStorage();
-            renderDecisions(risk.decisions);
-            textInput.value = '';
-            
-            if (WEB_APP_URL) {
-                try {
-                    const res = await fetch(WEB_APP_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action: 'addDecision', payload: { id: currentEditingRiskId, decision } })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        showToast('تم حفظ القرار في Google Sheets', 'success');
-                    } else {
-                        console.log('Decision save failed:', data.error);
-                        showToast('تم حفظ القرار محلياً', 'success');
-                    }
-                } catch (err) {
-                    console.log('Decision saved locally:', err);
-                    showToast('تم حفظ القرار محلياً', 'success');
-                }
-            } else {
-                showToast('تم إضافة القرار', 'success');
-            }
         }
         
         async function deleteRisk(id) {
@@ -1863,11 +1429,11 @@
                     const res = await fetch(WEB_APP_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action: 'deleteRisk', payload: { id } })
+                        body: JSON.stringify({ action: 'delete', payload: { id } })
                     });
                     const data = await res.json();
-                    if (data.success) {
-                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحذف من Google Sheets ✓');
+                    if (data.ok) {
+                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحذف ✓');
                     } else {
                         setSaveBadge('warn', '<i class="fas fa-exclamation-triangle"></i> حذف محلي فقط');
                     }
@@ -1889,22 +1455,10 @@
             document.getElementById('riskForm').reset();
             document.getElementById('editId').value = '';
             document.getElementById('formTitle').textContent = 'إضافة خطر جديد';
-            const submitBtn = document.querySelector('#riskForm button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.innerHTML = '<i class="fas fa-save"></i> <span id="submitText">حفظ</span>';
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('btn-saving');
-            }
+            document.getElementById('submitText').textContent = 'حفظ';
             document.getElementById('cancelBtn').style.display = 'none';
-            document.getElementById('newRiskBtn').style.display = 'none';
-            document.getElementById('commentsSection').style.display = 'none';
-            document.getElementById('commentsList').innerHTML = '';
-            document.getElementById('decisionsSection').style.display = 'none';
-            document.getElementById('decisionsList').innerHTML = '';
-            document.getElementById('negativeImpact').value = '';
-            document.getElementById('newDecision').value = '';
-            currentEditingRiskId = null;
             
+            // إذا تحول riskDesc إلى textarea، أرجعه select
             const riskEl = document.getElementById('riskDesc');
             if (riskEl && riskEl.tagName === 'TEXTAREA') {
                 const sel = document.createElement('select');
@@ -1928,12 +1482,6 @@
             updateScore();
         }
         
-        function startNewRisk() {
-            resetForm();
-            showToast('جاهز لإدخال سجل جديد', 'info');
-            document.getElementById('riskForm').scrollIntoView({ behavior: 'smooth' });
-        }
-        
         function exportExcel() {
             if (!allRisks.length) {
                 showToast('لا توجد بيانات للتصدير', 'error');
@@ -1941,10 +1489,10 @@
             }
             
             let csv = '\uFEFF';
-            csv += 'الخطر,التصنيف,مُقدّم الطلب,المصدر,الاحتمالية,الأثر,الدرجة,المستوى,الحالة,شرح الأثر السلبي,خطط المعالجة الأولية\n';
+            csv += 'الخطر,التصنيف,المسؤول,المصدر,الاحتمالية,الأثر,الدرجة,المستوى,الحالة,إجراءات التخفيف\n';
             
             allRisks.forEach(r => {
-                csv += '"' + (r.risk || '') + '","' + (r.category || '') + '","' + (r.owner || '') + '","' + (r.sourceEvidence || '') + '",' + (r.probability || '') + ',' + (r.impact || '') + ',' + (r.score || '') + ',"' + (r.level || '') + '","' + (r.status || '') + '","' + (r.negativeImpact || '') + '","' + (r.mitigation || '') + '"\n';
+                csv += `"${r.risk || ''}","${r.category || ''}","${r.owner || ''}","${r.sourceEvidence || ''}",${r.probability || ''},${r.impact || ''},${r.score || ''},"${r.level || ''}","${r.status || ''}","${r.mitigation || ''}"\n`;
             });
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1963,237 +1511,342 @@
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
         
-        let currentModalRiskId = null;
+        let currentRiskId = null;
         
-        function openRiskModal(id) {
-            const risk = allRisks.find(r => r.id === id);
+        const PIPELINE_STAGES = [
+            { key: 'تحديد المشكلة', icon: '📋', label: 'تحديد' },
+            { key: 'تطوير سياسة', icon: '📝', label: 'سياسة' },
+            { key: 'اعتماد السياسة', icon: '✅', label: 'اعتماد' },
+            { key: 'تدريب الموظفين', icon: '👥', label: 'تدريب' },
+            { key: 'تنفيذ التغيير', icon: '🔧', label: 'تنفيذ' },
+            { key: 'تحقق ومراجعة', icon: '🔍', label: 'تحقق' },
+            { key: 'إغلاق نهائي', icon: '🏁', label: 'مغلق' }
+        ];
+        
+        function getStaffOptions() {
+            // First try MASTER.owners, then extract from LIBRARY (risk field has owner names due to API swap)
+            let owners = MASTER?.owners || [];
+            if (owners.length === 0 && LIBRARY?.length > 0) {
+                owners = [...new Set(LIBRARY.map(x => x.risk).filter(Boolean))];
+            }
+            if (owners.length === 0) {
+                owners = ['عدنان الرفاعي', 'صابر عبده', 'بلال تتو', 'د.خالد الخطاب', 'هيثم', 'حسين بايصل'];
+            }
+            return owners.map(o => `<option value="${o.trim()}">${o.trim()}</option>`).join('');
+        }
+        
+        function renderPipelineStages(risk) {
+            const completedStages = (risk.followups || []).map(f => f.action);
+            return PIPELINE_STAGES.map((stage, idx) => {
+                const isCompleted = completedStages.includes(stage.key);
+                const followup = (risk.followups || []).find(f => f.action === stage.key);
+                return `
+                    <div class="pipeline-stage ${isCompleted ? 'completed' : ''}" title="${followup ? followup.date + ' - ' + followup.owner : 'لم يبدأ بعد'}">
+                        <div class="stage-icon">${isCompleted ? '✓' : stage.icon}</div>
+                        <div class="stage-label">${stage.label}</div>
+                    </div>
+                    ${idx < PIPELINE_STAGES.length - 1 ? '<div class="pipeline-connector ' + (isCompleted ? 'completed' : '') + '"></div>' : ''}
+                `;
+            }).join('');
+        }
+        
+        function renderFollowupHistory(followups) {
+            if (!followups || !followups.length) {
+                return '<div class="empty-history">لا توجد متابعات مسجلة بعد</div>';
+            }
+            return followups.slice().reverse().map(f => `
+                <div class="followup-entry">
+                    <div class="followup-header">
+                        <span class="followup-action">${f.action || ''}</span>
+                        <span class="followup-date">${f.date || ''}</span>
+                    </div>
+                    <div class="followup-owner"><i class="fas fa-user"></i> ${f.owner || '-'}</div>
+                    ${f.decision ? `<div class="followup-decision"><i class="fas fa-gavel"></i> القرار: ${f.decision}</div>` : ''}
+                    ${f.reviewDate ? `<div class="followup-review"><i class="fas fa-calendar-check"></i> المراجعة: ${f.reviewDate}</div>` : ''}
+                    ${f.note ? `<div class="followup-note">${f.note}</div>` : ''}
+                </div>
+            `).join('');
+        }
+        
+        function addFollowupEntry() {
+            if (!currentRiskId) return;
+            const risk = allRisks.find(r => r.id === currentRiskId);
             if (!risk) return;
             
-            currentModalRiskId = id;
+            const owner = document.getElementById('modalFollowupOwner').value;
+            const action = document.getElementById('modalFollowupAction').value;
+            const decision = document.getElementById('modalFollowupDecision').value;
+            const reviewDate = document.getElementById('modalFollowupReviewDate').value;
+            const note = document.getElementById('modalFollowupNote').value;
             
-            document.getElementById('modalBadge').textContent = risk.category || 'غير محدد';
-            document.getElementById('modalRiskTitle').textContent = risk.risk || '-';
-            document.getElementById('modalOwner').textContent = risk.owner || '-';
-            document.getElementById('modalSource').textContent = risk.sourceEvidence || '-';
-            document.getElementById('modalStatus').innerHTML = `<span class="badge badge-${getStatusClass(risk.status)}">${risk.status || '-'}</span>`;
-            document.getElementById('modalDueDate').textContent = risk.reviewDate ? new Date(risk.reviewDate).toLocaleDateString('ar-SA') : '-';
-            
-            document.getElementById('modalProb').textContent = risk.probability || '-';
-            document.getElementById('modalImpact').textContent = risk.impact || '-';
-            document.getElementById('modalScore').textContent = risk.score || '-';
-            
-            const score = risk.score || 0;
-            const scoreBox = document.getElementById('modalScoreBox');
-            const levelDisplay = document.getElementById('modalLevelDisplay');
-            
-            scoreBox.className = 'metric-box metric-score';
-            levelDisplay.className = 'risk-level-display';
-            
-            if (score >= 20) {
-                scoreBox.classList.add('critical');
-                levelDisplay.classList.add('critical');
-                levelDisplay.textContent = 'حرج';
-            } else if (score >= 12) {
-                scoreBox.classList.add('high');
-                levelDisplay.classList.add('high');
-                levelDisplay.textContent = 'عالي';
-            } else if (score >= 6) {
-                scoreBox.classList.add('medium');
-                levelDisplay.classList.add('medium');
-                levelDisplay.textContent = 'متوسط';
-            } else {
-                scoreBox.classList.add('low');
-                levelDisplay.classList.add('low');
-                levelDisplay.textContent = 'منخفض';
+            if (!action) {
+                showToast('الرجاء اختيار نوع الإجراء', 'error');
+                return;
             }
             
-            document.getElementById('modalNegativeImpact').textContent = risk.negativeImpact || 'لم يتم تحديد الأثر السلبي';
-            document.getElementById('modalMitigation').textContent = risk.mitigation || 'لم يتم تحديد خطط المعالجة';
+            if (!risk.followups) risk.followups = [];
+            risk.followups.push({
+                id: Date.now(),
+                date: new Date().toLocaleDateString('ar-SA'),
+                owner: owner || 'غير محدد',
+                action,
+                decision: decision || '',
+                reviewDate: reviewDate || '',
+                note
+            });
             
-            const comments = risk.comments || [];
-            if (comments.length > 0) {
-                document.getElementById('modalComments').innerHTML = comments.map(c => `
-                    <div class="modal-comment">
-                        <div class="modal-item-header">
-                            <span>${c.author || 'مجهول'}</span>
-                            <span>${c.date ? new Date(c.date).toLocaleDateString('ar-SA') : ''}</span>
-                        </div>
-                        <div class="modal-item-text">${escapeHtml(c.text)}</div>
+            if (reviewDate) {
+                risk.reviewDate = reviewDate;
+            }
+            
+            document.getElementById('followupHistory').innerHTML = renderFollowupHistory(risk.followups);
+            document.querySelector('.pipeline-stages').innerHTML = renderPipelineStages(risk);
+            
+            document.getElementById('modalFollowupOwner').value = '';
+            document.getElementById('modalFollowupAction').value = '';
+            document.getElementById('modalFollowupDecision').value = '';
+            document.getElementById('modalFollowupReviewDate').value = '';
+            document.getElementById('modalFollowupNote').value = '';
+            
+            if (action === 'إغلاق نهائي' || decision === 'تم الحل') {
+                risk.status = 'مغلق';
+                document.getElementById('modalStatus').value = 'مغلق';
+            }
+            
+            showToast('تمت إضافة المتابعة', 'success');
+        }
+        
+        function openRiskModal(riskId) {
+            const risk = allRisks.find(r => r.id === riskId);
+            if (!risk) return;
+            
+            currentRiskId = riskId;
+            const scoreClass = risk.score >= 16 ? 'ext' : risk.score >= 12 ? 'high' : risk.score >= 6 ? 'med' : 'low';
+            
+            document.getElementById('riskModalBody').innerHTML = `
+                <div class="risk-score-display" style="margin-bottom: 20px;">
+                    <div class="score-box score-${scoreClass}">${risk.score || '-'}</div>
+                    <div>
+                        <div style="font-size: 0.85rem; opacity: 0.7;">الاحتمالية × التأثير</div>
+                        <div style="font-size: 1.5rem; font-weight: 800;">${risk.probability || '-'} × ${risk.impact || '-'}</div>
+                        <div><span class="badge badge-${getLevelClass(risk.level)}" style="font-size: 1rem; padding: 5px 15px;">${risk.level || '-'}</span></div>
                     </div>
-                `).join('');
-            } else {
-                document.getElementById('modalComments').innerHTML = '<p style="opacity:0.5;text-align:center;">لا توجد تعليقات</p>';
-            }
-            
-            const decisions = risk.decisions || [];
-            if (decisions.length > 0) {
-                document.getElementById('modalDecisions').innerHTML = decisions.map(d => `
-                    <div class="modal-decision">
-                        <div class="modal-item-header">
-                            <span>${d.author || 'مجهول'}<span class="decision-type-badge">${d.type || 'عام'}</span></span>
-                            <span>${d.date ? new Date(d.date).toLocaleDateString('ar-SA') : ''}</span>
-                        </div>
-                        <div class="modal-item-text">${escapeHtml(d.text)}</div>
+                </div>
+                
+                <div class="modal-form">
+                    <div class="form-group full">
+                        <label>وصف المخاطرة</label>
+                        <textarea id="modalRisk" class="form-input" rows="2">${risk.risk || ''}</textarea>
                     </div>
-                `).join('');
-            } else {
-                document.getElementById('modalDecisions').innerHTML = '<p style="opacity:0.5;text-align:center;">لا توجد قرارات</p>';
-            }
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>التصنيف</label>
+                            <input type="text" id="modalCategory" class="form-input" value="${risk.category || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>المسؤول</label>
+                            <input type="text" id="modalOwner" class="form-input" value="${risk.owner || ''}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>مصدر الخطر</label>
+                            <input type="text" id="modalSource" class="form-input" value="${risk.sourceEvidence || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>الحالة</label>
+                            <select id="modalStatus" class="form-input">
+                                <option value="مفتوح" ${risk.status === 'مفتوح' ? 'selected' : ''}>مفتوح</option>
+                                <option value="قيد المعالجة" ${risk.status === 'قيد المعالجة' ? 'selected' : ''}>قيد المعالجة</option>
+                                <option value="مغلق" ${risk.status === 'مغلق' ? 'selected' : ''}>مغلق</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group full">
+                        <label>خطة المعالجة / التخفيف</label>
+                        <textarea id="modalMitigation" class="form-input" rows="3" placeholder="خطوات التخفيف من المخاطرة...">${risk.mitigation || ''}</textarea>
+                    </div>
+                    
+                    <div class="followup-section">
+                        <h4><i class="fas fa-plus-circle"></i> إضافة متابعة جديدة</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>المسؤول</label>
+                                <select id="modalFollowupOwner" class="form-input">
+                                    <option value="">اختر الموظف...</option>
+                                    ${getStaffOptions()}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>نوع الإجراء</label>
+                                <select id="modalFollowupAction" class="form-input">
+                                    <option value="">اختر نوع الإجراء...</option>
+                                    <optgroup label="📚 التدريب والتوعية">
+                                        <option value="عمل محاضرة">📢 عمل محاضرة</option>
+                                        <option value="عمل تدريب">🎓 عمل تدريب</option>
+                                        <option value="ورشة عمل">🛠️ ورشة عمل</option>
+                                    </optgroup>
+                                    <optgroup label="🔧 الاستشارات الفنية">
+                                        <option value="استدعاء صيانة">🔧 استدعاء صيانة</option>
+                                        <option value="رأي هندسي">🏗️ استدعاء رأي هندسي</option>
+                                        <option value="رأي طبي">⚕️ استدعاء رأي طبي</option>
+                                        <option value="خبير خارجي">👨‍💼 استدعاء خبير خارجي</option>
+                                        <option value="رأي مالي">💰 استدعاء رأي مالي</option>
+                                    </optgroup>
+                                    <optgroup label="📋 الإدارة والسياسات">
+                                        <option value="بناء سياسة">📝 بناء سياسة</option>
+                                        <option value="تحديث إجراء">🔄 تحديث إجراء</option>
+                                        <option value="قرار إداري">📜 قرار إداري</option>
+                                        <option value="اعتماد رسمي">✅ اعتماد رسمي</option>
+                                    </optgroup>
+                                    <optgroup label="📊 المتابعة">
+                                        <option value="تحقق ومراجعة">🔍 تحقق ومراجعة</option>
+                                        <option value="تقرير تقدم">📈 تقرير تقدم</option>
+                                        <option value="إغلاق نهائي">🏁 إغلاق نهائي</option>
+                                    </optgroup>
+                                    <option value="أخرى">➕ أخرى</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>القرار / النتيجة</label>
+                                <select id="modalFollowupDecision" class="form-input">
+                                    <option value="">اختر القرار...</option>
+                                    <option value="متابعة دورية">🔄 وضع متابعة دورية</option>
+                                    <option value="بناء سياسة جديدة">📝 بناء سياسة جديدة</option>
+                                    <option value="قرار إداري">📜 إصدار قرار إداري</option>
+                                    <option value="تأجيل - انتظار ميزانية">⏳ تأجيل (انتظار ميزانية)</option>
+                                    <option value="تأجيل - انتظار موافقة">⏳ تأجيل (انتظار موافقة)</option>
+                                    <option value="تأجيل - أخرى">⏳ تأجيل (سبب آخر)</option>
+                                    <option value="تنفيذ فوري">⚡ تنفيذ فوري</option>
+                                    <option value="إحالة لجهة أخرى">↗️ إحالة لجهة أخرى</option>
+                                    <option value="تم الحل">✅ تم الحل</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>تاريخ المراجعة القادمة</label>
+                                <input type="date" id="modalFollowupReviewDate" class="form-input">
+                            </div>
+                        </div>
+                        <div class="form-group full">
+                            <label>تفاصيل المتابعة</label>
+                            <textarea id="modalFollowupNote" class="form-input" rows="2" placeholder="وصف ما تم إنجازه أو المطلوب..."></textarea>
+                        </div>
+                        <button class="btn btn-gold btn-sm" onclick="addFollowupEntry()">
+                            <i class="fas fa-plus"></i> إضافة للسجل
+                        </button>
+                    </div>
+                    
+                    <div class="followup-section" style="margin-top: 15px;">
+                        <h4><i class="fas fa-history"></i> سجل المتابعات (${(risk.followups || []).length})</h4>
+                        <div id="followupHistory" class="followup-history">
+                            ${renderFollowupHistory(risk.followups || [])}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="btn btn-success" onclick="saveRiskModal()">
+                        <i class="fas fa-save"></i> حفظ التغييرات
+                    </button>
+                    <button class="btn btn-warning" onclick="closeRiskFromModal()">
+                        <i class="fas fa-check-circle"></i> إغلاق المخاطرة
+                    </button>
+                    <button class="btn btn-danger" onclick="deleteRisk('${risk.id}'); closeRiskModal();">
+                        <i class="fas fa-trash"></i> حذف
+                    </button>
+                    <button class="btn btn-light" onclick="closeRiskModal()">
+                        <i class="fas fa-times"></i> إلغاء
+                    </button>
+                </div>
+            `;
             
-            document.getElementById('riskModalOverlay').classList.add('show');
-            document.body.style.overflow = 'hidden';
+            document.getElementById('riskModal').classList.add('active');
+        }
+        
+        async function saveRiskModal() {
+            if (!currentRiskId) return;
+            
+            const risk = allRisks.find(r => r.id === currentRiskId);
+            if (!risk) return;
+            
+            risk.risk = document.getElementById('modalRisk').value;
+            risk.category = document.getElementById('modalCategory').value;
+            risk.owner = document.getElementById('modalOwner').value;
+            risk.sourceEvidence = document.getElementById('modalSource').value;
+            risk.status = document.getElementById('modalStatus').value;
+            risk.mitigation = document.getElementById('modalMitigation').value;
+            risk.reviewDate = document.getElementById('modalReviewDate').value;
+            risk.action = document.getElementById('modalAction').value;
+            risk.notes = document.getElementById('modalNotes').value;
+            
+            await saveRiskToSheet(risk);
+            renderTable(allRisks);
+            renderHeatmap();
+            showToast('تم حفظ التغييرات بنجاح', 'success');
+            closeRiskModal();
+        }
+        
+        function closeRiskFromModal() {
+            if (!currentRiskId) return;
+            
+            const risk = allRisks.find(r => r.id === currentRiskId);
+            if (!risk) return;
+            
+            if (confirm('هل تريد إغلاق هذه المخاطرة نهائياً؟')) {
+                risk.status = 'مغلق';
+                risk.closedDate = new Date().toISOString().split('T')[0];
+                saveRiskToSheet(risk);
+                renderTable(allRisks);
+                updateStats();
+                showToast('تم إغلاق المخاطرة', 'success');
+                closeRiskModal();
+            }
+        }
+        
+        async function saveRiskToSheet(risk) {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'saveRisk', risk })
+                });
+                const result = await response.json();
+                if (!result.ok) throw new Error(result.error);
+            } catch (error) {
+                console.error('Save error:', error);
+                localStorage.setItem('risks_' + risk.id, JSON.stringify(risk));
+            }
         }
         
         function closeRiskModal() {
-            document.getElementById('riskModalOverlay').classList.remove('show');
-            document.body.style.overflow = '';
-            currentModalRiskId = null;
-            switchToViewMode();
+            document.getElementById('riskModal').classList.remove('active');
         }
         
-        function switchToEditMode() {
-            if (!currentModalRiskId) return;
-            const risk = allRisks.find(r => r.id === currentModalRiskId);
-            if (!risk) return;
-            
-            document.querySelector('.risk-modal-body').style.display = 'none';
-            document.getElementById('modalEditMode').style.display = 'block';
-            document.getElementById('modalViewFooter').style.display = 'none';
-            document.getElementById('modalEditFooter').style.display = 'flex';
-            
-            document.getElementById('modalEditNegativeImpact').value = risk.negativeImpact || '';
-            document.getElementById('modalEditMitigation').value = risk.mitigation || '';
-            document.getElementById('modalEditStatus').value = risk.status || 'مفتوح';
-            document.getElementById('modalEditDueDate').value = risk.reviewDate || '';
-            document.getElementById('modalEditProb').value = risk.probability || 3;
-            document.getElementById('modalEditImpact').value = risk.impact || 3;
-            
-            const ownerSelect = document.getElementById('modalEditOwner');
-            ownerSelect.innerHTML = '';
-            if (MASTER && MASTER.owners) {
-                MASTER.owners.forEach(o => {
-                    const opt = document.createElement('option');
-                    opt.value = o;
-                    opt.textContent = o;
-                    ownerSelect.appendChild(opt);
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('riskModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) closeRiskModal();
                 });
             }
-            ownerSelect.value = risk.owner || '';
-        }
-        
-        function switchToViewMode() {
-            document.querySelector('.risk-modal-body').style.display = 'block';
-            document.getElementById('modalEditMode').style.display = 'none';
-            document.getElementById('modalViewFooter').style.display = 'flex';
-            document.getElementById('modalEditFooter').style.display = 'none';
-        }
-        
-        async function saveFromModal() {
-            if (!currentModalRiskId) return;
-            const risk = allRisks.find(r => r.id === currentModalRiskId);
-            if (!risk) return;
-            
-            const saveBtn = document.querySelector('#modalEditFooter .btn-success');
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
-            }
-            
-            const prob = parseInt(document.getElementById('modalEditProb').value) || 3;
-            const imp = parseInt(document.getElementById('modalEditImpact').value) || 3;
-            const score = prob * imp;
-            const level = score >= 20 ? 'حرج' : score >= 12 ? 'عالي' : score >= 6 ? 'متوسط' : 'منخفض';
-            
-            const payload = {
-                id: currentModalRiskId,
-                risk: risk.risk,
-                category: risk.category,
-                owner: document.getElementById('modalEditOwner').value,
-                probability: prob,
-                impact: imp,
-                negativeImpact: document.getElementById('modalEditNegativeImpact').value,
-                mitigation: document.getElementById('modalEditMitigation').value,
-                status: document.getElementById('modalEditStatus').value,
-                reviewDate: document.getElementById('modalEditDueDate').value,
-                sourceEvidence: risk.sourceEvidence
-            };
-            
-            try {
-                if (WEB_APP_URL) {
-                    const res = await fetch(WEB_APP_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action: 'updateRisk', payload })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        showToast('تم حفظ التعديلات بنجاح', 'success');
-                        await loadRisks();
-                    } else {
-                        throw new Error(data.error);
-                    }
-                } else {
-                    Object.assign(risk, payload, { score, level, lastUpdated: new Date().toISOString() });
-                    saveToLocalStorage();
-                    updateStats();
-                    applyFilters();
-                    showToast('تم حفظ التعديلات', 'success');
-                }
-                
-                closeRiskModal();
-                
-            } catch (err) {
-                console.error('Save error:', err);
-                showToast('فشل الحفظ', 'error');
-            } finally {
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التعديلات';
-                }
-            }
-        }
-        
-        async function addCommentFromModal() {
-            const input = document.getElementById('modalNewComment');
-            const text = input.value.trim();
-            if (!text || !currentModalRiskId) return;
-            
-            const risk = allRisks.find(r => r.id === currentModalRiskId);
-            if (!risk) return;
-            
-            const comment = {
-                text: text,
-                author: document.getElementById('modalEditOwner').value || 'مستخدم',
-                date: new Date().toISOString()
-            };
-            
-            if (!risk.comments) risk.comments = [];
-            risk.comments.push(comment);
-            saveToLocalStorage();
-            input.value = '';
-            
-            if (WEB_APP_URL) {
-                try {
-                    await fetch(WEB_APP_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action: 'addComment', payload: { id: currentModalRiskId, comment } })
-                    });
-                } catch (err) {}
-            }
-            
-            showToast('تم إضافة التعليق', 'success');
-        }
-        
-        function editFromModal() {
-            switchToEditMode();
-        }
-        
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') closeRiskModal();
         });
         
         init();
     </script>
+    
+    <div id="riskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> تفاصيل المخاطرة</h3>
+                <button class="modal-close" onclick="closeRiskModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="riskModalBody"></div>
+        </div>
+    </div>
 </body>
 </html>

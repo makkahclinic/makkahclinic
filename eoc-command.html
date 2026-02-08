@@ -1514,6 +1514,15 @@
         <div class="range-btns" id="trainRangeBtns"></div>
         <input type="date" id="trainFrom" onchange="applyTrainingFilter()">
         <input type="date" id="trainTo" onchange="applyTrainingFilter()">
+        <select id="trainScenarioFilter" onchange="applyTrainingFilter()">
+          <option value="">كل السيناريوهات</option>
+          <option value="bls">إنعاش قلبي (BLS)</option>
+          <option value="fire">حريق</option>
+          <option value="power">انقطاع كهرباء</option>
+          <option value="water">تسرب مياه</option>
+          <option value="injury">إغماء/إصابة</option>
+          <option value="outbreak">تفشي عدوى</option>
+        </select>
         <button class="view-btn" onclick="printTrainingDetails()"><i class="fas fa-print"></i> طباعة</button>
       </div>
 
@@ -2064,6 +2073,25 @@
     }
 
     /******************************************************
+     * POST API helper (for write operations)
+     * JSONP can't send payload, so we use fetch POST
+     ******************************************************/
+    async function postApi(action, payload = {}) {
+      try {
+        const response = await fetch(WEB_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action, payload })
+        });
+        const data = await response.json();
+        return data;
+      } catch (err) {
+        console.error('postApi error:', action, err);
+        throw err;
+      }
+    }
+
+    /******************************************************
      * UI helpers
      ******************************************************/
     function toast(message, type='info') {
@@ -2410,7 +2438,7 @@
           } catch(e) { console.warn('Failed to close report:', rep.id, e); }
         }
         
-        const res = await jsonp('closeActiveCommand', {
+        const res = await postApi('closeActiveCommand', {
           closedBy: who,
           closeReason: reason
         });
@@ -3269,7 +3297,7 @@
       };
 
       try{
-        const res = await jsonp('setActiveCommand', cmd);
+        const res = await postApi('setActiveCommand', cmd);
         if (!res || !res.ok) throw new Error(res?.error || 'setActiveCommand failed');
 
         // update report status only for real EMR reports
@@ -3388,7 +3416,7 @@
       const reason = closeReason || 'تم إنهاء الأمر';
 
       try{
-        const res = await jsonp('clearActiveCommand', {});
+        const res = await postApi('clearActiveCommand', {});
         if (!res || !res.ok) throw new Error(res?.error || 'clearActiveCommand failed');
 
         // تسجيل البلاغ اليدوي إذا لم يكن له reportId إلكتروني
@@ -4037,7 +4065,7 @@
         trainer: trainer
       };
       try{
-        const r = await jsonp('setActiveCommand', payload);
+        const r = await postApi('setActiveCommand', payload);
         if (!r || !r.ok) throw new Error(r?.error || 'setActiveCommand failed');
         showBigSuccess('تم إرسال التمرين للشاشات بنجاح! 📺');
         setStatusAlert(true, '🎯 تمرين جاري');
@@ -4071,7 +4099,7 @@
           toast('الأمر النشط ليس تمرينًا (لن يتم مسحه هنا)', 'warn');
           return;
         }
-        const r = await jsonp('clearActiveCommand', {});
+        const r = await postApi('clearActiveCommand', {});
         if (!r || !r.ok) throw new Error(r?.error || 'clearActiveCommand failed');
         showBigSuccess('تم إيقاف عرض التمرين! ⏹️');
         setStatusAlert(false);
@@ -4129,7 +4157,7 @@
       console.log('Payload:', JSON.stringify(payload, null, 2));
 
       try{
-        const res = await jsonp('logTrainingSession', payload);
+        const res = await postApi('logTrainingSession', payload);
         console.log('Response:', JSON.stringify(res, null, 2));
         if (!res || !res.ok) throw new Error(res?.error || 'logTrainingSession failed');
         
@@ -4206,10 +4234,12 @@
     function applyTrainingFilter(){
       const from = document.getElementById('trainFrom').value;
       const to = document.getElementById('trainTo').value;
+      const scenarioFilter = document.getElementById('trainScenarioFilter').value;
       const filtered = (APP.caches.trainingSessions||[]).filter(s=>{
         const d = s._dateYMD || toYMD(s.date);
         if (from && d < from) return false;
         if (to && d > to) return false;
+        if (scenarioFilter && s.scenarioKey !== scenarioFilter) return false;
         return true;
       });
       renderTrainingTable(filtered);
@@ -4517,9 +4547,10 @@
             break;
             
           case 'save':
-            const saveRes = await jsonp('systemTest', { testType: 'save', testData: 'test_' + Date.now() });
+            // Use ping to test server connectivity (systemTest may not be deployed)
+            const saveRes = await jsonp('ping', {});
             passed = saveRes && saveRes.ok;
-            details = passed ? 'الحفظ يعمل' : (saveRes?.error || 'فشل الحفظ');
+            details = passed ? 'الاتصال بالخادم يعمل' : (saveRes?.error || 'فشل الاتصال');
             break;
             
           case 'load':

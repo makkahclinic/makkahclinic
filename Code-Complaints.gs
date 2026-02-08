@@ -60,6 +60,9 @@ function doPost(e) {
       case 'escalateComplaint':
         result = escalateComplaint(payload);
         break;
+      case 'deescalateComplaint':
+        result = deescalateComplaint(payload);
+        break;
       case 'closeComplaint':
         result = closeComplaint(payload);
         break;
@@ -80,22 +83,81 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  const action = e && e.parameter && e.parameter.action;
+  const p = e && e.parameter ? e.parameter : {};
+  const action = p.action;
   
-  if (action === 'debug') {
-    const result = debugInfo();
-    return ContentService.createTextOutput(JSON.stringify({ ok: true, ...result }))
+  function output_(obj) {
+    return ContentService.createTextOutput(JSON.stringify(obj))
       .setMimeType(ContentService.MimeType.JSON);
   }
   
-  if (action === 'getLocations') {
-    const result = getLocations();
-    return ContentService.createTextOutput(JSON.stringify({ ok: true, ...result }))
-      .setMimeType(ContentService.MimeType.JSON);
+  try {
+    let result;
+    
+    switch (action) {
+      case 'debug':
+        result = debugInfo();
+        break;
+      case 'getLocations':
+        result = getLocations();
+        break;
+      case 'getComplaintStaff':
+        result = getComplaintStaff();
+        break;
+      case 'verifyComplaintPasscode':
+        result = verifyComplaintPasscode(p.staffName, p.passcode);
+        break;
+      case 'getComplaintStats':
+        result = getComplaintStats(p);
+        break;
+      case 'getComplaints':
+        result = getComplaints(p);
+        break;
+      case 'getComplaintDetails':
+        result = getComplaintDetails(p.complaintId);
+        break;
+      case 'getComplaintHistory':
+        result = getComplaintHistory(p.complaintId);
+        break;
+      case 'getComplaintAssignmentList':
+        result = getComplaintAssignmentList();
+        break;
+      case 'getComplaintEscalationList':
+        result = getComplaintEscalationList();
+        break;
+      case 'updateComplaint':
+        const updatePayload = p.payload ? JSON.parse(p.payload) : p;
+        result = updateComplaint(updatePayload);
+        break;
+      case 'assignComplaint':
+        const assignPayload = p.payload ? JSON.parse(p.payload) : p;
+        result = assignComplaint(assignPayload);
+        break;
+      case 'escalateComplaint':
+        const escPayload = p.payload ? JSON.parse(p.payload) : p;
+        result = escalateComplaint(escPayload);
+        break;
+      case 'deescalateComplaint':
+        const deescPayload = p.payload ? JSON.parse(p.payload) : p;
+        result = deescalateComplaint(deescPayload);
+        break;
+      case 'closeComplaint':
+        const closePayload = p.payload ? JSON.parse(p.payload) : p;
+        result = closeComplaint(closePayload);
+        break;
+      case 'submitComplaint':
+        const submitPayload = p.payload ? JSON.parse(p.payload) : p;
+        result = submitComplaint(submitPayload);
+        break;
+      default:
+        return output_({ ok: true, message: 'Complaints API is running', version: '2.0' });
+    }
+    
+    return output_({ ok: true, ...result });
+    
+  } catch (err) {
+    return output_({ ok: false, error: err.message });
   }
-  
-  return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Complaints API is running', version: '1.0' }))
-    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // ============================================
@@ -151,10 +213,6 @@ function getRoutingFromMaster() {
       escalationSet.add(escName);
     }
   }
-  
-  // ثابتين دائمًا للتصعيد
-  escalationSet.add('حسين بابصيل');
-  escalationSet.add('أ. بلال نتو');
   
   return { routing, escalation: Array.from(escalationSet) };
 }
@@ -227,24 +285,37 @@ function getComplaintsSheet(sheetName) {
 
 // دالة إصلاح الهيدر - تُشغّل مرة واحدة يدوياً
 function ensureComplaintsLogHeader() {
-  const sheet = getComplaintsSheet('Complaints_Log');
+  const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('Complaints_Log');
   
-  const currentHeader = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  // لو الورقة غير موجودة → أنشئها
+  if (!sheet) {
+    sheet = ss.insertSheet('Complaints_Log');
+    sheet.getRange(1, 1, 1, COMPLAINTS_LOG_HEADER.length).setValues([COMPLAINTS_LOG_HEADER]);
+    Logger.log('تم إنشاء ورقة Complaints_Log وإضافة الهيدر');
+    return { success: true, message: 'تم إنشاء الورقة وإضافة الهيدر' };
+  }
+  
+  // لو الورقة فاضية تماماً
+  if (sheet.getLastRow() === 0 || sheet.getLastColumn() === 0) {
+    sheet.getRange(1, 1, 1, COMPLAINTS_LOG_HEADER.length).setValues([COMPLAINTS_LOG_HEADER]);
+    Logger.log('تم إضافة الهيدر للورقة الفارغة');
+    return { success: true, message: 'تم إضافة الهيدر' };
+  }
+  
+  // قراءة الهيدر الحالي
+  const lastCol = sheet.getLastColumn();
+  const currentHeader = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   
   // لو الهيدر مطابق → لا تعمل شيء
   if (JSON.stringify(currentHeader) === JSON.stringify(COMPLAINTS_LOG_HEADER)) {
     Logger.log('Header already correct');
-    return { success: true, message: 'الهيدر صحيح' };
+    return { success: true, message: 'الهيدر صحيح بالفعل' };
   }
   
-  // لو الورقة فاضية
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(COMPLAINTS_LOG_HEADER);
-    return { success: true, message: 'تم إضافة الهيدر' };
-  }
-  
-  // لو فيها بيانات → نعمل Replace للهيدر فقط
+  // تحديث الهيدر (استبدال أو توسيع)
   sheet.getRange(1, 1, 1, COMPLAINTS_LOG_HEADER.length).setValues([COMPLAINTS_LOG_HEADER]);
+  Logger.log('تم تحديث الهيدر');
   return { success: true, message: 'تم تحديث الهيدر' };
 }
 
@@ -552,7 +623,22 @@ function getComplaintStats(params) {
   const newCount = filtered.filter(c => c.Status === 'new').length;
   const inProgress = filtered.filter(c => c.Status === 'in_progress').length;
   const closed = filtered.filter(c => c.Status === 'closed').length;
-  const escalated = filtered.filter(c => c.Escalated_To && c.Escalated_To.trim() !== '').length;
+  
+  // ✅ تفريق بين المصعدة النشطة والمنتهية
+  const escalatedActive = filtered.filter(c => 
+    c.Escalated_To && c.Escalated_To.trim() !== '' && c.Status !== 'closed'
+  ).length;
+  
+  const escalatedResolved = filtered.filter(c => {
+    const wasEscalated = (c.Escalation_Count && parseInt(c.Escalation_Count) > 0) || 
+                         (c.Deescalation_Date && c.Deescalation_Date.trim() !== '');
+    const escalatedToEmpty = !c.Escalated_To || c.Escalated_To.trim() === '';
+    const isClosed = c.Status === 'closed';
+    return wasEscalated && (escalatedToEmpty || isClosed);
+  }).length;
+  
+  // للتوافق: escalated = النشطة فقط (لأن لوحة التحكم تستخدمها للتنبيهات)
+  const escalated = escalatedActive;
   
   const closedWithDays = filtered.filter(c => c.Status === 'closed' && c.Days_Open);
   const avgDays = closedWithDays.length > 0 
@@ -570,7 +656,9 @@ function getComplaintStats(params) {
     new: newCount,
     in_progress: inProgress,
     closed,
-    escalated,
+    escalated,           // المصعدة النشطة فقط
+    escalatedActive,     // نفس escalated
+    escalatedResolved,   // المنتهية
     avgResolutionTime: avgDays,
     byType
   };
@@ -629,6 +717,11 @@ function getComplaints(params) {
     priority: c.Priority || 'medium',
     assignedTo: c.Assigned_To || '',
     daysOpen: c.Days_Open || 0,
+    // حقول الإغلاق
+    resolution: c.Resolution || '',
+    resolutionDate: formatDate(c.Resolution_Date),
+    closedBy: c.Closed_By || '',
+    responseSent: c.Response_Sent || 'no',
     // حقول التصعيد
     escalatedTo: c.Escalated_To || '',
     escalatedBy: c.Escalated_By || '',
@@ -636,6 +729,10 @@ function getComplaints(params) {
     escalationReason: c.Escalation_Reason || '',
     escalationCount: parseInt(c.Escalation_Count) || 0,
     isEscalated: c.Escalated_To ? true : false,
+    // حقول إنهاء التصعيد
+    deescalatedBy: c.Deescalated_By || '',
+    deescalationDate: formatDate(c.Deescalation_Date),
+    deescalationReason: c.Deescalation_Reason || '',
     // جذر المشكلة
     rootCauseCategory: c.Root_Cause_Category || '',
     rootCauseDetails: c.Root_Cause_Details || ''
@@ -695,6 +792,10 @@ function getComplaintDetails(complaintId) {
       escalationReason: complaint.Escalation_Reason || '',
       escalationCount: parseInt(complaint.Escalation_Count) || 0,
       isEscalated: complaint.Escalated_To ? true : false,
+      // حقول إنهاء التصعيد
+      deescalatedBy: complaint.Deescalated_By || '',
+      deescalationDate: formatDate(complaint.Deescalation_Date),
+      deescalationReason: complaint.Deescalation_Reason || '',
       // جذر المشكلة
       rootCauseCategory: complaint.Root_Cause_Category || '',
       rootCauseDetails: complaint.Root_Cause_Details || '',
@@ -915,4 +1016,97 @@ function closeComplaint(payload) {
   });
   
   return { success: true, message: 'تم إغلاق الشكوى بنجاح' };
+}
+
+function ensureDeescalationColumns(sheet) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const requiredCols = ['Deescalated_By', 'Deescalation_Date', 'Deescalation_Reason'];
+  
+  requiredCols.forEach(col => {
+    if (headers.indexOf(col) === -1) {
+      const lastCol = sheet.getLastColumn();
+      sheet.getRange(1, lastCol + 1).setValue(col);
+    }
+  });
+}
+
+function deescalateComplaint(payload) {
+  const sheet = getComplaintsSheet('Complaints_Log');
+  
+  // إنشاء الأعمدة تلقائياً إذا لم تكن موجودة
+  ensureDeescalationColumns(sheet);
+  
+  const data = sheetToObjects(sheet);
+  
+  const complaint = data.find(c => c.Complaint_ID === payload.complaintId);
+  if (!complaint) {
+    return { success: false, error: 'الشكوى غير موجودة' };
+  }
+  
+  const rowIndex = complaint._rowIndex;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const now = getSaudiDate();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  
+  // مسح بيانات التصعيد
+  const escalatedToCol = headers.indexOf('Escalated_To');
+  const deescalatedByCol = headers.indexOf('Deescalated_By');
+  const deescalationDateCol = headers.indexOf('Deescalation_Date');
+  const deescalationReasonCol = headers.indexOf('Deescalation_Reason');
+  
+  if (escalatedToCol !== -1) sheet.getRange(rowIndex, escalatedToCol + 1).setValue('');
+  if (deescalatedByCol !== -1) sheet.getRange(rowIndex, deescalatedByCol + 1).setValue(payload.deescalatedBy || 'النظام');
+  if (deescalationDateCol !== -1) sheet.getRange(rowIndex, deescalationDateCol + 1).setValue(dateStr);
+  if (deescalationReasonCol !== -1) sheet.getRange(rowIndex, deescalationReasonCol + 1).setValue(payload.reason || '');
+  
+  // إعادة الأولوية إلى متوسطة
+  const priorityCol = headers.indexOf('Priority');
+  if (priorityCol !== -1) sheet.getRange(rowIndex, priorityCol + 1).setValue('medium');
+  
+  addComplaintFollowup({
+    complaintId: payload.complaintId,
+    action: `إنهاء التصعيد - الإجراء: ${payload.action || 'غير محدد'}`,
+    actionBy: payload.deescalatedBy || 'النظام',
+    notes: payload.reason || ''
+  });
+  
+  return { 
+    success: true, 
+    message: 'تم إنهاء التصعيد بنجاح'
+  };
+}
+
+/**
+ * تعبئة Closed_By للشكاوى القديمة المغلقة
+ * يمكن تشغيلها مرة واحدة فقط
+ */
+function fillMissingClosedBy(defaultValue = 'النظام') {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName('Complaints');
+  if (!sheet) return { success: false, error: 'الشيت غير موجود' };
+  
+  const data = sheetToObjects(sheet);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const statusCol = headers.indexOf('Status');
+  const closedByCol = headers.indexOf('Closed_By');
+  
+  if (closedByCol === -1) {
+    return { success: false, error: 'عمود Closed_By غير موجود' };
+  }
+  
+  let updated = 0;
+  data.forEach(c => {
+    const isClosed = c.Status === 'closed' || c.Status === 'مغلقة';
+    const hasClosedBy = (c.Closed_By || '').trim() !== '';
+    
+    if (isClosed && !hasClosedBy) {
+      sheet.getRange(c._rowIndex, closedByCol + 1).setValue(defaultValue);
+      updated++;
+    }
+  });
+  
+  return { 
+    success: true, 
+    message: `تم تحديث ${updated} شكوى مغلقة بقيمة "${defaultValue}"` 
+  };
 }
