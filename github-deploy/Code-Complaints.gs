@@ -19,7 +19,7 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
     const action = body.action;
-    const payload = body.payload || {};
+    const payload = body.payload || body;
     
     let result;
     
