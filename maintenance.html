@@ -1013,13 +1013,15 @@
   function updateKPIs(kpisData){
     const data = kpisData || {};
 
-    const backendServiced   = data.servicedDevices ?? 0;
-    const backendTotal      = data.totalDevices    ?? 0;
-    const backendCompliance = data.completionRate  ?? 0;
-    const backendNotServiced = Math.max(backendTotal - backendServiced, 0);
+    const totalRecords = (App.records || []).length;
+    const backendTotal = data.totalDevices ?? 0;
 
-    animateValue($('#kpiServiced'),      backendServiced);
-    animateValue($('#kpiNotServiced'),   backendNotServiced);
+    const serviced = totalRecords;
+    const notServiced = Math.max(backendTotal - serviced, 0);
+    const compliance = backendTotal > 0 ? Math.round((serviced / backendTotal) * 100) : 0;
+
+    animateValue($('#kpiServiced'),      serviced);
+    animateValue($('#kpiNotServiced'),   notServiced);
     animateValue($('#kpiOverdue'),       data.overdue      ?? 0);
     animateValue($('#kpiDueThisMonth'),  data.dueThisMonth ?? 0);
     animateValue($('#kpiOutOfService'),  data.outOfService ?? 0);
@@ -1031,15 +1033,15 @@
     const hint = $('#kpiComplianceHint');
 
     if (el) {
-      animateValue(el, backendCompliance, '%');
+      animateValue(el, compliance, '%');
       el.style.color =
-        backendCompliance >= 90 ? '#22c55e' :
-        backendCompliance >= 75 ? '#f59e0b' :
+        compliance >= 90 ? '#22c55e' :
+        compliance >= 75 ? '#f59e0b' :
         '#ef4444';
     }
 
     if (hint) {
-      hint.textContent = `مصان ${backendServiced} / إجمالي ${backendTotal}`;
+      hint.textContent = `مصان ${serviced} / إجمالي ${backendTotal}`;
     }
 
     updateAlertsList();
