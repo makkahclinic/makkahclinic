@@ -578,9 +578,56 @@
           font-size:.85rem;
           opacity:.85;
         }
+
+        .toast-container {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 24px;
+            border-radius: 14px;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #fff;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+            animation: toastSlideIn 0.4s cubic-bezier(0.22,1,0.36,1), toastFadeOut 0.4s 3.2s ease-in forwards;
+            min-width: 280px;
+            max-width: 480px;
+            backdrop-filter: blur(8px);
+        }
+        .toast.success { background: linear-gradient(135deg, #28a745, #20c997); }
+        .toast.error { background: linear-gradient(135deg, #dc3545, #e74c3c); }
+        .toast.warning { background: linear-gradient(135deg, #ffc107, #fd7e14); color: #333; }
+        .toast.info { background: linear-gradient(135deg, #0056A3, #17a2b8); }
+        .toast i { font-size: 1.3rem; }
+        .toast .toast-text { flex: 1; line-height: 1.5; }
+        .toast .toast-close { background: none; border: none; color: inherit; font-size: 1.1rem; cursor: pointer; opacity: 0.7; padding: 4px; }
+        .toast .toast-close:hover { opacity: 1; }
+        @keyframes toastSlideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes toastFadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
     </style>
 </head>
 <body>
+    <div class="toast-container" id="toastContainer"></div>
     <div id="loginOverlay" class="login-overlay">
         <div class="login-card">
             <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="شعار المجمع" style="width:100px; height:100px; margin-bottom:15px;">
@@ -1061,6 +1108,16 @@
         let assignmentList = [];
         let escalationList = [];
         let currentComplaintId = null;
+
+        function showToast(message, type = 'success', duration = 3600) {
+            const container = document.getElementById('toastContainer');
+            const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i><span class="toast-text">${message}</span><button class="toast-close" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>`;
+            container.appendChild(toast);
+            setTimeout(() => { if (toast.parentElement) toast.remove(); }, duration);
+        }
 
         async function apiCall(action, payload = {}) {
             try {
@@ -2014,23 +2071,44 @@
                 result.followups.forEach(f => {
                     let notesHtml = '';
                     if (f.notes) {
-                        const parts = f.notes.split('📎 المرفقات:');
-                        notesHtml = `<div class="timeline-notes">${parts[0].trim()}</div>`;
-                        if (parts[1]) {
-                            const links = parts[1].trim().split('\n').filter(l => l.trim());
-                            notesHtml += `<div style="margin-top:8px;padding:8px;background:#f0f7ff;border-radius:8px;border:1px solid #d0e3f7;">
-                                <div style="font-size:0.8rem;color:#1e3a5f;font-weight:600;margin-bottom:6px;"><i class="fas fa-paperclip"></i> المرفقات</div>`;
-                            links.forEach(link => {
-                                const urlMatch = link.match(/https?:\/\/[^\s]+/);
-                                const nameMatch = link.match(/- ([^:]+):/);
-                                if (urlMatch) {
-                                    notesHtml += `<a href="${urlMatch[0]}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:#fff;border:1px solid #c9a962;border-radius:6px;color:#1e3a5f;text-decoration:none;font-size:0.8rem;margin:3px;">
-                                        <i class="fas fa-external-link-alt" style="color:#c9a962;"></i> ${nameMatch ? nameMatch[1].trim() : 'مرفق'}
-                                    </a>`;
-                                }
-                            });
-                            notesHtml += `</div>`;
+                        let noteText = f.notes;
+                        let attachHtml = '';
+                        
+                        const allUrls = noteText.match(/https?:\/\/[^\s<>"']+/g) || [];
+                        const driveUrls = allUrls.filter(u => u.includes('drive.google') || u.includes('docs.google'));
+                        
+                        if (noteText.includes('📎')) {
+                            const parts = noteText.split(/📎[^\n]*/);
+                            noteText = parts[0].trim();
                         }
+                        
+                        noteText = noteText.replace(/https?:\/\/[^\s<>"']+/g, '').replace(/^-\s*/gm, '').trim();
+                        
+                        if (noteText) {
+                            notesHtml = `<div class="timeline-notes">${noteText}</div>`;
+                        }
+                        
+                        if (driveUrls.length > 0) {
+                            attachHtml = `<div style="margin-top:8px;padding:10px;background:linear-gradient(135deg, #f0f7ff, #e8f4fd);border-radius:10px;border:1px solid #b8d4f0;">
+                                <div style="font-size:0.8rem;color:#0056A3;font-weight:700;margin-bottom:8px;"><i class="fas fa-paperclip" style="margin-left:4px;"></i> المرفقات (${driveUrls.length})</div>
+                                <div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+                            driveUrls.forEach((url, idx) => {
+                                const nameMatch = f.notes.match(new RegExp('([^\\s\\-:]+)\\s*:\\s*' + url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').substring(0, 40)));
+                                let fileName = nameMatch ? nameMatch[1].trim() : `مرفق ${idx + 1}`;
+                                const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)/i.test(url) || /\.(jpg|jpeg|png|gif|webp|bmp)/i.test(fileName);
+                                const isPdf = /\.pdf/i.test(url) || /\.pdf/i.test(fileName);
+                                const icon = isImage ? 'fa-image' : isPdf ? 'fa-file-pdf' : 'fa-file-alt';
+                                const iconColor = isImage ? '#4CAF50' : isPdf ? '#f44336' : '#2196F3';
+                                
+                                attachHtml += `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:6px 14px;background:#fff;border:1px solid #c9a962;border-radius:8px;color:#1e3a5f;text-decoration:none;font-size:0.82rem;font-weight:600;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.06);" onmouseover="this.style.background='#fdf6e3';this.style.boxShadow='0 3px 8px rgba(201,169,98,0.25)'" onmouseout="this.style.background='#fff';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)'">
+                                    <i class="fas ${icon}" style="color:${iconColor};font-size:1rem;"></i> ${fileName}
+                                    <i class="fas fa-external-link-alt" style="color:#c9a962;font-size:0.7rem;"></i>
+                                </a>`;
+                            });
+                            attachHtml += `</div></div>`;
+                        }
+                        
+                        notesHtml += attachHtml;
                     }
                     html += `<div class="timeline-item">
                         <div class="timeline-date">${f.date}</div>
@@ -2093,12 +2171,12 @@
                 notes: notes
             });
             if (result.ok) {
-                alert('تم التكليف بنجاح');
+                showToast('تم التكليف بنجاح ✓', 'success');
                 closeActionModal();
                 closeModal();
                 loadDashboard();
             } else {
-                alert('خطأ: ' + (result.error || 'فشل التكليف'));
+                showToast('خطأ: ' + (result.error || 'فشل التكليف'), 'error');
             }
         }
 
@@ -2130,12 +2208,12 @@
                 reason: reason
             });
             if (result.ok) {
-                alert('تم التصعيد بنجاح');
+                showToast('تم التصعيد بنجاح ✓', 'success');
                 closeActionModal();
                 closeModal();
                 loadDashboard();
             } else {
-                alert('خطأ: ' + (result.error || 'فشل التصعيد'));
+                showToast('خطأ: ' + (result.error || 'فشل التصعيد'), 'error');
             }
         }
 
@@ -2177,7 +2255,7 @@
             const action = document.getElementById('deescalateAction').value;
             
             if (!reason.trim()) {
-                alert('يرجى إدخال سبب إنهاء التصعيد');
+                showToast('يرجى إدخال سبب إنهاء التصعيد', 'warning');
                 return;
             }
             
@@ -2197,22 +2275,14 @@
                 if (result.ok) {
                     closeModal();
                     await loadDashboard();
-                    showSuccessToast('تم إنهاء التصعيد بنجاح');
+                    showToast('تم إنهاء التصعيد بنجاح ✓', 'success');
                 } else {
-                    alert('خطأ: ' + (result.error || 'فشل إنهاء التصعيد'));
+                    showToast('خطأ: ' + (result.error || 'فشل إنهاء التصعيد'), 'error');
                 }
             } catch (err) {
                 hideLoading();
-                alert('خطأ في الاتصال: ' + err.message);
+                showToast('خطأ في الاتصال: ' + err.message, 'error');
             }
-        }
-        
-        function showSuccessToast(message) {
-            const toast = document.createElement('div');
-            toast.style.cssText = 'position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:linear-gradient(135deg, #28a745, #20c997); color:white; padding:16px 32px; border-radius:12px; font-weight:600; box-shadow:0 8px 30px rgba(40,167,69,0.4); z-index:3000; display:flex; align-items:center; gap:10px; animation:slideUp 0.3s ease;';
-            toast.innerHTML = '<i class="fas fa-check-circle" style="font-size:1.2rem;"></i> ' + message;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
         }
 
         function showCloseModal(complaintId) {
@@ -2266,8 +2336,8 @@
             const correctiveAction = document.getElementById('correctiveAction').value;
             const responseSent = document.getElementById('responseSent').value;
             
-            if (!rootCauseCategory) { alert('يرجى اختيار تصنيف جذر المشكلة'); return; }
-            if (!resolution) { alert('يرجى كتابة الحل المتخذ'); return; }
+            if (!rootCauseCategory) { showToast('يرجى اختيار تصنيف جذر المشكلة', 'warning'); return; }
+            if (!resolution) { showToast('يرجى كتابة الحل المتخذ', 'warning'); return; }
             
             const result = await apiCall('closeComplaint', {
                 complaintId: currentComplaintId,
@@ -2279,12 +2349,12 @@
                 responseSent: responseSent
             });
             if (result.ok) {
-                alert('تم إغلاق الشكوى بنجاح');
+                showToast('تم إغلاق الشكوى بنجاح ✓', 'success');
                 closeActionModal();
                 closeModal();
                 loadDashboard();
             } else {
-                alert('خطأ: ' + (result.error || 'فشل الإغلاق'));
+                showToast('خطأ: ' + (result.error || 'فشل الإغلاق'), 'error');
             }
         }
 
@@ -2339,11 +2409,11 @@
             
             for (let i = 0; i < files.length; i++) {
                 if (noteAttachments.length >= maxFiles) {
-                    alert('الحد الأقصى 3 ملفات');
+                    showToast('الحد الأقصى 3 ملفات', 'warning');
                     break;
                 }
                 if (files[i].size > maxSize) {
-                    alert(`الملف "${files[i].name}" أكبر من 5 ميجا`);
+                    showToast(`الملف "${files[i].name}" أكبر من 5 ميجا`, 'warning');
                     continue;
                 }
                 const reader = new FileReader();
@@ -2390,7 +2460,7 @@
         async function submitNote() {
             const noteAction = document.getElementById('noteAction').value;
             const notes = document.getElementById('noteText').value;
-            if (!noteAction) { alert('يرجى كتابة الإجراء'); return; }
+            if (!noteAction) { showToast('يرجى كتابة الإجراء', 'warning'); return; }
             
             const btn = document.getElementById('submitNoteBtn');
             btn.disabled = true;
@@ -2442,16 +2512,16 @@
                 });
                 
                 if (result.ok && result.success) {
-                    alert('تم إضافة الملاحظة بنجاح' + (uploadedFiles.length ? ` مع ${uploadedFiles.length} مرفق` : ''));
+                    showToast('تم إضافة الملاحظة بنجاح' + (uploadedFiles.length ? ` مع ${uploadedFiles.length} مرفق ✓` : ' ✓'), 'success');
                     document.getElementById('actionModal').classList.remove('active');
                     noteAttachments = [];
                     await new Promise(r => setTimeout(r, 1500));
                     viewDetails(currentComplaintId);
                 } else {
-                    alert('خطأ: ' + (result.error || JSON.stringify(result)));
+                    showToast('خطأ: ' + (result.error || 'فشل في حفظ الملاحظة'), 'error');
                 }
             } catch (err) {
-                alert('خطأ في الاتصال: ' + err.message);
+                showToast('خطأ في الاتصال: ' + err.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال الملاحظة';
