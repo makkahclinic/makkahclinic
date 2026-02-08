@@ -106,6 +106,9 @@ function doGet(e) {
       case 'debug':
         result = debugInfo();
         break;
+      case 'debugFollowups':
+        result = debugFollowups(p.complaintId);
+        break;
       case 'getLocations':
         result = getLocations();
         break;
@@ -367,6 +370,52 @@ function debugInfo() {
     };
   } catch (err) {
     return { error: err.message, status: 'error' };
+  }
+}
+
+function debugFollowups(complaintId) {
+  try {
+    const sheet = getComplaintsSheet('Complaints_Followup');
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    
+    if (lastRow === 0 || lastCol === 0) {
+      return { headers: [], totalRows: 0, followups: [], message: 'الشيت فاضي' };
+    }
+    
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const allData = sheetToObjects(sheet);
+    
+    let matched = [];
+    if (complaintId) {
+      matched = allData.filter(f => String(f.Complaint_ID).trim() === String(complaintId).trim());
+    }
+    
+    const last5 = allData.slice(-5).map(r => ({
+      Followup_ID: r.Followup_ID,
+      Complaint_ID: r.Complaint_ID,
+      Date: r.Date,
+      Action: r.Action,
+      Action_By: r.Action_By,
+      Notes: String(r.Notes || '').substring(0, 50)
+    }));
+    
+    return {
+      headers: headers,
+      totalRows: allData.length,
+      matchedForId: matched.length,
+      searchedId: complaintId || 'none',
+      last5rows: last5,
+      matched: matched.map(f => ({
+        id: f.Followup_ID,
+        complaintId: f.Complaint_ID,
+        date: f.Date,
+        action: f.Action,
+        actionBy: f.Action_By
+      }))
+    };
+  } catch (err) {
+    return { error: err.message };
   }
 }
 
@@ -769,8 +818,9 @@ function getComplaintDetails(complaintId) {
   }
   
   const followupSheet = getComplaintsSheet('Complaints_Followup');
-  const followups = sheetToObjects(followupSheet)
-    .filter(f => f.Complaint_ID === complaintId)
+  const allFollowups = sheetToObjects(followupSheet);
+  const followups = allFollowups
+    .filter(f => String(f.Complaint_ID).trim() === String(complaintId).trim())
     .sort((a, b) => new Date(b.Date) - new Date(a.Date));
   
   return {
