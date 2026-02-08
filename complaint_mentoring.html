@@ -2241,21 +2241,25 @@
             const noteAction = document.getElementById('noteAction').value;
             const notes = document.getElementById('noteText').value;
             if (!noteAction) { alert('يرجى كتابة الإجراء'); return; }
-            const result = await apiCall('updateComplaint', {
-                payload: JSON.stringify({
-                    complaintId: currentComplaintId,
-                    action: noteAction,
-                    actionBy: currentUser,
-                    notes: notes
-                })
-            });
-            if (result.ok) {
-                alert('تم إضافة الملاحظة');
-                document.getElementById('actionModal').classList.remove('active');
-                await new Promise(r => setTimeout(r, 800));
-                viewDetails(currentComplaintId);
-            } else {
-                alert('خطأ: ' + (result.error || 'فشل الإضافة'));
+            try {
+                const result = await apiCall('addNote', {
+                    payload: JSON.stringify({
+                        complaintId: currentComplaintId,
+                        action: noteAction,
+                        actionBy: currentUser,
+                        notes: notes
+                    })
+                });
+                if (result.ok && result.success) {
+                    alert('تم إضافة الملاحظة بنجاح');
+                    document.getElementById('actionModal').classList.remove('active');
+                    await new Promise(r => setTimeout(r, 1500));
+                    viewDetails(currentComplaintId);
+                } else {
+                    alert('خطأ: ' + (result.error || 'فشل إضافة الملاحظة'));
+                }
+            } catch (err) {
+                alert('خطأ في الاتصال: ' + err.message);
             }
         }
 
