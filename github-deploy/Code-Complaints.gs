@@ -45,6 +45,17 @@ function doPost(e) {
       case 'updateComplaint':
         result = updateComplaint(payload);
         break;
+      case 'addNote':
+        result = addComplaintFollowup({
+          complaintId: payload.complaintId,
+          action: payload.action || payload.noteAction || 'ملاحظة',
+          actionBy: payload.actionBy || 'النظام',
+          notes: payload.notes || ''
+        });
+        break;
+      case 'uploadFollowupFiles':
+        result = uploadFollowupFilesToDrive(payload.files, payload.complaintId);
+        break;
       case 'getComplaintHistory':
         result = getComplaintHistory(payload.complaintId);
         break;
@@ -98,6 +109,9 @@ function doGet(e) {
       case 'debug':
         result = debugInfo();
         break;
+      case 'debugFollowups':
+        result = debugFollowups(p.complaintId);
+        break;
       case 'getLocations':
         result = getLocations();
         break;
@@ -128,6 +142,15 @@ function doGet(e) {
       case 'updateComplaint':
         const updatePayload = p.payload ? JSON.parse(p.payload) : p;
         result = updateComplaint(updatePayload);
+        break;
+      case 'addNote':
+        const notePayload = p.payload ? JSON.parse(p.payload) : p;
+        result = addComplaintFollowup({
+          complaintId: notePayload.complaintId,
+          action: notePayload.action || notePayload.noteAction || 'ملاحظة',
+          actionBy: notePayload.actionBy || 'النظام',
+          notes: notePayload.notes || ''
+        });
         break;
       case 'assignComplaint':
         const assignPayload = p.payload ? JSON.parse(p.payload) : p;
@@ -353,6 +376,52 @@ function debugInfo() {
   }
 }
 
+function debugFollowups(complaintId) {
+  try {
+    const sheet = getComplaintsSheet('Complaints_Followup');
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    
+    if (lastRow === 0 || lastCol === 0) {
+      return { headers: [], totalRows: 0, followups: [], message: 'الشيت فاضي' };
+    }
+    
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const allData = sheetToObjects(sheet);
+    
+    let matched = [];
+    if (complaintId) {
+      matched = allData.filter(f => String(f.Complaint_ID).trim() === String(complaintId).trim());
+    }
+    
+    const last5 = allData.slice(-5).map(r => ({
+      Followup_ID: r.Followup_ID,
+      Complaint_ID: r.Complaint_ID,
+      Date: r.Date,
+      Action: r.Action,
+      Action_By: r.Action_By,
+      Notes: String(r.Notes || '').substring(0, 50)
+    }));
+    
+    return {
+      headers: headers,
+      totalRows: allData.length,
+      matchedForId: matched.length,
+      searchedId: complaintId || 'none',
+      last5rows: last5,
+      matched: matched.map(f => ({
+        id: f.Followup_ID,
+        complaintId: f.Complaint_ID,
+        date: f.Date,
+        action: f.Action,
+        actionBy: f.Action_By
+      }))
+    };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
 // ============================================
 // دوال التفويض والاختبار - شغّل هذه الدوال أولاً!
 // ============================================
@@ -440,6 +509,64 @@ function uploadFilesToDrive(files, complaintId) {
   });
   
   return uploadedFiles;
+}
+
+function uploadFollowupFilesToDrive(files, complaintId) {
+  if (!files || files.length === 0) return { files: [] };
+  
+  let folder;
+  try {
+    folder = DriveApp.getFolderById(COMPLAINTS_DRIVE_FOLDER_ID);
+  } catch (e) {
+    throw new Error("لم يتم العثور على مجلد Drive: " + e.message);
+  }
+
+  let complaintFolder;
+  const folders = folder.getFoldersByName(complaintId);
+  if (folders.hasNext()) {
+    complaintFolder = folders.next();
+  } else {
+    complaintFolder = folder.createFolder(complaintId);
+  }
+
+  let followupFolder;
+  const fFolders = complaintFolder.getFoldersByName('followups');
+  if (fFolders.hasNext()) {
+    followupFolder = fFolders.next();
+  } else {
+    followupFolder = complaintFolder.createFolder('followups');
+  }
+
+  const uploadedFiles = [];
+  
+  files.forEach(function(file, index) {
+    try {
+      let base64Data = file.data;
+      if (base64Data.includes(',')) {
+        base64Data = base64Data.split(',')[1];
+      }
+      
+      const decoded = Utilities.base64Decode(base64Data);
+      const blob = Utilities.newBlob(
+        decoded,
+        file.mimeType || 'application/octet-stream',
+        file.name || ('followup_' + (index + 1))
+      );
+      
+      const driveFile = followupFolder.createFile(blob);
+      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      
+      uploadedFiles.push({
+        name: file.name,
+        url: driveFile.getUrl(),
+        id: driveFile.getId()
+      });
+    } catch (err) {
+      Logger.log("فشل رفع ملف المتابعة: " + err.message);
+    }
+  });
+  
+  return { files: uploadedFiles };
 }
 
 // ============================================
@@ -752,8 +879,9 @@ function getComplaintDetails(complaintId) {
   }
   
   const followupSheet = getComplaintsSheet('Complaints_Followup');
-  const followups = sheetToObjects(followupSheet)
-    .filter(f => f.Complaint_ID === complaintId)
+  const allFollowups = sheetToObjects(followupSheet);
+  const followups = allFollowups
+    .filter(f => String(f.Complaint_ID).trim() === String(complaintId).trim())
     .sort((a, b) => new Date(b.Date) - new Date(a.Date));
   
   return {
@@ -854,19 +982,34 @@ function updateComplaint(payload) {
 
 function addComplaintFollowup(payload) {
   const sheet = getComplaintsSheet('Complaints_Followup');
+  
+  const expectedHeaders = ['Followup_ID', 'Complaint_ID', 'Date', 'Action', 'Action_By', 'Notes', 'Status'];
+  const lastRow = sheet.getLastRow();
+  if (lastRow === 0) {
+    sheet.appendRow(expectedHeaders);
+  } else {
+    const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (currentHeaders[0] !== 'Followup_ID') {
+      sheet.insertRowBefore(1);
+      sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
+    }
+  }
+  
   const now = getSaudiDate();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const followupId = `CF-${Date.now()}`;
   
   sheet.appendRow([
     followupId,
-    payload.complaintId,
+    payload.complaintId || '',
     dateStr,
     payload.action || '',
     payload.actionBy || '',
     payload.notes || '',
     'completed'
   ]);
+  
+  SpreadsheetApp.flush();
   
   return { success: true, followupId: followupId };
 }
