@@ -1465,12 +1465,10 @@
           }
 
           const sseUrl = '/api/emergency-stream';
-          console.log('🔌 Connecting to SSE...');
           
           eventSource = new EventSource(sseUrl);
           
           eventSource.onopen = () => {
-            console.log('✅ SSE Connected - استجابة فورية!');
             sseConnected = true;
             sseReconnectAttempts = 0;
             updateConnectionStatus(true);
@@ -1485,12 +1483,10 @@
               const data = JSON.parse(event.data);
               
               if (data.connected) {
-                console.log('🟢 SSE Ready');
                 return;
               }
               
               if (data.error) {
-                console.warn('SSE Error:', data.error);
                 return;
               }
 
@@ -1503,7 +1499,7 @@
                 }
               } else if (data.cleared) {
                 if (currentCommand) {
-                  console.log('🔴 Emergency cleared via SSE');
+                  
                   deactivateEmergency();
                 }
               }
@@ -1513,7 +1509,6 @@
           };
 
           eventSource.onerror = (e) => {
-            console.warn('⚠️ SSE Error - attempting reconnect');
             sseConnected = false;
             updateConnectionStatus(false);
             
@@ -1526,7 +1521,6 @@
             if (sseReconnectAttempts < MAX_SSE_RECONNECT) {
               setTimeout(connectSSE, 3000);
             } else {
-              console.log('📡 Falling back to polling mode');
               startPollingFallback();
             }
           };
@@ -1538,7 +1532,7 @@
             eventSource.close();
             eventSource = null;
           }
-          console.log('📡 Using fast polling (1 second)');
+          
           updateConnectionStatus(false);
           checkActiveCommand();
           pollingInterval = setInterval(checkActiveCommand, 1000);
@@ -1568,7 +1562,16 @@
           const startScreen = document.getElementById('startScreen');
           if (startScreen) startScreen.classList.add('hidden');
           
-          startPollingFallback();
+          if (typeof EventSource !== 'undefined') {
+            connectSSE();
+            setTimeout(() => {
+              if (!sseConnected) {
+                startPollingFallback();
+              }
+            }, 5000);
+          } else {
+            startPollingFallback();
+          }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
