@@ -436,9 +436,9 @@
         <div class="col-6 col-lg-3">
           <div class="card-glass kpi topaz h-100">
             <div class="kpi-icon"><i class="fa-solid fa-list-check"></i></div>
-            <div class="label"><i class="fa-solid fa-hourglass-half"></i> غير المكتملة</div>
+            <div class="label"><i class="fa-solid fa-hourglass-half"></i> أجهزة غير مصانة</div>
             <div id="kpiUncompleted" class="value">0</div>
-            <div class="hint">كل المهام المفتوحة (قيد الانتظار/متأخرة)</div>
+            <div class="hint">أجهزة لم تكتمل صيانتها بعد</div>
           </div>
         </div>
         <div class="col-6 col-lg-3">
@@ -452,9 +452,9 @@
         <div class="col-6 col-lg-3">
           <div class="card-glass kpi emerald h-100">
             <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
-            <div class="label"><i class="fa-solid fa-check-double"></i> المكتملة</div>
+            <div class="label"><i class="fa-solid fa-check-double"></i> أجهزة مكتملة الصيانة</div>
             <div id="kpiCompleted" class="value">0</div>
-            <div class="hint">مهام تم إنهاؤها بنجاح</div>
+            <div class="hint">أجهزة آخر صيانة لها مكتملة</div>
           </div>
         </div>
         <div class="col-6 col-lg-3">
@@ -1009,68 +1009,37 @@
     }
   }
 
-  /*************** Compliance Calculation ****************/
-  function calcComplianceFromState() {
-    const allIds = new Set();
-    Object.values(App.assetsMap || {}).forEach(list => {
-      if (!Array.isArray(list)) return;
-      list.forEach(a => {
-        const id = String(a.id || '').trim();
-        if (id) allIds.add(id);
-      });
-    });
-    const totalDevices = allIds.size;
-
-    const latestByAsset = {};
-    (App.records || []).forEach(r => {
-      const assetId = String(r.AssetID || '').trim();
-      if (!assetId) return;
-
-      const d = new Date(r.CompletedDate || r.Timestamp || r.StartDate || r.DueDate || 0);
-      if (isNaN(d)) return;
-
-      if (!latestByAsset[assetId] || d > latestByAsset[assetId].d) {
-        latestByAsset[assetId] = { d, r };
-      }
-    });
-
-    let servicedDevices = 0;
-    Object.values(latestByAsset).forEach(({ r }) => {
-      if (String(r.Status || '').trim() === 'Completed') servicedDevices++;
-    });
-
-    const compliance = totalDevices ? Math.round((servicedDevices / totalDevices) * 100) : 0;
-
-    return { totalDevices, servicedDevices, compliance };
-  }
-
   /*************** KPIs ****************/
   function updateKPIs(kpisData){
     const data = kpisData || {};
-    animateValue($('#kpiNotServiced'), data.notServiced ?? 0);
+
+    const backendServiced   = data.servicedDevices ?? 0;
+    const backendTotal      = data.totalDevices    ?? 0;
+    const backendCompliance = data.completionRate  ?? 0;
+    const backendNotServiced = Math.max(backendTotal - backendServiced, 0);
+
+    animateValue($('#kpiNotServiced'), backendNotServiced);
     animateValue($('#kpiOverdue'),      data.overdue      ?? 0);
     animateValue($('#kpiDueThisMonth'), data.dueThisMonth ?? 0);
     animateValue($('#kpiOutOfService'), data.outOfService ?? 0);
-    animateValue($('#kpiCompleted'),    data.completed    ?? 0);
+    animateValue($('#kpiCompleted'),    backendServiced);
     animateValue($('#kpiCritical'),     data.critical     ?? 0);
-    animateValue($('#kpiUncompleted'),  data.uncompleted  ?? 0);
+    animateValue($('#kpiUncompleted'),  backendNotServiced);
     animateValue($('#kpiDowntime'),     data.downtime     ?? 0);
 
-    // Compliance (محسوب من الـ Front-end)
-    const c = calcComplianceFromState();
     const el = $('#kpiCompliance');
     const hint = $('#kpiComplianceHint');
 
     if (el) {
-      animateValue(el, c.compliance, '%');
+      animateValue(el, backendCompliance, '%');
       el.style.color =
-        c.compliance >= 90 ? '#22c55e' :
-        c.compliance >= 75 ? '#f59e0b' :
+        backendCompliance >= 90 ? '#22c55e' :
+        backendCompliance >= 75 ? '#f59e0b' :
         '#ef4444';
     }
 
     if (hint) {
-      hint.textContent = `مصان ${c.servicedDevices} / إجمالي ${c.totalDevices}`;
+      hint.textContent = `مصان ${backendServiced} / إجمالي ${backendTotal}`;
     }
 
     updateAlertsList();
