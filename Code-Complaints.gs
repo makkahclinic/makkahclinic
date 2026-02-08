@@ -53,6 +53,9 @@ function doPost(e) {
           notes: payload.notes || ''
         });
         break;
+      case 'uploadFollowupFiles':
+        result = uploadFollowupFilesToDrive(payload.files, payload.complaintId);
+        break;
       case 'getComplaintHistory':
         result = getComplaintHistory(payload.complaintId);
         break;
@@ -506,6 +509,64 @@ function uploadFilesToDrive(files, complaintId) {
   });
   
   return uploadedFiles;
+}
+
+function uploadFollowupFilesToDrive(files, complaintId) {
+  if (!files || files.length === 0) return { files: [] };
+  
+  let folder;
+  try {
+    folder = DriveApp.getFolderById(COMPLAINTS_DRIVE_FOLDER_ID);
+  } catch (e) {
+    throw new Error("لم يتم العثور على مجلد Drive: " + e.message);
+  }
+
+  let complaintFolder;
+  const folders = folder.getFoldersByName(complaintId);
+  if (folders.hasNext()) {
+    complaintFolder = folders.next();
+  } else {
+    complaintFolder = folder.createFolder(complaintId);
+  }
+
+  let followupFolder;
+  const fFolders = complaintFolder.getFoldersByName('followups');
+  if (fFolders.hasNext()) {
+    followupFolder = fFolders.next();
+  } else {
+    followupFolder = complaintFolder.createFolder('followups');
+  }
+
+  const uploadedFiles = [];
+  
+  files.forEach(function(file, index) {
+    try {
+      let base64Data = file.data;
+      if (base64Data.includes(',')) {
+        base64Data = base64Data.split(',')[1];
+      }
+      
+      const decoded = Utilities.base64Decode(base64Data);
+      const blob = Utilities.newBlob(
+        decoded,
+        file.mimeType || 'application/octet-stream',
+        file.name || ('followup_' + (index + 1))
+      );
+      
+      const driveFile = followupFolder.createFile(blob);
+      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      
+      uploadedFiles.push({
+        name: file.name,
+        url: driveFile.getUrl(),
+        id: driveFile.getId()
+      });
+    } catch (err) {
+      Logger.log("فشل رفع ملف المتابعة: " + err.message);
+    }
+  });
+  
+  return { files: uploadedFiles };
 }
 
 // ============================================
