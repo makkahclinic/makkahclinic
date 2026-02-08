@@ -2012,18 +2012,38 @@
             if (result.followups && result.followups.length > 0) {
                 html += `<div class="timeline">`;
                 result.followups.forEach(f => {
+                    let notesHtml = '';
+                    if (f.notes) {
+                        const parts = f.notes.split('📎 المرفقات:');
+                        notesHtml = `<div class="timeline-notes">${parts[0].trim()}</div>`;
+                        if (parts[1]) {
+                            const links = parts[1].trim().split('\n').filter(l => l.trim());
+                            notesHtml += `<div style="margin-top:8px;padding:8px;background:#f0f7ff;border-radius:8px;border:1px solid #d0e3f7;">
+                                <div style="font-size:0.8rem;color:#1e3a5f;font-weight:600;margin-bottom:6px;"><i class="fas fa-paperclip"></i> المرفقات</div>`;
+                            links.forEach(link => {
+                                const urlMatch = link.match(/https?:\/\/[^\s]+/);
+                                const nameMatch = link.match(/- ([^:]+):/);
+                                if (urlMatch) {
+                                    notesHtml += `<a href="${urlMatch[0]}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:#fff;border:1px solid #c9a962;border-radius:6px;color:#1e3a5f;text-decoration:none;font-size:0.8rem;margin:3px;">
+                                        <i class="fas fa-external-link-alt" style="color:#c9a962;"></i> ${nameMatch ? nameMatch[1].trim() : 'مرفق'}
+                                    </a>`;
+                                }
+                            });
+                            notesHtml += `</div>`;
+                        }
+                    }
                     html += `<div class="timeline-item">
                         <div class="timeline-date">${f.date}</div>
                         <div class="timeline-content">
                             <div class="timeline-action">${f.action}</div>
                             <div class="timeline-by">بواسطة: ${f.actionBy}</div>
-                            ${f.notes ? `<div class="timeline-notes">${f.notes}</div>` : ''}
+                            ${notesHtml}
                         </div>
                     </div>`;
                 });
                 html += `</div>`;
             } else {
-                html += `<p style="text-align:center;color:#999;padding:20px;">لا توجد متابعات بعد - followups: ${JSON.stringify(result.followups)}</p>`;
+                html += `<p style="text-align:center;color:#999;padding:20px;">لا توجد متابعات بعد</p>`;
             }
             html += `</div>`;
             
@@ -2268,8 +2288,11 @@
             }
         }
 
+        let noteAttachments = [];
+
         function showAddNoteModal(complaintId) {
             currentComplaintId = complaintId;
+            noteAttachments = [];
             document.getElementById('actionModalTitle').innerHTML = '<i class="fas fa-sticky-note" style="color:#c9a962;"></i> إضافة ملاحظة متابعة';
             document.getElementById('actionModalBody').innerHTML = `
                 <div style="background:linear-gradient(135deg, #1e3a5f08, #c9a96210); border-radius:12px; padding:16px; margin-bottom:20px; border-right:4px solid #c9a962;">
@@ -2286,30 +2309,142 @@
                     <label><i class="fas fa-pen-fancy"></i> تفاصيل الملاحظة</label>
                     <textarea id="noteText" placeholder="اكتب تفاصيل المتابعة هنا..."></textarea>
                 </div>
-                <button class="btn btn-purple" onclick="submitNote()" style="width:100%;">
+                <div class="form-group">
+                    <label><i class="fas fa-paperclip"></i> مرفقات الإثبات <span style="color:#999;font-size:0.8rem;">(اختياري - صور، مستندات PDF)</span></label>
+                    <div id="noteFileUploadArea" style="border:2px dashed #c9a962; border-radius:12px; padding:24px; text-align:center; cursor:pointer; background:#fdfaf3; transition:all 0.3s;" onclick="document.getElementById('noteFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='#1e3a5f';this.style.background='#f0f4f8'" ondragleave="this.style.borderColor='#c9a962';this.style.background='#fdfaf3'" ondrop="handleNoteDrop(event)">
+                        <i class="fas fa-cloud-upload-alt" style="font-size:2rem; color:#c9a962; margin-bottom:8px;"></i>
+                        <p style="margin:0; color:#666; font-size:0.9rem;">اضغط هنا أو اسحب الملفات</p>
+                        <p style="margin:4px 0 0; color:#999; font-size:0.75rem;">الحد الأقصى: 3 ملفات، 5 ميجا لكل ملف</p>
+                    </div>
+                    <input type="file" id="noteFileInput" multiple accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="handleNoteFiles(this.files)">
+                    <div id="noteFileList" style="margin-top:10px;"></div>
+                </div>
+                <button class="btn btn-purple" id="submitNoteBtn" onclick="submitNote()" style="width:100%;">
                     <i class="fas fa-paper-plane"></i> إرسال الملاحظة
                 </button>
             `;
             document.getElementById('actionModal').classList.add('active');
         }
 
+        function handleNoteDrop(e) {
+            e.preventDefault();
+            e.currentTarget.style.borderColor = '#c9a962';
+            e.currentTarget.style.background = '#fdfaf3';
+            if (e.dataTransfer.files) handleNoteFiles(e.dataTransfer.files);
+        }
+
+        function handleNoteFiles(files) {
+            const maxFiles = 3;
+            const maxSize = 5 * 1024 * 1024;
+            
+            for (let i = 0; i < files.length; i++) {
+                if (noteAttachments.length >= maxFiles) {
+                    alert('الحد الأقصى 3 ملفات');
+                    break;
+                }
+                if (files[i].size > maxSize) {
+                    alert(`الملف "${files[i].name}" أكبر من 5 ميجا`);
+                    continue;
+                }
+                const reader = new FileReader();
+                const file = files[i];
+                reader.onload = function(e) {
+                    noteAttachments.push({
+                        name: file.name,
+                        mimeType: file.type,
+                        data: e.target.result,
+                        size: file.size
+                    });
+                    renderNoteFileList();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function renderNoteFileList() {
+            const container = document.getElementById('noteFileList');
+            if (!noteAttachments.length) { container.innerHTML = ''; return; }
+            let html = '';
+            noteAttachments.forEach((f, i) => {
+                const sizeKB = (f.size / 1024).toFixed(1);
+                const icon = f.mimeType.startsWith('image/') ? 'fa-image' : f.mimeType.includes('pdf') ? 'fa-file-pdf' : 'fa-file';
+                const iconColor = f.mimeType.startsWith('image/') ? '#4CAF50' : f.mimeType.includes('pdf') ? '#f44336' : '#2196F3';
+                html += `<div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:#f8f9fa; border-radius:8px; margin-bottom:6px; border:1px solid #e9ecef;">
+                    <i class="fas ${icon}" style="color:${iconColor}; font-size:1.1rem;"></i>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:0.85rem; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${f.name}</div>
+                        <div style="font-size:0.7rem; color:#999;">${sizeKB} كيلوبايت</div>
+                    </div>
+                    ${f.mimeType.startsWith('image/') ? `<img src="${f.data}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;">` : ''}
+                    <button onclick="removeNoteFile(${i})" style="background:none;border:none;color:#dc3545;cursor:pointer;font-size:1.1rem;padding:4px;"><i class="fas fa-times-circle"></i></button>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function removeNoteFile(index) {
+            noteAttachments.splice(index, 1);
+            renderNoteFileList();
+        }
+
         async function submitNote() {
             const noteAction = document.getElementById('noteAction').value;
             const notes = document.getElementById('noteText').value;
             if (!noteAction) { alert('يرجى كتابة الإجراء'); return; }
+            
+            const btn = document.getElementById('submitNoteBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
+            
             try {
+                let fullNotes = notes;
+                let uploadedFiles = [];
+                
+                if (noteAttachments.length > 0) {
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع المرفقات...';
+                    const payload = {
+                        action: 'uploadFollowupFiles',
+                        complaintId: currentComplaintId,
+                        files: noteAttachments.map(f => ({
+                            name: f.name,
+                            mimeType: f.mimeType,
+                            data: f.data
+                        }))
+                    };
+                    
+                    const uploadResp = await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify(payload),
+                        redirect: 'follow'
+                    });
+                    const uploadText = await uploadResp.text();
+                    try {
+                        const uploadResult = JSON.parse(uploadText);
+                        if (uploadResult.ok && uploadResult.files) {
+                            uploadedFiles = uploadResult.files;
+                            fullNotes += '\n📎 المرفقات:\n' + uploadedFiles.map(f => `- ${f.name}: ${f.url}`).join('\n');
+                        }
+                    } catch(pe) {
+                        console.log('Upload parse error, saving note without files');
+                    }
+                }
+                
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري حفظ الملاحظة...';
+                
                 const result = await apiCall('updateComplaint', {
                     payload: JSON.stringify({
                         complaintId: currentComplaintId,
                         action: noteAction,
                         actionBy: currentUser,
-                        notes: notes
+                        notes: fullNotes
                     })
                 });
-                console.log('submitNote result:', JSON.stringify(result));
+                
                 if (result.ok && result.success) {
-                    alert('تم إضافة الملاحظة بنجاح');
+                    alert('تم إضافة الملاحظة بنجاح' + (uploadedFiles.length ? ` مع ${uploadedFiles.length} مرفق` : ''));
                     document.getElementById('actionModal').classList.remove('active');
+                    noteAttachments = [];
                     await new Promise(r => setTimeout(r, 1500));
                     viewDetails(currentComplaintId);
                 } else {
@@ -2317,6 +2452,9 @@
                 }
             } catch (err) {
                 alert('خطأ في الاتصال: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال الملاحظة';
             }
         }
 
