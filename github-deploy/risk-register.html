@@ -1777,7 +1777,7 @@
                 </div>
                 
                 <div class="modal-actions">
-                    <button class="btn btn-success" onclick="saveRiskModal()">
+                    <button class="btn btn-success" id="saveRiskBtn" onclick="saveRiskModal()">
                         <i class="fas fa-save"></i> حفظ التغييرات
                     </button>
                     <button class="btn btn-warning" onclick="closeRiskFromModal()">
@@ -1790,6 +1790,9 @@
                         <i class="fas fa-times"></i> إلغاء
                     </button>
                 </div>
+                <div id="saveConfirmation" style="display:none; margin-top:10px; padding:12px 20px; border-radius:10px; background:linear-gradient(135deg,#10b981,#059669); color:#fff; text-align:center; font-weight:700; font-size:1.1rem; animation:fadeInUp 0.4s ease;">
+                    <i class="fas fa-check-circle"></i> تم الحفظ في السيرفر بنجاح — البيانات محفوظة ✓
+                </div>
             `;
             
             document.getElementById('riskModal').classList.add('active');
@@ -1800,6 +1803,15 @@
             
             const risk = allRisks.find(r => r.id === currentRiskId);
             if (!risk) return;
+            
+            const saveBtn = document.getElementById('saveRiskBtn');
+            const confirmEl = document.getElementById('saveConfirmation');
+            if (confirmEl) confirmEl.style.display = 'none';
+            
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+            }
             
             risk.risk = document.getElementById('modalRisk').value;
             risk.category = document.getElementById('modalCategory').value;
@@ -1817,6 +1829,22 @@
             await saveRiskToSheet(risk);
             renderTable(allRisks);
             renderHeatmap();
+            
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-check"></i> تم الحفظ ✓';
+                saveBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                setTimeout(() => {
+                    saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التغييرات';
+                    saveBtn.style.background = '';
+                }, 3000);
+            }
+            
+            if (confirmEl) {
+                confirmEl.style.display = 'block';
+                setTimeout(() => { confirmEl.style.display = 'none'; }, 5000);
+            }
+            
             showToast('تم حفظ التغييرات بنجاح ✓', 'success');
         }
         
