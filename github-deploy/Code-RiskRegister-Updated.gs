@@ -227,7 +227,8 @@ function getRisks() {
     'ID': 'id', 'Risk': 'risk', 'Category': 'category', 'Owner': 'owner',
     'Probability': 'probability', 'Impact': 'impact', 'Score': 'score', 'Level': 'level',
     'Mitigation': 'mitigation', 'Status': 'status', 'SourceEvidence': 'sourceEvidence',
-    'ReviewDate': 'reviewDate', 'NegativeImpact': 'negativeImpact', 'LastUpdated': 'lastUpdated',
+    'ReviewDate': 'reviewDate', 'NegativeImpact': 'negativeImpact', 'Action': 'action',
+    'Notes': 'notes', 'Followups': 'followups', 'LastUpdated': 'lastUpdated',
     'UpdatedBy': 'updatedBy'
   };
   
@@ -240,6 +241,16 @@ function getRisks() {
       const key = headerMap[header] || header.toLowerCase();
       risk[key] = row[idx];
     });
+    
+    if (risk.followups && typeof risk.followups === 'string' && risk.followups.trim()) {
+      try {
+        risk.followups = JSON.parse(risk.followups);
+      } catch(e) {
+        risk.followups = [];
+      }
+    } else {
+      risk.followups = [];
+    }
     
     risk.comments = commentsMap[risk.id] || [];
     risk.decisions = decisionsMap[risk.id] || [];
@@ -269,7 +280,7 @@ function saveRisk(riskData) {
   let sheet = ss.getSheetByName(RISK_SHEET_NAME);
   
   const requiredHeaders = ['ID', 'Risk', 'Category', 'Owner', 'Probability', 'Impact', 'Score', 'Level', 
-                   'Mitigation', 'Status', 'ReviewDate', 'SourceEvidence', 'NegativeImpact', 'LastUpdated', 'UpdatedBy'];
+                   'Mitigation', 'Status', 'ReviewDate', 'SourceEvidence', 'NegativeImpact', 'Action', 'Notes', 'Followups', 'LastUpdated', 'UpdatedBy'];
   
   if (!sheet) {
     sheet = ss.insertSheet(RISK_SHEET_NAME);
@@ -287,6 +298,13 @@ function saveRisk(riskData) {
   const score = prob * imp;
   const level = score >= 20 ? 'حرج' : score >= 12 ? 'عالي' : score >= 6 ? 'متوسط' : 'منخفض';
   
+  var followupsStr = '';
+  try {
+    if (riskData.followups && Array.isArray(riskData.followups) && riskData.followups.length > 0) {
+      followupsStr = JSON.stringify(riskData.followups);
+    }
+  } catch(fe) { followupsStr = ''; }
+  
   const dataMap = {
     'ID': id,
     'Risk': riskData.risk || '',
@@ -301,6 +319,9 @@ function saveRisk(riskData) {
     'ReviewDate': riskData.reviewDate || '',
     'SourceEvidence': riskData.sourceEvidence || '',
     'NegativeImpact': riskData.negativeImpact || '',
+    'Action': riskData.action || '',
+    'Notes': riskData.notes || '',
+    'Followups': followupsStr,
     'LastUpdated': now,
     'UpdatedBy': 'user'
   };
@@ -319,7 +340,7 @@ function updateRisk(riskData) {
   }
   
   const requiredHeaders = ['ID', 'Risk', 'Category', 'Owner', 'Probability', 'Impact', 'Score', 'Level', 
-                   'Mitigation', 'Status', 'ReviewDate', 'SourceEvidence', 'NegativeImpact', 'LastUpdated', 'UpdatedBy'];
+                   'Mitigation', 'Status', 'ReviewDate', 'SourceEvidence', 'NegativeImpact', 'Action', 'Notes', 'Followups', 'LastUpdated', 'UpdatedBy'];
   const headers = ensureColumnsExist(sheet, requiredHeaders);
   
   const data = sheet.getDataRange().getValues();
@@ -332,7 +353,7 @@ function updateRisk(riskData) {
   
   let rowIndex = -1;
   for (let i = 1; i < data.length; i++) {
-    if (data[i][idIndex] === riskData.id) {
+    if (String(data[i][idIndex]) === String(riskData.id)) {
       rowIndex = i + 1;
       break;
     }
@@ -348,11 +369,19 @@ function updateRisk(riskData) {
   const score = prob * imp;
   const level = score >= 20 ? 'حرج' : score >= 12 ? 'عالي' : score >= 6 ? 'متوسط' : 'منخفض';
   
+  var followupsStr = '';
+  try {
+    if (riskData.followups && Array.isArray(riskData.followups) && riskData.followups.length > 0) {
+      followupsStr = JSON.stringify(riskData.followups);
+    }
+  } catch(fe) { followupsStr = ''; }
+  
   const headerMap = {
     'ID': 'id', 'Risk': 'risk', 'Category': 'category', 'Owner': 'owner',
     'Probability': 'probability', 'Impact': 'impact', 'Score': 'score', 'Level': 'level',
     'Mitigation': 'mitigation', 'Status': 'status', 'SourceEvidence': 'sourceEvidence',
-    'ReviewDate': 'reviewDate', 'NegativeImpact': 'negativeImpact', 'LastUpdated': 'lastUpdated'
+    'ReviewDate': 'reviewDate', 'NegativeImpact': 'negativeImpact', 'Action': 'action',
+    'Notes': 'notes', 'Followups': 'followups', 'LastUpdated': 'lastUpdated', 'UpdatedBy': 'updatedBy'
   };
   
   const updates = {
@@ -368,7 +397,11 @@ function updateRisk(riskData) {
     sourceEvidence: riskData.sourceEvidence,
     reviewDate: riskData.reviewDate,
     negativeImpact: riskData.negativeImpact,
-    lastUpdated: now
+    action: riskData.action || '',
+    notes: riskData.notes || '',
+    followups: followupsStr,
+    lastUpdated: now,
+    updatedBy: 'user'
   };
   
   headers.forEach((header, colIndex) => {
