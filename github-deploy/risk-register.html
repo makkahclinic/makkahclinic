@@ -1609,9 +1609,15 @@
             document.getElementById('modalFollowupReviewDate').value = '';
             document.getElementById('modalFollowupNote').value = '';
             
-            if (action === 'إغلاق نهائي' || decision === 'تم الحل') {
+            if (action === 'إغلاق نهائي') {
                 risk.status = 'مغلق';
                 document.getElementById('modalStatus').value = 'مغلق';
+            }
+            
+            if (decision === 'إعادة فتح الحالة') {
+                risk.status = 'مفتوح';
+                risk.closedDate = '';
+                document.getElementById('modalStatus').value = 'مفتوح';
             }
             
             showToast('تمت إضافة المتابعة', 'success');
@@ -1751,7 +1757,8 @@
                                     <option value="تأجيل - أخرى">⏳ تأجيل (سبب آخر)</option>
                                     <option value="تنفيذ فوري">⚡ تنفيذ فوري</option>
                                     <option value="إحالة لجهة أخرى">↗️ إحالة لجهة أخرى</option>
-                                    <option value="تم الحل">✅ تم الحل</option>
+                                    <option value="تم إنجاز المهمة">✅ تم إنجاز المهمة</option>
+                                    <option value="إعادة فتح الحالة">🔓 إعادة فتح الحالة</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -1780,8 +1787,8 @@
                     <button class="btn btn-success" id="saveRiskBtn" onclick="saveRiskModal()">
                         <i class="fas fa-save"></i> حفظ التغييرات
                     </button>
-                    <button class="btn btn-warning" onclick="closeRiskFromModal()">
-                        <i class="fas fa-check-circle"></i> إغلاق المخاطرة
+                    <button class="btn btn-warning" onclick="showCloseConfirmation()">
+                        <i class="fas fa-lock"></i> تم قفل الحالة
                     </button>
                     <button class="btn btn-danger" onclick="deleteRisk('${risk.id}'); closeRiskModal();">
                         <i class="fas fa-trash"></i> حذف
@@ -1848,21 +1855,47 @@
             showToast('تم حفظ التغييرات بنجاح ✓', 'success');
         }
         
-        function closeRiskFromModal() {
+        function showCloseConfirmation() {
             if (!currentRiskId) return;
+            const overlay = document.createElement('div');
+            overlay.id = 'closeConfirmOverlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:100000;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.3s ease;';
+            overlay.innerHTML = `
+                <div style="background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #c9a962;border-radius:20px;padding:35px 40px;max-width:450px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);animation:fadeInUp 0.4s ease;">
+                    <div style="font-size:3rem;margin-bottom:15px;">🔒</div>
+                    <h3 style="color:#c9a962;font-family:Tajawal;font-size:1.4rem;margin-bottom:10px;">تأكيد قفل الحالة</h3>
+                    <p style="color:#cbd5e1;font-family:Tajawal;font-size:1rem;margin-bottom:25px;line-height:1.8;">
+                        هل أنت متأكد من قفل هذه المخاطرة نهائياً؟<br>
+                        <span style="color:#fbbf24;font-size:0.9rem;">سيتم تغيير الحالة إلى "مغلق" مع تسجيل تاريخ الإغلاق</span>
+                    </p>
+                    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+                        <button onclick="confirmCloseRisk()" style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border:none;padding:12px 30px;border-radius:12px;font-family:Tajawal;font-size:1rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-lock"></i> نعم، قفل الحالة
+                        </button>
+                        <button onclick="document.getElementById('closeConfirmOverlay').remove()" style="background:linear-gradient(135deg,#475569,#334155);color:#fff;border:none;padding:12px 30px;border-radius:12px;font-family:Tajawal;font-size:1rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-arrow-right"></i> تراجع
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+        
+        function confirmCloseRisk() {
+            const overlay = document.getElementById('closeConfirmOverlay');
+            if (overlay) overlay.remove();
             
+            if (!currentRiskId) return;
             const risk = allRisks.find(r => r.id === currentRiskId);
             if (!risk) return;
             
-            if (confirm('هل تريد إغلاق هذه المخاطرة نهائياً؟')) {
-                risk.status = 'مغلق';
-                risk.closedDate = new Date().toISOString().split('T')[0];
-                saveRiskToSheet(risk);
-                renderTable(allRisks);
-                updateStats();
-                showToast('تم إغلاق المخاطرة', 'success');
-                closeRiskModal();
-            }
+            risk.status = 'مغلق';
+            risk.closedDate = new Date().toISOString().split('T')[0];
+            saveRiskToSheet(risk);
+            renderTable(allRisks);
+            updateStats();
+            showToast('تم قفل الحالة بنجاح 🔒', 'success');
+            closeRiskModal();
         }
         
         async function saveRiskToSheet(risk) {
