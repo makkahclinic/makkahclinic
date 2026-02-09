@@ -1830,16 +1830,39 @@
         
         async function saveRiskToSheet(risk) {
             try {
-                const response = await fetch(API_URL, {
+                if (!WEB_APP_URL) throw new Error('No API URL');
+                const riskPayload = {
+                    id: risk.id,
+                    risk: risk.risk || '',
+                    category: risk.category || '',
+                    owner: risk.owner || '',
+                    probability: risk.probability,
+                    impact: risk.impact,
+                    score: risk.score,
+                    level: risk.level,
+                    mitigation: risk.mitigation || '',
+                    status: risk.status || 'مفتوح',
+                    reviewDate: risk.reviewDate || '',
+                    sourceEvidence: risk.sourceEvidence || '',
+                    negativeImpact: risk.negativeImpact || '',
+                    action: risk.action || '',
+                    notes: risk.notes || '',
+                    followups: risk.followups || []
+                };
+                const response = await fetch(WEB_APP_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'saveRisk', risk })
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'updateRisk', payload: riskPayload })
                 });
                 const result = await response.json();
-                if (!result.ok) throw new Error(result.error);
+                if (!result.ok && !result.success) throw new Error(result.error || 'Save failed');
+                setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحفظ ✓');
+                saveToLocalStorage();
             } catch (error) {
                 console.error('Save error:', error);
-                localStorage.setItem('risks_' + risk.id, JSON.stringify(risk));
+                saveToLocalStorage();
+                setSaveBadge('warn', '<i class="fas fa-exclamation-triangle"></i> محفوظ محلياً');
+                showToast('تم الحفظ محلياً - تعذر الحفظ في السيرفر', 'warning');
             }
         }
         
