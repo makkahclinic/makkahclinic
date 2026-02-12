@@ -2619,6 +2619,20 @@
           <i class="fas fa-times"></i> إلغاء
         </button>
       </div>
+      <div style="border-top:1px solid rgba(255,255,255,0.1);margin-top:15px;padding-top:15px;text-align:center;">
+        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:10px;">
+          <i class="fas fa-share-alt"></i> أو أرسل رابط التوقيع للطبيب عن بُعد
+        </p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <button onclick="generateAndShareLink('copy')" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;padding:10px 20px;border-radius:10px;font-family:Tajawal;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:0.9rem;">
+            <i class="fas fa-copy"></i> نسخ الرابط
+          </button>
+          <button onclick="generateAndShareLink('whatsapp')" style="background:linear-gradient(135deg,#25d366,#128c7e);color:#fff;border:none;padding:10px 20px;border-radius:10px;font-family:Tajawal;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:0.9rem;">
+            <i class="fab fa-whatsapp"></i> إرسال واتساب
+          </button>
+        </div>
+        <p id="linkStatus" style="color:#22c55e;font-size:0.85rem;margin-top:8px;display:none;"></p>
+      </div>
     </div>
   </div>
 
@@ -6844,6 +6858,63 @@ function handleTouchMove(e) {
 function clearSignature() {
   signatureCtx.fillStyle = 'white';
   signatureCtx.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+}
+
+async function generateAndShareLink(method) {
+  if (!currentDeliveryTask) return;
+  
+  const statusEl = document.getElementById('linkStatus');
+  statusEl.style.display = 'block';
+  statusEl.style.color = '#3b82f6';
+  statusEl.textContent = 'جاري إنشاء الرابط...';
+  
+  try {
+    const response = await fetch(TASKS_API_URL + '?action=createSigningToken', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        taskId: currentDeliveryTask.id,
+        doctorName: currentDeliveryTask.doctorName,
+        fileName: currentDeliveryTask.fileName,
+        sentBy: currentUser ? currentUser.name : 'النظام'
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (!result.success) {
+      statusEl.style.color = '#ef4444';
+      statusEl.textContent = result.error || 'فشل إنشاء الرابط';
+      return;
+    }
+    
+    const signUrl = 'https://m2020m.org/sign.html?token=' + result.token;
+    
+    if (method === 'copy') {
+      await navigator.clipboard.writeText(signUrl);
+      statusEl.style.color = '#22c55e';
+      statusEl.textContent = 'تم نسخ الرابط بنجاح ✓';
+      showCustomAlert('تم نسخ رابط التوقيع! شاركه مع الطبيب', 'success');
+    } else if (method === 'whatsapp') {
+      const msg = encodeURIComponent(
+        `*مجمع مكة الطبي - توقيع تقرير المراجعة*\n\n` +
+        `السلام عليكم دكتور ${currentDeliveryTask.doctorName}\n` +
+        `نأمل التكرم بالتوقيع على تقرير المراجعة الخاص بكم:\n\n` +
+        `📋 التقرير: ${currentDeliveryTask.fileName}\n\n` +
+        `✍️ رابط التوقيع:\n${signUrl}\n\n` +
+        `شاكرين تعاونكم 🙏`
+      );
+      window.open('https://wa.me/?text=' + msg, '_blank');
+      statusEl.style.color = '#22c55e';
+      statusEl.textContent = 'تم فتح واتساب ✓';
+    }
+    
+    setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
+  } catch(e) {
+    console.error('Share link error:', e);
+    statusEl.style.color = '#ef4444';
+    statusEl.textContent = 'خطأ في الاتصال';
+  }
 }
 
 function openDeliveryModal(taskIndex) {
