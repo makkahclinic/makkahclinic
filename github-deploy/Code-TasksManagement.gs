@@ -44,6 +44,17 @@ const TASKS_FOLDER_ID = '1ABC123XYZ'; // معرف مجلد Drive لحفظ ملف
     case 'getDeliveryLog':
       result = getDeliveryLog_();
       break;
+    case 'createSigningToken':
+      result = createSigningToken_(payload);
+      break;
+    case 'confirmRemoteSignature':
+      result = confirmRemoteSignature_(payload);
+      break;
+
+وفي دالة doGet، أضف:
+    case 'getSigningTask':
+      result = getSigningTask_(e.parameter.token);
+      break;
 */
 
 // ============================================
@@ -327,18 +338,183 @@ function getDeliveryLog_() {
 // دالة اختبار
 // ============================================
 function testTasksSystem() {
-  // اختبار إنشاء مهمة
   const result = createTask_({
     doctorName: 'د. اختبار',
     fileName: 'test.xlsx',
     uploadedBy: 'مدير النظام',
     uploadedByEmail: 'admin@test.com',
-    fileData: 'dGVzdA==' // "test" in base64
+    fileData: 'dGVzdA=='
   });
-  
   console.log('Create task result:', result);
-  
-  // اختبار جلب المهام
   const tasks = getTasks_();
   console.log('Tasks:', tasks);
+}
+
+// ============================================
+// نظام التوقيع عن بُعد - Remote Signing System
+// ============================================
+
+/**
+ * إنشاء رمز توقيع فريد وتخزينه
+ */
+function createSigningToken_(data) {
+  try {
+    const ss = SpreadsheetApp.openById(TASKS_SPREADSHEET_ID);
+    let tokenSheet = ss.getSheetByName('SigningTokens');
+    
+    if (!tokenSheet) {
+      tokenSheet = ss.insertSheet('SigningTokens');
+      tokenSheet.appendRow([
+        'Token', 'TaskId', 'DoctorName', 'FileName', 'SentBy',
+        'CreatedAt', 'Status', 'SignedAt', 'Signature'
+      ]);
+      tokenSheet.getRange(1, 1, 1, 9).setFontWeight('bold');
+    }
+    
+    const token = Utilities.getUuid().replace(/-/g, '').substring(0, 16);
+    
+    tokenSheet.appendRow([
+      token,
+      data.taskId || '',
+      data.doctorName || '',
+      data.fileName || '',
+      data.sentBy || '',
+      new Date().toISOString(),
+      'pending',
+      '',
+      ''
+    ]);
+    
+    return { success: true, token: token };
+  } catch(e) {
+    console.error('createSigningToken error:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * جلب بيانات المهمة بناءً على الرمز (للصفحة المستقلة)
+ */
+function getSigningTask_(token) {
+  try {
+    if (!token) return { success: false, error: 'رمز غير صالح' };
+    
+    const ss = SpreadsheetApp.openById(TASKS_SPREADSHEET_ID);
+    const tokenSheet = ss.getSheetByName('SigningTokens');
+    
+    if (!tokenSheet) return { success: false, error: 'لم يتم العثور على بيانات التوقيع' };
+    
+    const allData = tokenSheet.getDataRange().getValues();
+    
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][0] === token) {
+        if (allData[i][6] === 'signed') {
+          return { 
+            success: false, 
+            alreadySigned: true, 
+            doctorName: allData[i][2],
+            signedDate: allData[i][7]
+          };
+        }
+        
+        // تحقق من انتهاء الصلاحية (7 أيام)
+        const created = new Date(allData[i][5]);
+        const now = new Date();
+        const daysDiff = (now - created) / (1000 * 60 * 60 * 24);
+        if (daysDiff > 7) {
+          return { success: false, error: 'انتهت صلاحية هذا الرابط. يرجى طلب رابط جديد.' };
+        }
+        
+        return {
+          success: true,
+          task: {
+            doctorName: allData[i][2],
+            fileName: allData[i][3],
+            sentBy: allData[i][4],
+            taskId: allData[i][1]
+          }
+        };
+      }
+    }
+    
+    return { success: false, error: 'رمز التوقيع غير موجود' };
+  } catch(e) {
+    console.error('getSigningTask error:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * تأكيد التوقيع عن بُعد
+ */
+function confirmRemoteSignature_(data) {
+  try {
+    if (!data.token) return { success: false, error: 'رمز غير صالح' };
+    
+    const ss = SpreadsheetApp.openById(TASKS_SPREADSHEET_ID);
+    const tokenSheet = ss.getSheetByName('SigningTokens');
+    
+    if (!tokenSheet) return { success: false, error: 'لم يتم العثور على بيانات التوقيع' };
+    
+    const allData = tokenSheet.getDataRange().getValues();
+    
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][0] === data.token) {
+        if (allData[i][6] === 'signed') {
+          return { success: false, error: 'تم التوقيع مسبقاً على هذا التقرير' };
+        }
+        
+        // تحديث حالة التوقيع
+        tokenSheet.getRange(i + 1, 7).setValue('signed');
+        tokenSheet.getRange(i + 1, 8).setValue(new Date().toISOString());
+        
+        // حفظ التوقيع (أول 1000 حرف)
+        const sigData = data.signature ? data.signature.substring(0, 1000) : '';
+        tokenSheet.getRange(i + 1, 9).setValue(sigData);
+        
+        // تحديث المهمة الأصلية إلى "مسلّم"
+        const taskId = allData[i][1];
+        if (taskId) {
+          try {
+            const tasksSheet = ss.getSheetByName('Tasks');
+            if (tasksSheet) {
+              const tasksData = tasksSheet.getDataRange().getValues();
+              for (let j = 1; j < tasksData.length; j++) {
+                if (tasksData[j][0] === taskId) {
+                  tasksSheet.getRange(j + 1, 7).setValue('delivered');
+                  tasksSheet.getRange(j + 1, 10).setValue(new Date().toLocaleDateString('ar-SA'));
+                  tasksSheet.getRange(j + 1, 11).setValue(sigData);
+                  break;
+                }
+              }
+            }
+          } catch(e2) {
+            console.log('Could not update task:', e2.message);
+          }
+        }
+        
+        // حفظ التوقيع الكامل في Drive
+        try {
+          if (data.signature && data.signature.length > 100) {
+            const folder = DriveApp.getFolderById(TASKS_FOLDER_ID);
+            const blob = Utilities.newBlob(
+              Utilities.base64Decode(data.signature.split(',')[1] || data.signature),
+              'image/png',
+              'remote_signature_' + data.token + '.png'
+            );
+            folder.createFile(blob);
+          }
+        } catch(e3) {
+          console.log('Could not save signature to Drive:', e3.message);
+        }
+        
+        return { success: true };
+      }
+    }
+    
+    return { success: false, error: 'رمز التوقيع غير موجود' };
+  } catch(e) {
+    console.error('confirmRemoteSignature error:', e);
+    return { success: false, error: e.message };
+  }
 }
