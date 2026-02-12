@@ -1048,7 +1048,10 @@
         مجمع مكة الطبي بالزاهر - نظام الطوارئ المركزي
     </div>
 
-    <!-- زر تفعيل الصوت (يظهر في الزاوية فقط إذا المتصفح منع التشغيل) -->
+    <audio id="fallbackAlarm" preload="auto" loop style="display:none;">
+      <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+    </audio>
+
     <div id="soundGate" class="sound-gate hidden">
       <button id="enableSoundBtn" class="sound-btn">
         <i class="fas fa-volume-up"></i> تفعيل الصوت
@@ -1075,15 +1078,42 @@
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
             if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
+                audioCtx.resume().catch(e => console.warn('AudioContext resume failed:', e));
             }
         }
+
+        async function ensureAudioReady() {
+            initAudioContext();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                try { await audioCtx.resume(); } catch(e) {}
+            }
+            if (audioCtx && audioCtx.state !== 'running') {
+                try {
+                    audioCtx.close();
+                    audioCtx = null;
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    await audioCtx.resume();
+                } catch(e) { console.warn('Audio recreate failed:', e); }
+            }
+        }
+
+        setInterval(() => {
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(() => {});
+            }
+        }, 3000);
 
         function startSiren() {
             try {
                 initAudioContext();
                 if (sirenPlaying) return;
                 sirenPlaying = true;
+
+                if (!audioCtx || audioCtx.state !== 'running') {
+                    playFallbackAlarm();
+                    showSoundGate();
+                    return;
+                }
 
                 sirenGain = audioCtx.createGain();
                 sirenGain.gain.value = 0.6;
@@ -1117,8 +1147,30 @@
 
             } catch(e) {
                 console.error('Siren error:', e);
+                playFallbackAlarm();
                 showSoundGate();
             }
+        }
+
+        function playFallbackAlarm() {
+            try {
+                const audio = document.getElementById('fallbackAlarm');
+                if (audio) {
+                    audio.currentTime = 0;
+                    audio.volume = 1;
+                    audio.play().catch(() => {
+                        console.warn('Fallback audio blocked too');
+                        showSoundGate();
+                    });
+                }
+            } catch(e) {}
+        }
+
+        function stopFallbackAlarm() {
+            try {
+                const audio = document.getElementById('fallbackAlarm');
+                if (audio) { audio.pause(); audio.currentTime = 0; }
+            } catch(e) {}
         }
 
         function stopSiren() {
@@ -1252,11 +1304,11 @@
             }
         }
 
-        // ========== إيقاف جميع الأصوات ==========
         function stopAllSounds() {
             stopSiren();
             stopHeartbeat();
             stopIsolationAlert();
+            stopFallbackAlarm();
         }
 
         // ========== Text-to-Speech للأوامر الصوتية ==========
@@ -1370,27 +1422,31 @@
           if (g) g.classList.add('hidden');
         }
 
-        // تفعيل الصوت بأي نقرة على الصفحة
         function unlockAudioOnInteraction() {
-          if (audioUnlocked) return;
           try {
             initAudioContext();
+            if (audioCtx && audioCtx.state === 'suspended') {
+              audioCtx.resume();
+            }
             audioUnlocked = true;
             hideSoundGate();
-            // إذا كان هناك إنذار نشط، شغل الصوت فوراً
-            if (currentCommand && !sirenPlaying) {
-              startSiren();
+            if (currentCommand && !sirenPlaying && !heartbeatPlaying && !isolationPlaying) {
+              const resp = String(currentCommand.responseType || '').toLowerCase().trim();
+              const rt = String(currentCommand.reportType || '');
+              stopAllSounds();
+              if (resp.includes('send_team') || resp.includes('توجيه')) {
+                startHeartbeat();
+              } else if (resp.includes('isolation') || resp.includes('عزل') || rt.includes('عدوى')) {
+                startIsolationAlert();
+              } else {
+                startSiren();
+              }
             }
-            // أزل المستمعين بعد التفعيل
-            document.removeEventListener('click', unlockAudioOnInteraction);
-            document.removeEventListener('touchstart', unlockAudioOnInteraction);
-            document.removeEventListener('keydown', unlockAudioOnInteraction);
           } catch(e) {
             console.warn('Audio unlock failed:', e);
           }
         }
 
-        // استمع لأي تفاعل مع الصفحة
         document.addEventListener('click', unlockAudioOnInteraction);
         document.addEventListener('touchstart', unlockAudioOnInteraction);
         document.addEventListener('keydown', unlockAudioOnInteraction);
@@ -1409,12 +1465,10 @@
           }
 
           const sseUrl = '/api/emergency-stream';
-          console.log('🔌 Connecting to SSE...');
           
           eventSource = new EventSource(sseUrl);
           
           eventSource.onopen = () => {
-            console.log('✅ SSE Connected - استجابة فورية!');
             sseConnected = true;
             sseReconnectAttempts = 0;
             updateConnectionStatus(true);
@@ -1429,12 +1483,10 @@
               const data = JSON.parse(event.data);
               
               if (data.connected) {
-                console.log('🟢 SSE Ready');
                 return;
               }
               
               if (data.error) {
-                console.warn('SSE Error:', data.error);
                 return;
               }
 
@@ -1447,7 +1499,7 @@
                 }
               } else if (data.cleared) {
                 if (currentCommand) {
-                  console.log('🔴 Emergency cleared via SSE');
+                  
                   deactivateEmergency();
                 }
               }
@@ -1457,7 +1509,6 @@
           };
 
           eventSource.onerror = (e) => {
-            console.warn('⚠️ SSE Error - attempting reconnect');
             sseConnected = false;
             updateConnectionStatus(false);
             
@@ -1470,7 +1521,6 @@
             if (sseReconnectAttempts < MAX_SSE_RECONNECT) {
               setTimeout(connectSSE, 3000);
             } else {
-              console.log('📡 Falling back to polling mode');
               startPollingFallback();
             }
           };
@@ -1482,7 +1532,7 @@
             eventSource.close();
             eventSource = null;
           }
-          console.log('📡 Using fast polling (1 second)');
+          
           updateConnectionStatus(false);
           checkActiveCommand();
           pollingInterval = setInterval(checkActiveCommand, 1000);
@@ -1504,28 +1554,22 @@
           if (monitoringStarted) return;
           monitoringStarted = true;
           
-          // تفعيل الصوت
           try {
             initAudioContext();
             audioUnlocked = true;
           } catch(e) {}
           
-          // إخفاء شاشة البداية
           const startScreen = document.getElementById('startScreen');
           if (startScreen) startScreen.classList.add('hidden');
           
-          // محاولة الاتصال بـ SSE أولاً
           if (typeof EventSource !== 'undefined') {
             connectSSE();
-            // fallback بعد 5 ثواني إذا لم يتصل SSE
             setTimeout(() => {
               if (!sseConnected) {
-                console.log('SSE timeout - using polling');
                 startPollingFallback();
               }
             }, 5000);
           } else {
-            // المتصفح لا يدعم SSE
             startPollingFallback();
           }
         }
@@ -1711,9 +1755,11 @@
             'تفشي عدوى / مكافحة العدوى': ['🔒 اعزل المريض فوراً', '🧤 البس قفازات+كمامة+عباءة', '📞 أبلغ مكافحة العدوى', '🧴 اغسل يديك 20 ثانية', '🩸 دم على الأرض؟ غطّه ثم صب كلور مخفف', '🔴 النفايات في كيس أحمر']
         };
 
-        function activateEmergency(command) {
+        async function activateEmergency(command) {
             currentCommand = command;
             commandStartTime = new Date(command.timestamp || Date.now());
+
+            await ensureAudioReady();
 
             document.getElementById('safeScreen').classList.add('hidden');
             document.getElementById('emergencyScreen').classList.add('active');
