@@ -3134,20 +3134,47 @@
 
         if (isReal) {
           try {
-            await safeUpdateReportStatus(
-              id,
-              'مغلق',
-              'EOC',
-              'تم إلغاء البلاغ من شاشة القرار (رجوع بدون إجراء)'
-            );
+            // أولاً: منع تشغيل الصوت مؤقتاً لعدم إعادة تشغيله أثناء المزامنة
+            alarmSuppressed = true;
+            alarmPlaying = false;
 
-            if (Array.isArray(APP.caches?.reports)) {
+            // تحديث حالة البلاغ في Google Sheets (المسار القديم)
+            try {
+              await safeUpdateReportStatus(
+                id,
+                'مغلق',
+                'EOC',
+                'تم إلغاء البلاغ من شاشة القرار (رجوع بدون إجراء)'
+              );
+            } catch(e) {
+              console.warn('safeUpdateReportStatus failed in closeResponseModal:', e);
+            }
+
+            // تحديث حالة البلاغ في جدول البلاغات الرئيسي (نفس ما يُستخدم في confirmCloseEmergency)
+            try {
+              await jsonp('updateEmergencyReportStatus', {
+                reportId: id,
+                status: 'مغلق',
+                responder: 'EOC',
+                actionNotes: 'تم الإلغاء من شاشة القرار (رجوع بدون إجراء)'
+              });
+            } catch(e) {
+              console.warn('updateEmergencyReportStatus failed in closeResponseModal:', e);
+            }
+
+            // تحديث الكاش المحلي حتى لا يعتبره syncActiveCommandUI "بلاغ مفتوح"
+            if (Array.isArray(APP.caches && APP.caches.reports)) {
               APP.caches.reports = APP.caches.reports.map(r =>
                 String(r.id) === id ? { ...r, status: 'مغلق' } : r
               );
             }
 
+            // إعادة مزامنة حالة الأوامر والبلاغات مع السيرفر
+            await syncActiveCommandUI();
             await refreshLists();
+
+            // إعادة تفعيل إمكانية تشغيل الصوت بعد فترة (لبلاغات جديدة فقط)
+            setTimeout(() => { alarmSuppressed = false; }, 30000);
           } catch (e) {
             console.warn('Failed to cancel report on closeResponseModal:', e);
           }
