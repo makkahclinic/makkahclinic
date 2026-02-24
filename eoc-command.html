@@ -1281,7 +1281,7 @@
       </div>
 
       <div class="modal-actions">
-        <button class="btn secondary" onclick="closeResponseModal()"><i class="fas fa-arrow-right"></i> رجوع بدون إجراء</button>
+        <button class="btn secondary" onclick="closeResponseModal(true)"><i class="fas fa-arrow-right"></i> رجوع بدون إجراء</button>
         <button class="btn primary" id="issueBtn" onclick="issueCommand()" disabled><i class="fas fa-bullhorn"></i> إصدار الأمر للشاشات</button>
       </div>
 
@@ -3119,12 +3119,40 @@
       alarmPlaying = true;
     }
 
-    function closeResponseModal(){
+    async function closeResponseModal(isCancel = false){
       document.getElementById('responseModal').classList.remove('active');
       // إيقاف الصوت عند الرجوع بدون إجراء
       stopAlarmSound();
       // إعادة الحالة للوضع الآمن
       setStatusAlert(false);
+
+      // في حالة الضغط على "رجوع بدون إجراء" مع بلاغ حقيقي، نغلق البلاغ حتى لا يبقى كـ "بلاغ مفتوح"
+      if (isCancel && APP && APP.currentReport) {
+        const report = APP.currentReport;
+        const id = String(report.id || '');
+        const isReal = !report.isDrill && id && !id.startsWith('MANUAL-');
+
+        if (isReal) {
+          try {
+            await safeUpdateReportStatus(
+              id,
+              'مغلق',
+              'EOC',
+              'تم إلغاء البلاغ من شاشة القرار (رجوع بدون إجراء)'
+            );
+
+            if (Array.isArray(APP.caches?.reports)) {
+              APP.caches.reports = APP.caches.reports.map(r =>
+                String(r.id) === id ? { ...r, status: 'مغلق' } : r
+              );
+            }
+
+            await refreshLists();
+          } catch (e) {
+            console.warn('Failed to cancel report on closeResponseModal:', e);
+          }
+        }
+      }
     }
 
     function selectResponseType(rt){
