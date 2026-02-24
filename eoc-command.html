@@ -3126,47 +3126,80 @@
       // إعادة الحالة للوضع الآمن
       setStatusAlert(false);
 
-      // في حالة الضغط على "رجوع بدون إجراء" مع بلاغ حقيقي، نغلق البلاغ حتى لا يبقى كـ "بلاغ مفتوح"
+      // في حالة الضغط على "رجوع بدون إجراء" نغلق كل البلاغات المفتوحة حتى لا يبقى أي "بلاغ مفتوح"
       if (isCancel && APP && APP.currentReport) {
         const report = APP.currentReport;
         const id = String(report.id || '');
-        const isReal = !report.isDrill && id && !id.startsWith('MANUAL-');
+        const isManual = id.startsWith('MANUAL-');
 
-        if (isReal) {
+        // نستخدم اسم ثابت لأن هذا إغلاق آلي
+        const who = 'EOC';
+        const reason = 'تم الإلغاء من شاشة القرار (رجوع بدون إجراء)';
+
+        if (id) {
           try {
             // أولاً: منع تشغيل الصوت مؤقتاً لعدم إعادة تشغيله أثناء المزامنة
             alarmSuppressed = true;
             alarmPlaying = false;
 
-            // تحديث حالة البلاغ في Google Sheets (المسار القديم)
-            try {
-              await safeUpdateReportStatus(
-                id,
-                'مغلق',
-                'EOC',
-                'تم إلغاء البلاغ من شاشة القرار (رجوع بدون إجراء)'
-              );
-            } catch(e) {
-              console.warn('safeUpdateReportStatus failed in closeResponseModal:', e);
+            // إذا لم يكن MANUAL- نحاول إغلاقه في جميع المسارات المعتمدة
+            if (!isManual) {
+              // تحديث حالة البلاغ في Google Sheets (المسار القديم)
+              try {
+                await safeUpdateReportStatus(
+                  id,
+                  'مغلق',
+                  who,
+                  reason
+                );
+              } catch(e) {
+                console.warn('safeUpdateReportStatus failed in closeResponseModal:', e);
+              }
+
+              // تحديث حالة البلاغ في جدول البلاغات الرئيسي (نفس ما يُستخدم في confirmCloseEmergency)
+              try {
+                await jsonp('updateEmergencyReportStatus', {
+                  reportId: id,
+                  status: 'مغلق',
+                  responder: who,
+                  actionNotes: reason
+                });
+              } catch(e) {
+                console.warn('updateEmergencyReportStatus failed in closeResponseModal (current):', e);
+              }
             }
 
-            // تحديث حالة البلاغ في جدول البلاغات الرئيسي (نفس ما يُستخدم في confirmCloseEmergency)
-            try {
-              await jsonp('updateEmergencyReportStatus', {
-                reportId: id,
-                status: 'مغلق',
-                responder: 'EOC',
-                actionNotes: 'تم الإلغاء من شاشة القرار (رجوع بدون إجراء)'
-              });
-            } catch(e) {
-              console.warn('updateEmergencyReportStatus failed in closeResponseModal:', e);
+            // إغلاق أي بلاغات أخرى ما زالت "جديد" أو "قيد المعالجة" في الكاش (نفس منطق confirmCloseEmergency)
+            const openReports = (APP.caches && APP.caches.reports || []).filter(r => {
+              const st = String(r.status || '').trim();
+              return st === 'جديد' || st === 'قيد المعالجة' || st.includes('جديد') || st.includes('المعالجة');
+            });
+            for (const rep of openReports) {
+              const repId = String(rep.id || '');
+              if (!repId || repId.startsWith('MANUAL-')) continue;
+              try {
+                await jsonp('updateEmergencyReportStatus', {
+                  reportId: repId,
+                  status: 'مغلق',
+                  responder: who,
+                  actionNotes: reason
+                });
+              } catch(e) {
+                console.warn('updateEmergencyReportStatus failed in closeResponseModal (loop):', repId, e);
+              }
             }
 
             // تحديث الكاش المحلي حتى لا يعتبره syncActiveCommandUI "بلاغ مفتوح"
             if (Array.isArray(APP.caches && APP.caches.reports)) {
-              APP.caches.reports = APP.caches.reports.map(r =>
-                String(r.id) === id ? { ...r, status: 'مغلق' } : r
-              );
+              APP.caches.reports = APP.caches.reports.map(r => {
+                const rid = String(r.id || '');
+                if (!rid || rid.startsWith('MANUAL-')) return r;
+                if (rid === id) return { ...r, status: 'مغلق' };
+                if (openReports.find(or => String(or.id || '') === rid)) {
+                  return { ...r, status: 'مغلق' };
+                }
+                return r;
+              });
             }
 
             // إعادة مزامنة حالة الأوامر والبلاغات مع السيرفر
