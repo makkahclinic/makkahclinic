@@ -1281,7 +1281,7 @@
       </div>
 
       <div class="modal-actions">
-        <button class="btn secondary" onclick="closeResponseModal(true)"><i class="fas fa-arrow-right"></i> رجوع بدون إجراء</button>
+        <button class="btn secondary" onclick="openCancelReasonModal()"><i class="fas fa-arrow-right"></i> رجوع بدون إجراء</button>
         <button class="btn primary" id="issueBtn" onclick="issueCommand()" disabled><i class="fas fa-bullhorn"></i> إصدار الأمر للشاشات</button>
       </div>
 
@@ -1344,6 +1344,32 @@
       <div class="modal-actions" style="padding:0 16px 16px">
         <button class="btn secondary" onclick="closeInputModal()"><i class="fas fa-times"></i> إلغاء</button>
         <button class="btn primary" id="imConfirmBtn" onclick="confirmInputModal()"><i class="fas fa-check"></i> تأكيد</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cancel Reason Modal (for "رجوع بدون إجراء") -->
+  <div class="modal" id="cancelReasonModal">
+    <div class="modal-card" style="max-width:480px">
+      <div class="modal-header">
+        <h2><i class="fas fa-circle-question"></i> سبب الإلغاء</h2>
+        <button class="close-modal" onclick="closeCancelReasonModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div style="padding:16px">
+        <p style="font-weight:900;color:var(--secondary);margin-bottom:12px">
+          اختر سبب إلغاء هذا البلاغ.
+        </p>
+        <div class="modal-actions" style="flex-direction:column;gap:8px">
+          <button class="btn primary" onclick="confirmCancelReport('بلاغ كاذب')">
+            <i class="fas fa-circle-exclamation"></i> بلاغ كاذب
+          </button>
+          <button class="btn" onclick="confirmCancelReport('تمرين / تجربة تدريبية')">
+            <i class="fas fa-chalkboard-teacher"></i> تمرين / تجربة تدريبية
+          </button>
+          <button class="btn secondary" onclick="closeCancelReasonModal()">
+            <i class="fas fa-arrow-right"></i> تراجع، العودة لشاشة القرار
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -3123,7 +3149,22 @@
       alarmPlaying = true;
     }
 
-    async function closeResponseModal(isCancel = false){
+    function openCancelReasonModal(){
+      const m = document.getElementById('cancelReasonModal');
+      if (m) m.classList.add('active');
+    }
+
+    function closeCancelReasonModal(){
+      const m = document.getElementById('cancelReasonModal');
+      if (m) m.classList.remove('active');
+    }
+
+    async function confirmCancelReport(reasonLabel){
+      closeCancelReasonModal();
+      await closeResponseModal(true, reasonLabel || '');
+    }
+
+    async function closeResponseModal(isCancel = false, cancelReasonLabel = ''){
       document.getElementById('responseModal').classList.remove('active');
       // إيقاف الصوت عند الرجوع بدون إجراء
       stopAlarmSound();
@@ -3138,7 +3179,9 @@
 
         // نستخدم اسم ثابت لأن هذا إغلاق آلي
         const who = 'EOC';
-        const reason = 'تم الإلغاء من شاشة القرار (رجوع بدون إجراء)';
+        const reason = cancelReasonLabel
+          ? `تم الإلغاء من شاشة القرار (رجوع بدون إجراء - ${cancelReasonLabel})`
+          : 'تم الإلغاء من شاشة القرار (رجوع بدون إجراء)';
 
         if (id) {
           try {
