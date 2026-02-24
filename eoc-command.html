@@ -2017,6 +2017,7 @@
       scenarios: {},        // {key:{key,label,DO[],DONT[]}}
       roster: [],           // [{name,department,role}]
       alerted: new Set(JSON.parse(localStorage.getItem('eoc_alerted_reports') || '[]')),
+      cancelledReports: new Set(JSON.parse(localStorage.getItem('eoc_cancelled_reports') || '[]')),
       currentReport: null,
 
       // response modal state
@@ -2332,6 +2333,9 @@
           
           const openReports = reportsRes.reports.filter(r => {
             const status = String(r.status || '').trim();
+            const id = String(r.id || '');
+            // تجاهل البلاغات التي قام المستخدم بإلغائها محلياً من شاشة القرار
+            if (APP.cancelledReports && APP.cancelledReports.has(id)) return false;
             return status === 'جديد' || status === 'قيد المعالجة' ||
                    status.includes('جديد') || status.includes('المعالجة');
           });
@@ -3169,6 +3173,10 @@
               }
             }
 
+            // إضافة هذا البلاغ وكل البلاغات المفتوحة إلى قائمة الملغاة محلياً
+            if (!APP.cancelledReports) APP.cancelledReports = new Set();
+            APP.cancelledReports.add(id);
+
             // إغلاق أي بلاغات أخرى ما زالت "جديد" أو "قيد المعالجة" في الكاش (نفس منطق confirmCloseEmergency)
             const openReports = (APP.caches && APP.caches.reports || []).filter(r => {
               const st = String(r.status || '').trim();
@@ -3177,6 +3185,7 @@
             for (const rep of openReports) {
               const repId = String(rep.id || '');
               if (!repId || repId.startsWith('MANUAL-')) continue;
+              APP.cancelledReports.add(repId);
               try {
                 await jsonp('updateEmergencyReportStatus', {
                   reportId: repId,
@@ -3200,6 +3209,13 @@
                 }
                 return r;
               });
+            }
+
+            // حفظ قائمة البلاغات الملغاة في localStorage لضمان عدم إعادة فتحها بعد إعادة تحميل الصفحة
+            try {
+              localStorage.setItem('eoc_cancelled_reports', JSON.stringify(Array.from(APP.cancelledReports)));
+            } catch(e) {
+              console.warn('Failed to persist cancelled reports:', e);
             }
 
             // إعادة مزامنة حالة الأوامر والبلاغات مع السيرفر
@@ -3594,8 +3610,12 @@
         const reports = await fetchEmergencyReports(60);
         APP.caches.reports = reports;
 
-        // detect new
-        const newOnes = reports.filter(r=> String(r.status||'')==='جديد' && !APP.alerted.has(String(r.id)));
+        // detect new (مع استبعاد البلاغات التي أُلغيت محلياً من شاشة القرار)
+        const newOnes = reports.filter(r=>{
+          const id = String(r.id || '');
+          if (APP.cancelledReports && APP.cancelledReports.has(id)) return false;
+          return String(r.status||'')==='جديد' && !APP.alerted.has(id);
+        });
         if (newOnes.length){
           newOnes.forEach(r=>APP.alerted.add(String(r.id)));
           localStorage.setItem('eoc_alerted_reports', JSON.stringify(Array.from(APP.alerted)));
