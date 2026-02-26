@@ -62,16 +62,22 @@ function doGet(e) {
   }
 
   // عرض الكريدنشالس للزوار (بدون رقم سري) — للربط من صفحة الإدارة
+  // يدعم JSONP (callback=...) لتجاوز CORS عند الاستدعاء من الموقع
   if (action === 'getcredentials' || action === 'getCredentials') {
     var name = (params.name || '').toString().trim();
-    var out;
+    var callback = (params.callback || '').toString().replace(/[^a-zA-Z0-9_.]/g, '');
+    var data;
     try {
       var list = _listQualificationsForDisplay(name);
-      out = _jsonWithCors({ ok: true, name: name, items: list });
+      data = { ok: true, name: name, items: list };
     } catch (err) {
-      out = _jsonWithCors({ ok: false, error: (err && err.message) ? err.message : 'خطأ في الخادم' });
+      data = { ok: false, error: (err && err.message) ? err.message : 'خطأ في الخادم' };
     }
-    return out;
+    if (callback) {
+      return ContentService.createTextOutput(callback + '(' + JSON.stringify(data) + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return _jsonWithCors(data);
   }
 
   var html = HtmlService.createTemplateFromFile('ManagementUpload');

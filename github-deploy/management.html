@@ -145,27 +145,47 @@
         var modalTitle = document.getElementById('credentialModalTitle');
         var modalClose = document.getElementById('credentialModalClose');
 
+        function renderCredentialData(data) {
+            if (!data || !data.ok || !data.items || !data.items.length) {
+                modalBody.innerHTML = '<div class="empty">لا توجد وثائق مسجّلة لهذا الاسم بعد.</div>';
+                return;
+            }
+            var html = '';
+            data.items.forEach(function(item) {
+                html += '<div class="cred-item"><span>' + (item.docType || 'وثيقة') + (item.date ? ' — ' + item.date : '') + '</span><a href="' + (item.fileUrl || '#') + '" target="_blank" rel="noopener">عرض / تحميل</a></div>';
+            });
+            modalBody.innerHTML = html;
+        }
+
         function openCredentialModal(name) {
             modalTitle.innerHTML = '<i class="fas fa-user-graduate"></i> كريدنشالس: ' + (name || '');
             modalBody.innerHTML = '<div class="empty">جاري التحميل...</div>';
             modal.classList.add('active');
-            var url = CREDENTIALS_API + '?action=getCredentials&name=' + encodeURIComponent(name || '');
-            fetch(url)
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (!data || !data.ok || !data.items || !data.items.length) {
-                        modalBody.innerHTML = '<div class="empty">لا توجد وثائق مسجّلة لهذا الاسم بعد.</div>';
-                        return;
-                    }
-                    var html = '';
-                    data.items.forEach(function(item) {
-                        html += '<div class="cred-item"><span>' + (item.docType || 'وثيقة') + (item.date ? ' — ' + item.date : '') + '</span><a href="' + (item.fileUrl || '#') + '" target="_blank" rel="noopener">عرض / تحميل</a></div>';
-                    });
-                    modalBody.innerHTML = html;
-                })
-                .catch(function() {
-                    modalBody.innerHTML = '<div class="empty">تعذّر تحميل البيانات. تأكد من نشر السكربت وتفعيل action=getCredentials.</div>';
-                });
+            var cbName = '__cred_' + Date.now();
+            var url = CREDENTIALS_API + '?action=getCredentials&name=' + encodeURIComponent(name || '') + '&callback=' + cbName;
+            var timeout = setTimeout(function() {
+                if (window[cbName]) return;
+                window[cbName] = null;
+                if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
+                modalBody.innerHTML = '<div class="empty">تعذّر تحميل البيانات. تحقق من الاتصال أو نشر السكربت.</div>';
+            }, 15000);
+            var scriptEl = document.createElement('script');
+            scriptEl.async = true;
+            window[cbName] = function(data) {
+                clearTimeout(timeout);
+                window[cbName] = null;
+                if (scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
+                if (data && data.ok !== false) renderCredentialData(data);
+                else modalBody.innerHTML = '<div class="empty">' + (data && data.error ? data.error : 'تعذّر تحميل البيانات.') + '</div>';
+            };
+            scriptEl.onerror = function() {
+                clearTimeout(timeout);
+                window[cbName] = null;
+                if (scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
+                modalBody.innerHTML = '<div class="empty">تعذّر تحميل البيانات. تحقق من الاتصال أو نشر السكربت.</div>';
+            };
+            scriptEl.src = url;
+            document.body.appendChild(scriptEl);
         }
 
         function closeCredentialModal() {
