@@ -642,8 +642,17 @@ async function loadFiles(name) {
   
   try {
     const url = APPS_SCRIPT_URL + '?action=getFiles&name=' + encodeURIComponent(name);
-    const response = await fetch(url);
-    const data = await response.json();
+    console.log('[LoadFiles] Fetching:', url);
+    const response = await fetch(url, { redirect: 'follow' });
+    const responseText = await response.text();
+    console.log('[LoadFiles] Raw response:', responseText.substring(0, 200));
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch(pe) {
+      const m = responseText.match(/\{[\s\S]*\}/);
+      data = m ? JSON.parse(m[0]) : { success: false };
+    }
     
     if (data.success && data.files && data.files.length > 0) {
       fileCounts[name] = data.files.length;
@@ -797,9 +806,10 @@ async function uploadFiles() {
     try {
       const base64 = await fileToBase64(file);
       
+      console.log('[Upload] Sending file:', file.name, 'for:', currentStaff.name);
+      
       const response = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
           action: 'uploadFile',
           password: password,
@@ -807,10 +817,27 @@ async function uploadFiles() {
           fileName: file.name,
           mimeType: file.type || 'application/octet-stream',
           fileData: base64
-        })
+        }),
+        redirect: 'follow'
       });
       
-      const result = await response.json();
+      const responseText = await response.text();
+      console.log('[Upload] Raw response:', responseText.substring(0, 200));
+      
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch(parseErr) {
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+        } else {
+          console.error('[Upload] Cannot parse response:', responseText.substring(0, 500));
+          throw new Error('Invalid response from server');
+        }
+      }
+      
+      console.log('[Upload] Parsed result:', result);
       
       if (result.success) {
         uploadedCount++;
@@ -822,10 +849,15 @@ async function uploadFiles() {
           btn.disabled = false;
           return;
         }
+        console.error('[Upload] Server error:', result.error);
+        statusEl.className = 'upload-status error';
+        statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> خطأ: ' + (result.error || 'غير معروف');
       }
     } catch (err) {
-      console.error('Upload error:', err);
+      console.error('[Upload] Error:', err.message);
       failedCount++;
+      statusEl.className = 'upload-status error';
+      statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> خطأ في الاتصال: ' + err.message;
     }
   }
   
@@ -855,14 +887,23 @@ function fileToBase64(file) {
 async function loadAllCounts() {
   try {
     const url = APPS_SCRIPT_URL + '?action=getAllCounts';
-    const response = await fetch(url);
-    const data = await response.json();
+    console.log('[Counts] Fetching:', url);
+    const response = await fetch(url, { redirect: 'follow' });
+    const responseText = await response.text();
+    console.log('[Counts] Raw response:', responseText.substring(0, 200));
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch(pe) {
+      const m = responseText.match(/\{[\s\S]*\}/);
+      data = m ? JSON.parse(m[0]) : { success: false };
+    }
     if (data.success && data.counts) {
       fileCounts = data.counts;
       updateFileCount();
     }
   } catch(e) {
-    console.log('Could not load counts');
+    console.log('[Counts] Error:', e.message);
   }
 }
 
