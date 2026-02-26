@@ -1617,7 +1617,9 @@
               <th>الوقت</th>
               <th>النوع</th>
               <th>الموقع</th>
+              <th>المستجيب</th>
               <th>الحالة</th>
+              <th>سبب الإغلاق / الإجراءات</th>
               <th>إجراء</th>
             </tr>
           </thead>
@@ -4451,21 +4453,21 @@
 
     async function loadReportsLog(){
       const body = document.getElementById('repLogBody');
-      body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:22px"><i class="fas fa-spinner fa-spin"></i> تحميل...</td></tr>`;
+      body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:22px"><i class="fas fa-spinner fa-spin"></i> تحميل...</td></tr>`;
       try{
         const list = await fetchEmergencyReports(200);
         APP.caches.reports = list;
         renderReportsTable(list);
       } catch(e){
         console.error(e);
-        body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:22px;color:var(--danger)">تعذر تحميل سجل البلاغات</td></tr>`;
+        body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:22px;color:var(--danger)">تعذر تحميل سجل البلاغات</td></tr>`;
       }
     }
 
     function renderReportsTable(list){
       const body = document.getElementById('repLogBody');
       if (!list || !list.length){
-        body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:22px">لا توجد بلاغات</td></tr>`;
+        body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:22px">لا توجد بلاغات</td></tr>`;
         return;
       }
       body.innerHTML = list.map(r=>{
@@ -4481,6 +4483,9 @@
           st === 'قيد المعالجة' ? `<button class="view-btn" onclick="event.stopPropagation();updateReportFlow('${escapeHtml(r.id)}','مغلق')">إغلاق</button>` :
           `<span style="color:var(--success);font-weight:1000"><i class="fas fa-check"></i></span>`;
 
+        const responder = escapeHtml(r.responder||'');
+        const actions = escapeHtml(r.actions||r.actionNotes||'');
+
         return `
           <tr style="${rowStyle}" ${rowHover} ${rowClick} title="${isOpen ? 'انقر للتعديل' : ''}">
             <td>${escapeHtml(r.id||'')}</td>
@@ -4488,7 +4493,9 @@
             <td>${escapeHtml(r.time||'')}</td>
             <td>${escapeHtml(r.type||'')}</td>
             <td>${escapeHtml(r.location||'')}</td>
+            <td>${responder || '<span style="color:var(--muted)">-</span>'}</td>
             <td><span class="pill ${pill}">${escapeHtml(st)}</span></td>
+            <td style="max-width:200px;font-size:.8rem">${actions || '<span style="color:var(--muted)">-</span>'}</td>
             <td>${action}</td>
           </tr>
         `;
