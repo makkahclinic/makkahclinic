@@ -52,6 +52,15 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
+  // عرض الكريدنشالس للزوار (بدون رقم سري) — للربط من صفحة الإدارة
+  if (action === 'getcredentials' || action === 'getCredentials') {
+    var name = (params.name || '').toString().trim();
+    var list = _listQualificationsForDisplay(name);
+    return ContentService.createTextOutput(JSON.stringify({ ok: true, name: name, items: list }))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin', '*');
+  }
+
   var html = HtmlService.createTemplateFromFile('ManagementUpload');
   html.sheetId = MANAGEMENT_SHEET_ID;
   html.folderId = MANAGEMENT_DRIVE_FOLDER_ID;
@@ -135,6 +144,27 @@ function _listQualifications(filterName) {
     if (filterName && name !== filterName) continue;
     rows.push({
       name: name,
+      docType: (r[1] || '').toString().trim(),
+      fileUrl: (r[2] || '').toString().trim(),
+      fileName: (r[3] || '').toString().trim(),
+      date: (r[4] || '').toString().trim()
+    });
+  }
+  return rows;
+}
+
+/** للعرض العام من الموقع: مطابقة جزئية على الاسم (يحتوي أو يساوي) */
+function _listQualificationsForDisplay(searchName) {
+  var sheet = _getSheet();
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  var rows = [];
+  var search = (searchName || '').toString().trim();
+  for (var i = 1; i < data.length; i++) {
+    var r = data[i];
+    var name = (r[0] || '').toString().trim();
+    if (search && name.indexOf(search) === -1 && search.indexOf(name) === -1) continue;
+    rows.push({
       docType: (r[1] || '').toString().trim(),
       fileUrl: (r[2] || '').toString().trim(),
       fileName: (r[3] || '').toString().trim(),
