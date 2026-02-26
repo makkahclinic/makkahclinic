@@ -59,6 +59,8 @@
         .cred-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; gap: 12px; }
         .cred-item a { color: var(--primary); font-weight: 700; }
         .modal-body .empty { color: #666; text-align: center; padding: 20px; }
+        .cred-upload-link { display: inline-block; margin-top: 16px; padding: 12px 20px; background: var(--primary); color: #fff !important; border-radius: 8px; font-weight: 700; text-decoration: none; }
+        .cred-upload-link:hover { background: var(--gold); color: #fff !important; }
     </style>
 </head>
 <body>
@@ -145,9 +147,19 @@
         var modalTitle = document.getElementById('credentialModalTitle');
         var modalClose = document.getElementById('credentialModalClose');
 
+        var UPLOAD_PAGE_URL = CREDENTIALS_API.replace(/\?.*$/, '');
+        function uploadLink(name) {
+            var url = UPLOAD_PAGE_URL + (name ? '?name=' + encodeURIComponent(name) : '');
+            return '<p style="text-align:center;margin-top:12px;"><a href="' + url + '" target="_blank" rel="noopener" class="cred-upload-link">ارفع شهاداتك من هنا (رقم سري فقط)</a></p>';
+        }
+        function emptyMessage(withUploadLink, name) {
+            var msg = '<div class="empty">لا توجد وثائق مسجّلة لهذا الاسم بعد.</div>';
+            if (withUploadLink) msg += uploadLink(name || '');
+            return msg;
+        }
         function renderCredentialData(data) {
             if (!data || !data.ok || !data.items || !data.items.length) {
-                modalBody.innerHTML = '<div class="empty">لا توجد وثائق مسجّلة لهذا الاسم بعد.</div>';
+                modalBody.innerHTML = emptyMessage(true, data && data.name ? data.name : '');
                 return;
             }
             var html = '';
@@ -167,7 +179,7 @@
                 if (window[cbName]) return;
                 window[cbName] = null;
                 if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
-                modalBody.innerHTML = '<div class="empty">تعذّر تحميل البيانات. تحقق من الاتصال أو نشر السكربت.</div>';
+                modalBody.innerHTML = '<div class="empty">تعذّر تحميل البيانات. تحقق من الاتصال أو نشر السكربت.</div>' + uploadLink(name || '');
             }, 15000);
             var scriptEl = document.createElement('script');
             scriptEl.async = true;
@@ -176,13 +188,13 @@
                 window[cbName] = null;
                 if (scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
                 if (data && data.ok !== false) renderCredentialData(data);
-                else modalBody.innerHTML = '<div class="empty">' + (data && data.error ? data.error : 'تعذّر تحميل البيانات.') + '</div>';
+                else modalBody.innerHTML = '<div class="empty">' + (data && data.error ? data.error : 'تعذّر تحميل البيانات.') + '</div>' + uploadLink(data && data.name ? data.name : '');
             };
             scriptEl.onerror = function() {
                 clearTimeout(timeout);
                 window[cbName] = null;
                 if (scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
-                modalBody.innerHTML = '<div class="empty">تعذّر تحميل البيانات. تحقق من الاتصال أو نشر السكربت.</div>';
+                modalBody.innerHTML = '<div class="empty">تعذّر تحميل البيانات. تحقق من الاتصال أو نشر السكربت.</div>' + uploadLink(name || '');
             };
             scriptEl.src = url;
             document.body.appendChild(scriptEl);

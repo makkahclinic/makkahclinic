@@ -83,6 +83,7 @@ function doGet(e) {
   var html = HtmlService.createTemplateFromFile('ManagementUpload');
   html.sheetId = MANAGEMENT_SHEET_ID;
   html.folderId = MANAGEMENT_DRIVE_FOLDER_ID;
+  html.name = (params.name || '').toString().trim();
   return html.evaluate()
     .setTitle('رفع الموّهلات – مجمع مكة الطبي')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
