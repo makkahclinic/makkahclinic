@@ -340,6 +340,28 @@
           <label>الرقم السري للرفع</label>
           <input type="password" id="pass" placeholder="أدخل الرقم السري">
         </div>
+        <div class="field">
+          <label>نوع المستند</label>
+          <select id="docType" style="width:100%;padding:10px 12px;border:2px solid #e0e0e0;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:0.9rem;background:#fff;cursor:pointer;direction:rtl;">
+            <option value="">-- اختر نوع المستند --</option>
+            <option value="CV - سيرة ذاتية">سيرة ذاتية (CV)</option>
+            <option value="PhD - شهادة دكتوراه">شهادة دكتوراه (PhD)</option>
+            <option value="Master - شهادة ماجستير">شهادة ماجستير (Master)</option>
+            <option value="Fellowship - زمالة">زمالة (Fellowship)</option>
+            <option value="Bachelor - شهادة بكالوريوس">شهادة بكالوريوس (Bachelor)</option>
+            <option value="Diploma - شهادة دبلوم">شهادة دبلوم (Diploma)</option>
+            <option value="Experience - شهادة خبرة">شهادة خبرة (Experience)</option>
+            <option value="License - ترخيص مزاولة">ترخيص مزاولة (License)</option>
+            <option value="SCFHS - تصنيف هيئة التخصصات">تصنيف هيئة التخصصات (SCFHS)</option>
+            <option value="BLS - شهادة إنعاش قلبي">شهادة إنعاش قلبي (BLS)</option>
+            <option value="ACLS - شهادة إنعاش متقدم">شهادة إنعاش متقدم (ACLS)</option>
+            <option value="Training - شهادة تدريب">شهادة تدريب (Training)</option>
+            <option value="ID - صورة الهوية">صورة الهوية (ID)</option>
+            <option value="Passport - صورة الجواز">صورة الجواز (Passport)</option>
+            <option value="Contract - العقد">العقد (Contract)</option>
+            <option value="Other - مستند آخر">مستند آخر (Other)</option>
+          </select>
+        </div>
         <div class="drop-box" id="dropBox">
           <i class="fas fa-cloud-upload-alt"></i>
           <p>اسحب الملفات هنا أو اضغط للاختيار</p>
@@ -489,6 +511,7 @@ function loadFiles(name) {
 
 var dropBox = document.getElementById('dropBox');
 var fInput = document.getElementById('fInput');
+document.getElementById('docType').addEventListener('change', function() { showPicked(); });
 dropBox.addEventListener('click', function() { fInput.click(); });
 dropBox.addEventListener('dragover', function(e) { e.preventDefault(); dropBox.classList.add('over'); });
 dropBox.addEventListener('dragleave', function() { dropBox.classList.remove('over'); });
@@ -511,9 +534,12 @@ function showPicked() {
   var c = document.getElementById('pickedList');
   document.getElementById('btnSubmit').disabled = picked.length === 0;
   if (!picked.length) { c.innerHTML = ''; return; }
+  var docType = document.getElementById('docType').value;
   var html = '';
   for (var i = 0; i < picked.length; i++) {
-    html += '<div class="picked-item"><span><i class="fas fa-file" style="color:var(--primary);margin-left:4px;"></i>' + picked[i].name + '</span><button onclick="removePick(' + i + ')">&times;</button></div>';
+    var ext = picked[i].name.split('.').pop().toLowerCase();
+    var displayName = docType ? (docType + '.' + ext) : picked[i].name;
+    html += '<div class="picked-item"><span><i class="fas fa-file" style="color:var(--primary);margin-left:4px;"></i>' + displayName + '</span><button onclick="removePick(' + i + ')">&times;</button></div>';
   }
   c.innerHTML = html;
 }
@@ -529,9 +555,11 @@ document.getElementById('btnSubmit').addEventListener('click', doUpload);
 
 function doUpload() {
   var pass = document.getElementById('pass').value.trim();
+  var docType = document.getElementById('docType').value;
   var st = document.getElementById('statusMsg');
   var btn = document.getElementById('btnSubmit');
   if (!pass) { st.className = 'msg err'; st.textContent = 'أدخل الرقم السري'; return; }
+  if (!docType) { st.className = 'msg err'; st.textContent = 'اختر نوع المستند'; return; }
   if (!picked.length) return;
 
   btn.disabled = true;
@@ -545,14 +573,17 @@ function doUpload() {
       if (ok > 0) {
         st.className = 'msg ok'; st.textContent = 'تم رفع ' + ok + ' مستند بنجاح';
         picked = []; showPicked(); loadFiles(cur.name); renderTeam();
+        document.getElementById('docType').value = '';
       } else { st.className = 'msg err'; st.textContent = 'فشل الرفع'; }
       return;
     }
     var file = picked[idx];
-    st.className = 'msg wait'; st.textContent = 'جاري رفع: ' + file.name;
+    var ext = file.name.split('.').pop().toLowerCase();
+    var uploadName = docType + (total > 1 ? ' (' + (idx+1) + ')' : '') + '.' + ext;
+    st.className = 'msg wait'; st.textContent = 'جاري رفع: ' + uploadName;
     toB64(file, function(b64) {
       if (!b64) { fail++; idx++; next(); return; }
-      apiPost({ action: 'uploadFile', password: pass, staffName: cur.name, fileName: file.name, mimeType: file.type || 'application/octet-stream', fileData: b64 }, function(err, res) {
+      apiPost({ action: 'uploadFile', password: pass, staffName: cur.name, fileName: uploadName, mimeType: file.type || 'application/octet-stream', fileData: b64 }, function(err, res) {
         if (err) { fail++; }
         else if (res && res.success) { ok++; }
         else if (res && res.error === 'WRONG_PASSWORD') {
