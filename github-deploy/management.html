@@ -223,7 +223,7 @@
 
 <header>
   <div class="logo">
-    <img src="https://www.m2020m.org/logo2026" alt="Logo" onerror="this.style.display='none'">
+    <img src="https://www.m2020m.org/logo2026.jpg" alt="Logo" onerror="this.style.display='none'">
     <h1>مجمع مكة الطبي <span>بالزاهر</span></h1>
   </div>
   <nav>
@@ -232,6 +232,7 @@
 </header>
 
 <div class="hero">
+  <img src="https://www.m2020m.org/logo2026.jpg" alt="شعار المجمع" style="height:70px;margin-bottom:10px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.2);">
   <h2><i class="fas fa-sitemap"></i> الهيكل الإداري والتنظيمي</h2>
   <p>متوافق مع معايير سباهي CBAHI - القيادة والحوكمة</p>
   <div class="badge-row">
@@ -318,7 +319,11 @@
 <div class="overlay" id="overlay">
   <div class="panel">
     <div class="panel-top">
-      <div class="p-avatar" id="panelAvatar"><i class="fas fa-user"></i></div>
+      <div class="p-avatar" id="panelAvatar" style="cursor:pointer;position:relative;" onclick="changePhoto()" title="اضغط لتغيير الصورة">
+        <i class="fas fa-user"></i>
+        <div style="position:absolute;bottom:-2px;left:-2px;background:var(--gold);color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.6rem;border:2px solid #fff;"><i class="fas fa-camera"></i></div>
+      </div>
+      <input type="file" id="photoInput" accept="image/*" style="display:none;">
       <div class="p-info">
         <h3 id="pName"></h3>
         <p id="pRole"></p>
@@ -367,6 +372,27 @@ var team = [
 
 var cur = null, picked = [], counts = {};
 
+function getAvatar(i, size) {
+  var t = team[i];
+  var photoUrl = localStorage.getItem('staff_photo_' + i);
+  var sz = size || '1.5rem';
+  if (photoUrl) {
+    return '<img src="' + photoUrl + '" alt="' + t.name + '">';
+  } else if (t.icon === 'logo') {
+    return '<img src="https://www.m2020m.org/logo2026.jpg" alt="شعار المجمع" style="width:80%;height:80%;object-fit:contain;">';
+  } else {
+    return '<i class="fas ' + t.icon + '" style="font-size:' + sz + ';"></i>';
+  }
+}
+
+function getAvatarStyle(i) {
+  var t = team[i];
+  var photoUrl = localStorage.getItem('staff_photo_' + i);
+  if (photoUrl) return 'border-color:var(--gold);';
+  if (t.icon === 'logo') return 'background:#fff;border-color:var(--gold);';
+  return 'background:' + t.color + '15;border-color:' + t.color + '40;color:' + t.color + ';';
+}
+
 function renderTeam() {
   var html = '';
   for (var i = 0; i < team.length; i++) {
@@ -374,11 +400,7 @@ function renderTeam() {
     var hasFiles = (counts[t.name] || 0) > 0;
     html += '<div class="person-card" onclick="openPerson(' + i + ')">';
     if (hasFiles) html += '<div class="file-indicator"><i class="fas fa-folder"></i> ' + counts[t.name] + '</div>';
-    if (t.icon === 'logo') {
-      html += '<div class="avatar" style="background:#fff;border-color:var(--gold);"><img src="https://www.m2020m.org/logo2026" alt="logo" style="width:80%;height:80%;object-fit:contain;"></div>';
-    } else {
-      html += '<div class="avatar" style="background:' + t.color + '15;border-color:' + t.color + '40;color:' + t.color + ';"><i class="fas ' + t.icon + '" style="font-size:1.5rem;"></i></div>';
-    }
+    html += '<div class="avatar" style="' + getAvatarStyle(i) + '">' + getAvatar(i) + '</div>';
     html += '<h4>' + t.name + '</h4>';
     html += '<div class="title">' + t.role + '</div>';
     html += '<div class="dept-tag">' + t.dept + '</div>';
@@ -387,18 +409,15 @@ function renderTeam() {
   document.getElementById('teamGrid').innerHTML = html;
 }
 
+var curIdx = -1;
 function openPerson(i) {
+  curIdx = i;
   cur = team[i];
   document.getElementById('pName').textContent = cur.name;
   document.getElementById('pRole').textContent = cur.role + ' — ' + cur.dept;
-  if (cur.icon === 'logo') {
-    document.getElementById('panelAvatar').innerHTML = '<img src="https://www.m2020m.org/logo2026" alt="logo" style="width:80%;height:80%;object-fit:contain;">';
-    document.getElementById('panelAvatar').style.background = '#fff';
-  } else {
-    document.getElementById('panelAvatar').innerHTML = '<i class="fas ' + cur.icon + '" style="font-size:1.3rem;"></i>';
-    document.getElementById('panelAvatar').style.background = cur.color + '15';
-    document.getElementById('panelAvatar').style.color = cur.color;
-  }
+  var pa = document.getElementById('panelAvatar');
+  pa.innerHTML = getAvatar(i, '1.3rem');
+  pa.style.cssText = getAvatarStyle(i);
   document.getElementById('overlay').classList.add('active');
   document.getElementById('pass').value = '';
   document.getElementById('statusMsg').className = 'msg';
@@ -552,6 +571,27 @@ function loadCounts() {
     if (!err && data && data.success && data.counts) { counts = data.counts; renderTeam(); }
   });
 }
+
+function changePhoto() {
+  document.getElementById('photoInput').click();
+}
+
+document.getElementById('photoInput').addEventListener('change', function() {
+  var file = this.files[0];
+  if (!file || curIdx < 0) return;
+  if (file.size > 2 * 1024 * 1024) { alert('حجم الصورة أكبر من 2 ميجا'); return; }
+  var reader = new FileReader();
+  reader.onload = function() {
+    localStorage.setItem('staff_photo_' + curIdx, reader.result);
+    var pa = document.getElementById('panelAvatar');
+    var camIcon = '<div style="position:absolute;bottom:-2px;left:-2px;background:var(--gold);color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.6rem;border:2px solid #fff;"><i class="fas fa-camera"></i></div>';
+    pa.innerHTML = '<img src="' + reader.result + '" alt="صورة">' + camIcon;
+    pa.style.cssText = 'cursor:pointer;position:relative;border-color:var(--gold);';
+    renderTeam();
+  };
+  reader.readAsDataURL(file);
+  this.value = '';
+});
 
 renderTeam();
 loadCounts();
