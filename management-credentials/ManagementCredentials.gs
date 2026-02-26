@@ -34,6 +34,15 @@ function _getDriveFolder() {
   return DriveApp.getFolderById(MANAGEMENT_DRIVE_FOLDER_ID);
 }
 
+/** إرجاع JSON مع هيدرات CORS للسماح بالاستدعاء من الموقع */
+function _jsonWithCors(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeader('Access-Control-Allow-Origin', '*')
+    .setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
 /**
  * doGet: إما صفحة الرفع/العرض، أو قائمة الموّهلات (JSON)
  */
@@ -55,10 +64,14 @@ function doGet(e) {
   // عرض الكريدنشالس للزوار (بدون رقم سري) — للربط من صفحة الإدارة
   if (action === 'getcredentials' || action === 'getCredentials') {
     var name = (params.name || '').toString().trim();
-    var list = _listQualificationsForDisplay(name);
-    return ContentService.createTextOutput(JSON.stringify({ ok: true, name: name, items: list }))
-      .setMimeType(ContentService.MimeType.JSON)
-      .setHeader('Access-Control-Allow-Origin', '*');
+    var out;
+    try {
+      var list = _listQualificationsForDisplay(name);
+      out = _jsonWithCors({ ok: true, name: name, items: list });
+    } catch (err) {
+      out = _jsonWithCors({ ok: false, error: (err && err.message) ? err.message : 'خطأ في الخادم' });
+    }
+    return out;
   }
 
   var html = HtmlService.createTemplateFromFile('ManagementUpload');
