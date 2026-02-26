@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>رفع الموّهلات – مجمع مكة الطبي</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Tajawal', sans-serif; background: #f0f4f8; padding: 20px; color: #1a1a2e; }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; color: #1e3a5f; margin-bottom: 20px; }
+    .card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+    .card h2 { font-size: 1.15rem; color: #1e3a5f; margin-bottom: 14px; }
+    label { display: block; font-weight: 700; margin-bottom: 6px; color: #333; }
+    input[type="text"], input[type="password"], select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 12px; font-family: inherit; font-size: 1rem; }
+    input[type="file"] { margin-bottom: 12px; }
+    button, .btn { background: #1e3a5f; color: #fff; border: none; padding: 12px 24px; border-radius: 8px; font-family: inherit; font-weight: 700; cursor: pointer; font-size: 1rem; }
+    button:hover, .btn:hover { background: #2d5a8a; }
+    .btn-secondary { background: #6c757d; }
+    .btn-secondary:hover { background: #5a6268; }
+    .hidden { display: none !important; }
+    .msg { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; }
+    .msg.ok { background: #d4edda; color: #155724; }
+    .msg.err { background: #f8d7da; color: #721c24; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th, td { padding: 10px 12px; text-align: right; border-bottom: 1px solid #eee; }
+    th { background: #1e3a5f; color: #fff; font-weight: 700; }
+    tr:hover td { background: #f8f9fa; }
+    a { color: #1e3a5f; font-weight: 700; }
+    .login-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .login-row label { margin-bottom: 0; }
+    .login-row input { margin-bottom: 0; max-width: 200px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>رفع السير الذاتية والموّهلات الدراسية</h1>
+
+    <div id="loginCard" class="card">
+      <h2>تسجيل الدخول</h2>
+      <p style="margin-bottom:14px;color:#555;">أدخل اسمك والرقم السري للرفع أو لعرض الموّهلات.</p>
+      <div class="login-row">
+        <div>
+          <label for="userName">الاسم</label>
+          <input type="text" id="userName" placeholder="مثال: حسين" autocomplete="off" />
+        </div>
+        <div>
+          <label for="userPass">الرقم السري</label>
+          <input type="password" id="userPass" placeholder="الرقم السري" autocomplete="off" />
+        </div>
+        <div>
+          <button type="button" id="btnLogin">ادخل</button>
+        </div>
+      </div>
+      <div id="loginMsg" class="msg hidden"></div>
+    </div>
+
+    <div id="uploadCard" class="card hidden">
+      <h2>رفع الموّهلات</h2>
+      <p style="margin-bottom:14px;color:#555;">ارفع صور الشهادات أو الموّهلات الدراسية (صور أو PDF).</p>
+      <input type="hidden" id="uploadName" />
+      <input type="hidden" id="uploadPass" />
+      <label for="docType">نوع الوثيقة</label>
+      <select id="docType">
+        <option value="موهلة دراسية">موهلة دراسية</option>
+        <option value="شهادة جامعية">شهادة جامعية</option>
+        <option value="تدريب">تدريب</option>
+        <option value="سباهي / اعتماد">سباهي / اعتماد</option>
+        <option value="سيرة ذاتية">سيرة ذاتية</option>
+        <option value="أخرى">أخرى</option>
+      </select>
+      <label for="fileInput">الملف (صورة أو PDF)</label>
+      <input type="file" id="fileInput" accept="image/*,.pdf" />
+      <button type="button" id="btnUpload">رفع الملف</button>
+      <div id="uploadMsg" class="msg hidden"></div>
+    </div>
+
+    <div id="viewCard" class="card hidden">
+      <h2>عرض الموّهلات</h2>
+      <p style="margin-bottom:14px;color:#555;">الوثائق المرفوعة حسب الاسم (أو الكل إذا تركت الاسم فارغاً عند الدخول).</p>
+      <button type="button" id="btnRefresh" class="btn btn-secondary">تحديث القائمة</button>
+      <div id="tableWrap" style="margin-top:16px;overflow-x:auto;"></div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var userName = document.getElementById('userName');
+      var userPass = document.getElementById('userPass');
+      var btnLogin = document.getElementById('btnLogin');
+      var loginMsg = document.getElementById('loginMsg');
+      var loginCard = document.getElementById('loginCard');
+      var uploadCard = document.getElementById('uploadCard');
+      var uploadName = document.getElementById('uploadName');
+      var uploadPass = document.getElementById('uploadPass');
+      var docType = document.getElementById('docType');
+      var fileInput = document.getElementById('fileInput');
+      var btnUpload = document.getElementById('btnUpload');
+      var uploadMsg = document.getElementById('uploadMsg');
+      var viewCard = document.getElementById('viewCard');
+      var btnRefresh = document.getElementById('btnRefresh');
+      var tableWrap = document.getElementById('tableWrap');
+
+      function showMsg(el, text, isOk) {
+        el.textContent = text;
+        el.className = 'msg ' + (isOk ? 'ok' : 'err');
+        el.classList.remove('hidden');
+      }
+
+      function hideMsg(el) {
+        el.classList.add('hidden');
+      }
+
+      btnLogin.onclick = function() {
+        var name = (userName.value || '').trim();
+        var pass = (userPass.value || '').trim();
+        hideMsg(loginMsg);
+        if (!pass) {
+          showMsg(loginMsg, 'أدخل الرقم السري', false);
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(function(rows) {
+            if (rows && typeof rows.length !== 'undefined') {
+              uploadName.value = name;
+              uploadPass.value = pass;
+              loginCard.classList.add('hidden');
+              uploadCard.classList.remove('hidden');
+              viewCard.classList.remove('hidden');
+              loadTable(pass, name);
+            } else {
+              showMsg(loginMsg, 'رقم سري غير صحيح', false);
+            }
+          })
+          .withFailureHandler(function() {
+            showMsg(loginMsg, 'رقم سري غير صحيح', false);
+          })
+          .listQualifications(pass, name);
+      };
+
+      function loadTable(password, filterName) {
+        google.script.run
+          .withSuccessHandler(function(rows) {
+            if (!rows || !rows.length) {
+              tableWrap.innerHTML = '<p style="color:#666;">لا توجد وثائق مسجّلة.</p>';
+              return;
+            }
+            var html = '<table><thead><tr><th>التاريخ</th><th>اسم الملف</th><th>نوع الوثيقة</th><th>الاسم</th><th>الرابط</th></tr></thead><tbody>';
+            rows.forEach(function(r) {
+              html += '<tr><td>' + (r.date || '') + '</td><td>' + (r.fileName || '') + '</td><td>' + (r.docType || '') + '</td><td>' + (r.name || '') + '</td><td><a href="' + (r.fileUrl || '#') + '" target="_blank" rel="noopener">فتح</a></td></tr>';
+            });
+            html += '</tbody></table>';
+            tableWrap.innerHTML = html;
+          })
+          .withFailureHandler(function() {
+            tableWrap.innerHTML = '<p style="color:#c00;">فشل تحميل القائمة.</p>';
+          })
+          .listQualifications(password, filterName);
+      }
+
+      btnRefresh.onclick = function() {
+        loadTable(uploadPass.value, uploadName.value);
+      };
+
+      btnUpload.onclick = function() {
+        var name = (uploadName.value || '').trim();
+        var pass = (uploadPass.value || '').trim();
+        var type = (docType.value || '').trim();
+        var file = fileInput.files[0];
+        hideMsg(uploadMsg);
+        if (!name) {
+          showMsg(uploadMsg, 'الاسم مفقود', false);
+          return;
+        }
+        if (!pass) {
+          showMsg(uploadMsg, 'الرقم السري مطلوب للرفع', false);
+          return;
+        }
+        if (!file) {
+          showMsg(uploadMsg, 'اختر ملفاً للرفع', false);
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function() {
+          var base64 = reader.result;
+          var filename = file.name || 'document.pdf';
+          btnUpload.disabled = true;
+          google.script.run
+            .withSuccessHandler(function(res) {
+              btnUpload.disabled = false;
+              if (res && res.ok) {
+                showMsg(uploadMsg, 'تم رفع الملف بنجاح. يمكنك رفع المزيد.', true);
+                fileInput.value = '';
+                loadTable(pass, name);
+              } else {
+                showMsg(uploadMsg, (res && res.error) || 'فشل الرفع', false);
+              }
+            })
+            .withFailureHandler(function(err) {
+              btnUpload.disabled = false;
+              showMsg(uploadMsg, err.message || 'فشل الرفع', false);
+            })
+            .uploadQualification(name, pass, type, base64, filename);
+        };
+        reader.readAsDataURL(file);
+      };
+    })();
+  </script>
+</body>
+</html>
