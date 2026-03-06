@@ -426,6 +426,34 @@
         </div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:15px">
+      <div class="card-header" style="background:linear-gradient(135deg,#059669,#047857)">
+        <i class="fas fa-archive"></i> أرشفة وتقارير
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:15px">
+          <div class="stat-box" style="background:#f0fdf4;text-align:center;padding:12px;border-radius:10px">
+            <div class="num" id="archiveCount" style="color:#059669;font-size:1.3rem">-</div>
+            <div class="lbl" style="color:#065f46;font-size:0.75rem">مؤرشف اليوم</div>
+          </div>
+          <div class="stat-box" style="background:#fffbeb;text-align:center;padding:12px;border-radius:10px">
+            <div class="num" id="archiveAvgWait" style="color:#d97706;font-size:1.3rem">-</div>
+            <div class="lbl" style="color:#92400e;font-size:0.75rem">متوسط الانتظار (د)</div>
+          </div>
+        </div>
+        <button class="btn" onclick="archiveToSheet()" style="width:100%;background:#059669;color:white;margin-bottom:8px">
+          <i class="fas fa-cloud-upload-alt"></i> أرشفة الطابور الحالي
+        </button>
+        <button class="btn" onclick="syncDoctorsToSheet()" style="width:100%;background:var(--info);color:white;margin-bottom:8px">
+          <i class="fas fa-user-md-gear"></i> حفظ الأطباء في الشيت
+        </button>
+        <button class="btn" onclick="calcDailyStats()" style="width:100%;background:var(--gold);color:var(--primary)">
+          <i class="fas fa-chart-bar"></i> حساب إحصائيات اليوم
+        </button>
+        <div id="archiveStatus" style="margin-top:10px;font-size:0.8rem;color:var(--gray);text-align:center"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -862,6 +890,135 @@ function showToast(msg, type = 'success') {
 document.getElementById('patientName').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') window.addToQueue();
 });
+
+const QUEUE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzEIyoCBc8LNuPfNWxyxhc8yRi5AIfzaZ6Rk0zm6LMOOrp9xXb7NweNzdvTVOOwFCPP9g/exec';
+
+function setArchiveStatus(msg, isError) {
+  const el = document.getElementById('archiveStatus');
+  el.textContent = msg;
+  el.style.color = isError ? '#ef4444' : '#059669';
+}
+
+window.archiveToSheet = async function() {
+  if (!allQueue.length) { showToast('لا يوجد مرضى للأرشفة', 'error'); return; }
+
+  setArchiveStatus('جاري الأرشفة...', false);
+
+  const patients = allQueue.map(q => {
+    const created = q.createdAt?.toDate?.() || (q.createdAt ? new Date(q.createdAt) : new Date());
+    const called = q.calledAt?.toDate?.() || (q.calledAt ? new Date(q.calledAt) : null);
+    const done = q.doneAt?.toDate?.() || (q.doneAt ? new Date(q.doneAt) : null);
+
+    const formatDT = (d) => {
+      if (!d) return '';
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
+
+    let status = q.status || 'waiting';
+    if (status === 'done') status = 'completed';
+
+    return {
+      ticketNum: q.number || '',
+      patientName: q.patientName || '',
+      patientPhone: q.fileNumber || '',
+      doctorName: q.doctorName || '',
+      clinic: q.clinicName || '',
+      status,
+      addedAt: formatDT(created),
+      calledAt: formatDT(called),
+      completedAt: formatDT(done),
+      addedBy: auth.currentUser?.email || ''
+    };
+  });
+
+  try {
+    const resp = await fetch(QUEUE_SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'logBatch', patients })
+    });
+    const result = await resp.json();
+    if (result.status === 'success') {
+      showToast(`تم أرشفة ${result.data.count} مريض بنجاح`);
+      setArchiveStatus(`آخر أرشفة: ${new Date().toLocaleTimeString('ar-SA')} - ${result.data.count} مريض`, false);
+      loadArchiveStats();
+    } else {
+      throw new Error(result.message);
+    }
+  } catch (e) {
+    showToast('خطأ في الأرشفة: ' + e.message, 'error');
+    setArchiveStatus('فشلت الأرشفة: ' + e.message, true);
+  }
+};
+
+window.syncDoctorsToSheet = async function() {
+  if (!doctors.length) { showToast('لا يوجد أطباء', 'error'); return; }
+
+  setArchiveStatus('جاري حفظ الأطباء...', false);
+
+  try {
+    const resp = await fetch(QUEUE_SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'saveDoctors', doctors })
+    });
+    const result = await resp.json();
+    if (result.status === 'success') {
+      showToast(`تم حفظ ${result.data.count} طبيب`);
+      setArchiveStatus(`تم حفظ الأطباء: ${result.data.count}`, false);
+    } else {
+      throw new Error(result.message);
+    }
+  } catch (e) {
+    showToast('خطأ: ' + e.message, 'error');
+    setArchiveStatus('فشل حفظ الأطباء', true);
+  }
+};
+
+window.calcDailyStats = async function() {
+  setArchiveStatus('جاري حساب الإحصائيات...', false);
+
+  try {
+    const resp = await fetch(QUEUE_SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'calcDailyStats' })
+    });
+    const result = await resp.json();
+    if (result.status === 'success') {
+      const d = result.data;
+      showToast(`إحصائيات اليوم: ${d.total} مريض | متوسط انتظار: ${d.avgWait} دقيقة`);
+      setArchiveStatus(`${d.total} مريض | ${d.completed} منتهي | انتظار: ${d.avgWait} د`, false);
+      document.getElementById('archiveAvgWait').textContent = d.avgWait || '0';
+    } else {
+      throw new Error(result.message);
+    }
+  } catch (e) {
+    showToast('خطأ: ' + e.message, 'error');
+    setArchiveStatus('فشل حساب الإحصائيات', true);
+  }
+};
+
+async function loadArchiveStats() {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const resp = await fetch(QUEUE_SHEET_URL + '?action=getLog&date=' + today);
+    const result = await resp.json();
+    if (result.status === 'success') {
+      const log = result.data || [];
+      document.getElementById('archiveCount').textContent = log.length;
+      const waits = log.map(r => Number(r.waitMinutes)).filter(w => w > 0);
+      document.getElementById('archiveAvgWait').textContent = waits.length
+        ? Math.round(waits.reduce((a, b) => a + b, 0) / waits.length)
+        : '0';
+    }
+  } catch (e) {
+    console.log('Archive stats load error:', e);
+  }
+}
+
+setTimeout(loadArchiveStats, 3000);
 </script>
 </body>
 </html>
