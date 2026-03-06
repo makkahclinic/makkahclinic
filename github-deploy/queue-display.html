@@ -472,36 +472,65 @@ function updateClock() {
 updateClock();
 setInterval(updateClock, 1000);
 
+let bestArabicVoice = null;
+
+function findBestArabicVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  const arVoices = voices.filter(v => v.lang.startsWith('ar'));
+
+  const preferred = [
+    'Majed', 'Maged', 'Hoda', 'Laila',
+    'Microsoft Hoda', 'Microsoft Naayf',
+    'Google العربية', 'Google Arabic'
+  ];
+
+  for (const pref of preferred) {
+    const found = arVoices.find(v => v.name.includes(pref));
+    if (found) { bestArabicVoice = found; return; }
+  }
+
+  if (arVoices.length > 0) {
+    bestArabicVoice = arVoices[0];
+  }
+}
+
 function speakName(name, doctor, clinic) {
   if (!voiceEnabled) return;
   if (!('speechSynthesis' in window)) return;
 
   window.speechSynthesis.cancel();
 
-  const text = `${name}... ${name}... تفضل إلى ${doctor}... ${clinic}`;
+  const bellAudio = new Audio('https://cdn.pixabay.com/audio/2024/11/27/audio_d8429f00ce.mp3');
+  bellAudio.volume = 0.5;
 
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = 'ar-SA';
-  utter.rate = 0.85;
-  utter.pitch = 1;
-  utter.volume = 1;
+  const speakAfterBell = () => {
+    const text = `${name} ، ${name} ، تفضل إلى ${doctor} ، ${clinic}`;
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'ar-SA';
+    utter.rate = 0.8;
+    utter.pitch = 1.0;
+    utter.volume = 1;
 
-  const voices = window.speechSynthesis.getVoices();
-  const arVoice = voices.find(v => v.lang.startsWith('ar'));
-  if (arVoice) utter.voice = arVoice;
+    if (bestArabicVoice) {
+      utter.voice = bestArabicVoice;
+    }
 
-  const chime = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
-  chime.volume = 0.3;
-  chime.play().catch(() => {});
-
-  setTimeout(() => {
     window.speechSynthesis.speak(utter);
-  }, 300);
+  };
+
+  bellAudio.play().then(() => {
+    bellAudio.onended = speakAfterBell;
+  }).catch(() => {
+    speakAfterBell();
+  });
 }
 
 if ('speechSynthesis' in window) {
   window.speechSynthesis.getVoices();
-  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+  findBestArabicVoice();
+  window.speechSynthesis.onvoiceschanged = () => {
+    findBestArabicVoice();
+  };
 }
 
 function renderFilters() {
