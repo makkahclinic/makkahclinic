@@ -555,6 +555,40 @@
       transform: translateY(-50%);
       color: var(--gray);
     }
+
+    .verify-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    .verify-table th { background: linear-gradient(135deg, var(--lab-dark), var(--primary-dark)); color: white; padding: 14px 12px; font-size: 0.85rem; font-weight: 700; text-align: right; white-space: nowrap; }
+    .verify-table td { padding: 12px; border-bottom: 1px solid #f0f0f0; font-size: 0.88rem; vertical-align: middle; }
+    .verify-table tr:hover { background: #f0fdf4; cursor: pointer; }
+    .verify-table tr:last-child td { border-bottom: none; }
+
+    .progress-bar-wrap { background: #e5e7eb; border-radius: 20px; height: 22px; overflow: hidden; min-width: 120px; position: relative; }
+    .progress-bar-fill { height: 100%; border-radius: 20px; transition: width 0.5s ease; display: flex; align-items: center; justify-content: center; }
+    .progress-bar-fill span { font-size: 0.7rem; font-weight: 800; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+    .progress-bar-fill.green { background: linear-gradient(90deg, #10b981, #059669); }
+    .progress-bar-fill.red { background: linear-gradient(90deg, #f87171, #ef4444); }
+    .progress-bar-fill.yellow { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+    .progress-bar-fill.gray { background: linear-gradient(90deg, #9ca3af, #6b7280); }
+
+    .status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 800; }
+    .status-pill.pass { background: #d1fae5; color: #065f46; }
+    .status-pill.fail { background: #fee2e2; color: #991b1b; }
+    .status-pill.pending { background: #fef3c7; color: #92400e; }
+    .status-pill.new { background: #e0e7ff; color: #3730a3; }
+
+    .verify-action-btn { background: var(--lab-green); color: white; border: none; padding: 7px 16px; border-radius: 8px; font-family: inherit; font-weight: 700; font-size: 0.8rem; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 5px; }
+    .verify-action-btn:hover { background: var(--lab-dark); transform: scale(1.03); }
+
+    .verify-summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .verify-summary-card { background: white; border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-top: 3px solid var(--lab-green); }
+    .verify-summary-card .val { font-size: 1.8rem; font-weight: 900; }
+    .verify-summary-card .lbl { font-size: 0.78rem; color: var(--gray); margin-top: 4px; }
+    .verify-summary-card.green { border-top-color: var(--success); }
+    .verify-summary-card.green .val { color: var(--success); }
+    .verify-summary-card.red { border-top-color: var(--danger); }
+    .verify-summary-card.red .val { color: var(--danger); }
+    .verify-summary-card.gold { border-top-color: var(--warning); }
+    .verify-summary-card.gold .val { color: var(--warning); }
   </style>
 </head>
 <body>
@@ -582,9 +616,9 @@
 
 <div class="tabs">
   <button class="tab active" onclick="switchTab('dashboard')"><i class="fas fa-chart-bar"></i> لوحة القيادة</button>
+  <button class="tab" onclick="switchTab('policy')"><i class="fas fa-file-alt"></i> السياسة (SOP)</button>
   <button class="tab" onclick="switchTab('tests')"><i class="fas fa-vials"></i> الاختبارات</button>
   <button class="tab" onclick="switchTab('verification')"><i class="fas fa-clipboard-check"></i> سجل التحقق</button>
-  <button class="tab" onclick="switchTab('policy')"><i class="fas fa-file-alt"></i> السياسة (SOP)</button>
 </div>
 
 <div id="tab-dashboard" class="tab-content active">
@@ -636,12 +670,7 @@
 </div>
 
 <div id="tab-verification" class="tab-content">
-  <div id="verificationContent">
-    <div class="empty-state">
-      <i class="fas fa-clipboard-check"></i>
-      <p>اختر اختبار من تبويب "الاختبارات" لبدء التحقق</p>
-    </div>
-  </div>
+  <div id="verificationContent"></div>
 </div>
 
 <div id="tab-policy" class="tab-content">
@@ -917,6 +946,7 @@ function switchTab(tabId) {
 
   if (tabId === 'dashboard') updateDashboard();
   if (tabId === 'tests') renderTests();
+  if (tabId === 'verification') renderVerificationLog();
 }
 
 function openAddTestModal() { document.getElementById('addTestModal').classList.add('show'); }
@@ -1407,6 +1437,80 @@ function updateDashboard() {
       </div>
     `;
   }).join('')}</div>`;
+}
+
+function renderVerificationLog() {
+  const container = document.getElementById('verificationContent');
+  if (!tests.length) {
+    container.innerHTML = '<div class="empty-state"><i class="fas fa-clipboard-check"></i><p>لا يوجد اختبارات بعد - أضف اختبار من تبويب "الاختبارات"</p></div>';
+    return;
+  }
+
+  const passed = tests.filter(t => t.status === 'pass').length;
+  const failed = tests.filter(t => t.status === 'fail').length;
+  const pending = tests.filter(t => t.status === 'pending').length;
+  const newT = tests.filter(t => t.status === 'new').length;
+
+  let html = `
+    <div class="verify-summary-cards">
+      <div class="verify-summary-card"><div class="val">${tests.length}</div><div class="lbl">إجمالي الاختبارات</div></div>
+      <div class="verify-summary-card green"><div class="val">${passed}</div><div class="lbl">اجتاز التحقق</div></div>
+      <div class="verify-summary-card red"><div class="val">${failed}</div><div class="lbl">لم يجتز</div></div>
+      <div class="verify-summary-card gold"><div class="val">${pending + newT}</div><div class="lbl">بانتظار التحقق</div></div>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="verify-table">
+      <thead>
+        <tr>
+          <th style="width:40px">#</th>
+          <th>اسم الاختبار</th>
+          <th>القسم</th>
+          <th>النطاق المرجعي</th>
+          <th>التقدم (عينات)</th>
+          <th>داخل النطاق</th>
+          <th>الحالة</th>
+          <th>إجراء</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+  tests.forEach((t, idx) => {
+    const filled = t.samples.filter(s => s.result !== '' && s.result !== null && s.result !== undefined).length;
+    const within = t.samples.filter(s => s.withinRange === true || s.withinRange === 'Y').length;
+    const pct = filled > 0 ? Math.round((filled / 20) * 100) : 0;
+    const withinPct = filled > 0 ? Math.round((within / filled) * 100) : 0;
+
+    const barColor = t.status === 'pass' ? 'green' : t.status === 'fail' ? 'red' : filled > 0 ? 'yellow' : 'gray';
+
+    const statusMap = {
+      pass: '<span class="status-pill pass"><i class="fas fa-check-circle"></i> اجتاز</span>',
+      fail: '<span class="status-pill fail"><i class="fas fa-times-circle"></i> لم يجتز</span>',
+      pending: '<span class="status-pill pending"><i class="fas fa-clock"></i> قيد التحقق</span>',
+      new: '<span class="status-pill new"><i class="fas fa-star"></i> جديد</span>'
+    };
+
+    html += `
+      <tr onclick="openVerification('${t.id}')">
+        <td style="font-weight:800;color:var(--primary)">${idx + 1}</td>
+        <td>
+          <div style="font-weight:800">${t.nameAr}</div>
+          <div style="font-size:0.75rem;color:var(--gray)">${t.nameEn}</div>
+        </td>
+        <td>${deptNames[t.department] || t.department}</td>
+        <td style="font-weight:700;color:var(--lab-green)">${t.refLow} - ${t.refHigh} ${t.unit}</td>
+        <td>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill ${barColor}" style="width:${pct}%"><span>${filled}/20</span></div>
+          </div>
+        </td>
+        <td style="text-align:center;font-weight:800">${filled > 0 ? within + '/' + filled + ' (' + withinPct + '%)' : '-'}</td>
+        <td>${statusMap[t.status] || statusMap.new}</td>
+        <td><button class="verify-action-btn" onclick="event.stopPropagation();openVerification('${t.id}')"><i class="fas fa-edit"></i> تحقق</button></td>
+      </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
 }
 
 loadTestsFromServer();
