@@ -819,18 +819,95 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const STORAGE_KEY = 'lab_tests_data';
+const API_URL = 'https://script.google.com/macros/s/AKfycbw8NXbrsFs3NAE_uKxge81KrYMom-ouGntTZySdjC1b-gX4zrtQ6BtrA4eSMpMMXp55/exec';
 
-function loadTests() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  return saved ? JSON.parse(saved) : [];
+let tests = [];
+let isSaving = false;
+let saveQueue = [];
+
+function showLoading(msg) {
+  let overlay = document.getElementById('loadingOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'loadingOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:15px;';
+    overlay.innerHTML = '<div style="width:50px;height:50px;border:4px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite"></div><div style="color:white;font-size:1.1rem;font-weight:700" id="loadingText"></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('loadingText').textContent = msg || 'جاري التحميل...';
+  overlay.style.display = 'flex';
 }
 
-function saveAllTests(tests) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tests));
+function hideLoading() {
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
-let tests = loadTests();
+async function apiGet(params = {}) {
+  const url = new URL(API_URL);
+  Object.keys(params).forEach(k => url.searchParams.append(k, params[k]));
+  const resp = await fetch(url.toString());
+  const json = await resp.json();
+  if (json.status === 'error') throw new Error(json.message);
+  return json.data;
+}
+
+async function apiPost(body) {
+  const resp = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  });
+  const json = await resp.json();
+  if (json.status === 'error') throw new Error(json.message);
+  return json.data;
+}
+
+async function loadTestsFromServer() {
+  showLoading('جاري تحميل بيانات المختبر...');
+  try {
+    const data = await apiGet({ action: 'getAll' });
+    tests = data.tests || [];
+    updateDashboard();
+    renderTests();
+    showToast('تم تحميل ' + tests.length + ' اختبار');
+  } catch (err) {
+    console.error('Load error:', err);
+    showToast('خطأ في تحميل البيانات: ' + err.message, 'error');
+    const saved = localStorage.getItem('lab_tests_backup');
+    if (saved) {
+      tests = JSON.parse(saved);
+      showToast('تم استرجاع النسخة الاحتياطية المحلية', 'warning');
+    }
+  }
+  hideLoading();
+}
+
+function saveLocalBackup() {
+  try { localStorage.setItem('lab_tests_backup', JSON.stringify(tests)); } catch(e) {}
+}
+
+async function saveSamplesToServer(testId) {
+  const test = tests.find(t => t.id === testId);
+  if (!test) return;
+  try {
+    const result = await apiPost({
+      action: 'saveSamples',
+      testId: testId,
+      samples: test.samples
+    });
+    test.status = result.status || test.status;
+    saveLocalBackup();
+  } catch (err) {
+    console.error('Save samples error:', err);
+  }
+}
+
+let sampleSaveTimers = {};
+function debounceSaveSamples(testId) {
+  if (sampleSaveTimers[testId]) clearTimeout(sampleSaveTimers[testId]);
+  sampleSaveTimers[testId] = setTimeout(() => saveSamplesToServer(testId), 2000);
+}
 
 function switchTab(tabId) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -865,7 +942,7 @@ const deptNames = {
 
 const popNames = { both: 'ذكور وإناث', male: 'ذكور', female: 'إناث' };
 
-function saveTest() {
+async function saveTest() {
   const nameAr = document.getElementById('testNameAr').value.trim();
   const nameEn = document.getElementById('testNameEn').value.trim();
   const instrument = document.getElementById('testInstrument').value.trim();
@@ -883,29 +960,40 @@ function saveTest() {
   if (isNaN(refLow) || isNaN(refHigh)) { showToast('أدخل النطاق المرجعي (الحد الأدنى والأعلى)', 'error'); return; }
   if (refLow >= refHigh) { showToast('الحد الأدنى يجب أن يكون أقل من الأعلى', 'error'); return; }
 
-  const test = {
-    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
-    nameAr, nameEn, instrument, reagent, lot, unit,
-    refLow, refHigh, population, ageRange, department, notes,
-    samples: Array(20).fill(null).map(() => ({ sampleId: '', sex: '', age: '', result: '', withinRange: null, remarks: '' })),
-    status: 'new',
-    signatures: { performer: '', quality: '', director: '' },
-    createdAt: new Date().toISOString(),
-    verifiedAt: null
-  };
+  showLoading('جاري حفظ الاختبار...');
+  try {
+    const result = await apiPost({
+      action: 'addTest',
+      data: { nameAr, nameEn, instrument, reagent, lot, unit, refLow, refHigh, population, ageRange, department, notes }
+    });
 
-  tests.push(test);
-  saveAllTests(tests);
+    const test = {
+      id: result.testId,
+      nameAr, nameEn, instrument, reagent, lot, unit,
+      refLow, refHigh, population, ageRange, department, notes,
+      samples: Array(20).fill(null).map(() => ({ sampleId: '', sex: '', age: '', result: '', withinRange: null, remarks: '' })),
+      status: 'new',
+      signatures: { performer: '', quality: '', director: '' },
+      createdAt: new Date().toISOString(),
+      verifiedAt: null
+    };
 
-  document.querySelectorAll('#addTestModal input, #addTestModal select').forEach(el => {
-    if (el.type === 'select-one') el.selectedIndex = 0;
-    else el.value = '';
-  });
+    tests.push(test);
+    saveLocalBackup();
 
-  closeModal('addTestModal');
-  showToast('تم إضافة الاختبار: ' + nameAr);
-  renderTests();
-  updateDashboard();
+    document.querySelectorAll('#addTestModal input, #addTestModal select').forEach(el => {
+      if (el.type === 'select-one') el.selectedIndex = 0;
+      else el.value = '';
+    });
+
+    closeModal('addTestModal');
+    showToast('تم إضافة الاختبار: ' + nameAr);
+    renderTests();
+    updateDashboard();
+  } catch (err) {
+    showToast('خطأ في حفظ الاختبار: ' + err.message, 'error');
+  }
+  hideLoading();
 }
 
 function renderTests() {
@@ -1034,7 +1122,8 @@ function updateSample(testId, idx, field, value) {
   const test = tests.find(t => t.id === testId);
   if (!test) return;
   test.samples[idx][field] = value;
-  saveAllTests(tests);
+  saveLocalBackup();
+  debounceSaveSamples(testId);
 }
 
 function updateSampleResult(testId, idx, value) {
@@ -1067,7 +1156,8 @@ function updateSampleResult(testId, idx, value) {
   const filledCount = test.samples.filter(s => s.result !== '' && s.result !== null).length;
   test.status = filledCount === 0 ? 'new' : filledCount < 20 ? 'pending' : (test.samples.filter(s => s.withinRange).length >= 18 ? 'pass' : 'fail');
 
-  saveAllTests(tests);
+  saveLocalBackup();
+  debounceSaveSamples(testId);
 
   const summaryEl = document.getElementById(`summary-${testId}`);
   if (summaryEl) summaryEl.innerHTML = renderSummary(test);
@@ -1110,10 +1200,10 @@ function updateSignature(testId, field, value) {
   const test = tests.find(t => t.id === testId);
   if (!test) return;
   test.signatures[field] = value;
-  saveAllTests(tests);
+  saveLocalBackup();
 }
 
-function finalizeVerification(testId) {
+async function finalizeVerification(testId) {
   const test = tests.find(t => t.id === testId);
   if (!test) return;
 
@@ -1123,25 +1213,52 @@ function finalizeVerification(testId) {
     return;
   }
 
-  const withinRange = test.samples.filter(s => s.withinRange === true).length;
-  test.status = withinRange >= 18 ? 'pass' : 'fail';
-  test.verifiedAt = new Date().toISOString();
+  showLoading('جاري حفظ واعتماد النتائج...');
+  try {
+    await saveSamplesToServer(testId);
 
-  saveAllTests(tests);
-  closeModal('verifyModal');
-  renderTests();
-  updateDashboard();
-  showToast(test.status === 'pass' ? 'تم اعتماد النطاق المرجعي بنجاح' : 'لم يجتز - يتطلب إعادة التحقق');
+    await apiPost({
+      action: 'updateSignatures',
+      testId: testId,
+      signatures: test.signatures
+    });
+
+    const result = await apiPost({
+      action: 'finalizeTest',
+      testId: testId
+    });
+
+    const withinRange = test.samples.filter(s => s.withinRange === true).length;
+    test.status = withinRange >= 18 ? 'pass' : 'fail';
+    test.verifiedAt = new Date().toISOString();
+
+    saveLocalBackup();
+    closeModal('verifyModal');
+    renderTests();
+    updateDashboard();
+    showToast(test.status === 'pass' ? 'تم اعتماد النطاق المرجعي بنجاح' : 'لم يجتز - يتطلب إعادة التحقق');
+  } catch (err) {
+    showToast('خطأ: ' + err.message, 'error');
+  }
+  hideLoading();
 }
 
-function deleteTest(testId) {
+async function deleteTest(testId) {
   if (!confirm('هل تريد حذف هذا الاختبار نهائياً؟')) return;
-  tests = tests.filter(t => t.id !== testId);
-  saveAllTests(tests);
-  closeModal('verifyModal');
-  renderTests();
-  updateDashboard();
-  showToast('تم حذف الاختبار');
+
+  showLoading('جاري حذف الاختبار...');
+  try {
+    await apiPost({ action: 'deleteTest', testId: testId });
+    tests = tests.filter(t => t.id !== testId);
+    saveLocalBackup();
+    closeModal('verifyModal');
+    renderTests();
+    updateDashboard();
+    showToast('تم حذف الاختبار');
+  } catch (err) {
+    showToast('خطأ في الحذف: ' + err.message, 'error');
+  }
+  hideLoading();
 }
 
 function printVerification(testId) {
@@ -1292,8 +1409,7 @@ function updateDashboard() {
   }).join('')}</div>`;
 }
 
-updateDashboard();
-renderTests();
+loadTestsFromServer();
 </script>
 </body>
 </html>
