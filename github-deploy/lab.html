@@ -892,11 +892,24 @@ async function apiPost(body) {
   return json.data;
 }
 
+function normalizeSamples(testArr) {
+  testArr.forEach(t => {
+    if (!t.samples) t.samples = [];
+    t.samples.forEach(s => {
+      if (s.withinRange === 'Y' || s.withinRange === true) s.withinRange = true;
+      else if (s.withinRange === 'N' || s.withinRange === false) s.withinRange = false;
+      else s.withinRange = null;
+      if (s.result === '' || s.result === null || s.result === undefined) s.result = '';
+    });
+  });
+}
+
 async function loadTestsFromServer() {
   showLoading('جاري تحميل بيانات المختبر...');
   try {
     const data = await apiGet({ action: 'getAll' });
     tests = data.tests || [];
+    normalizeSamples(tests);
     updateDashboard();
     renderTests();
     showToast('تم تحميل ' + tests.length + ' اختبار');
