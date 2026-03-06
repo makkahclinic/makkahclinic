@@ -703,6 +703,14 @@
                 <i class="fas fa-file-medical" style="color:#10b981;"></i>
                 <span>التأمين الطبي</span>
             </a>
+            <a class="nav-item system-link" data-system="lab" href="lab.html" target="_blank">
+                <i class="fas fa-flask" style="color:#059669;"></i>
+                <span>المختبر</span>
+            </a>
+            <a class="nav-item system-link" data-system="queue" href="queue-reception.html" target="_blank">
+                <i class="fas fa-users-cog" style="color:#6366f1;"></i>
+                <span>نظام الانتظار</span>
+            </a>
             <a class="nav-item" href="eoc-command.html" target="_blank">
                 <i class="fas fa-shield-alt"></i>
                 <span>مركز القيادة EOC</span>
@@ -1924,7 +1932,14 @@
             }
 
             currentUserRole = roleData.role;
-            userAllowedSystems = roleData.allowedSystems || [];
+            
+            const fromArray = roleData.allowedSystems || [];
+            const fromPerms = roleData.permissions || {};
+            const mergedSystems = [...new Set([
+              ...fromArray,
+              ...Object.keys(fromPerms).filter(k => fromPerms[k] === true)
+            ])];
+            userAllowedSystems = mergedSystems;
             
             const roleLabels = { 
                 admin: 'مدير النظام', 
@@ -1940,7 +1955,7 @@
             if (roleData.role === 'admin') document.body.classList.add('is-admin');
             
             // تطبيق فلتر الأنظمة المسموحة
-            applySystemsFilter(roleData.role, roleData.allowedSystems);
+            applySystemsFilter(roleData.role, mergedSystems);
             
             // إظهار قسم التأمين إذا كان لديه صلاحية
             if (roleData.role === 'admin' || roleData.role === 'owner' || (roleData.permissions && roleData.permissions.insurance === true)) {
