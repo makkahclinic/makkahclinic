@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>شاشة الطوابير | مجمع مكة الطبي</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary: #0a1628;
+      --primary-mid: #1e3a5f;
+      --gold: #c9a962;
+      --gold-light: #f4d03f;
+      --success: #10b981;
+      --danger: #ef4444;
+      --info: #3b82f6;
+      --white: #ffffff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Tajawal', sans-serif;
+      background: var(--primary);
+      color: var(--white);
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, var(--primary-mid), var(--primary));
+      padding: 15px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 3px solid var(--gold);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .header img {
+      width: 55px;
+      height: 55px;
+      border-radius: 50%;
+      border: 2px solid var(--gold);
+    }
+
+    .header h1 { font-size: 1.5rem; font-weight: 900; }
+    .header p { font-size: 0.85rem; color: var(--gold); }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .clock {
+      font-size: 2rem;
+      font-weight: 900;
+      color: var(--gold);
+      direction: ltr;
+    }
+
+    .date-display {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.7);
+    }
+
+    .filter-bar {
+      padding: 10px 40px;
+      display: flex;
+      gap: 10px;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      overflow-x: auto;
+    }
+
+    .filter-chip {
+      padding: 8px 20px;
+      border-radius: 25px;
+      border: 2px solid rgba(255,255,255,0.15);
+      background: transparent;
+      color: white;
+      font-family: 'Tajawal', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: 0.2s;
+    }
+
+    .filter-chip:hover { border-color: var(--gold); }
+    .filter-chip.active { background: var(--gold); color: var(--primary); border-color: var(--gold); }
+
+    .main-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      height: calc(100vh - 140px);
+    }
+
+    .current-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      background: linear-gradient(180deg, rgba(201,169,98,0.08), transparent);
+      border-left: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .current-label {
+      font-size: 1.2rem;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 15px;
+      letter-spacing: 2px;
+    }
+
+    .current-number {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3.5rem;
+      font-weight: 900;
+      color: var(--primary);
+      margin-bottom: 20px;
+      box-shadow: 0 0 60px rgba(201,169,98,0.4);
+      animation: pulseGlow 2s infinite;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 40px rgba(201,169,98,0.3); }
+      50% { box-shadow: 0 0 80px rgba(201,169,98,0.6); }
+    }
+
+    .current-name {
+      font-size: 3rem;
+      font-weight: 900;
+      margin-bottom: 10px;
+      text-align: center;
+      animation: fadeInUp 0.5s ease-out;
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .current-doctor {
+      font-size: 1.4rem;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .current-clinic {
+      font-size: 1.2rem;
+      color: rgba(255,255,255,0.7);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .current-empty {
+      text-align: center;
+      color: rgba(255,255,255,0.3);
+    }
+
+    .current-empty i { font-size: 4rem; margin-bottom: 15px; display: block; }
+
+    .waiting-section {
+      padding: 20px 30px;
+      overflow-y: auto;
+    }
+
+    .waiting-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--gold);
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .waiting-title .count {
+      background: var(--info);
+      color: white;
+      padding: 2px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+    }
+
+    .wait-item {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      padding: 14px 18px;
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: 0.3s;
+    }
+
+    .wait-item.calling {
+      background: rgba(201,169,98,0.15);
+      border-color: var(--gold);
+      animation: callPulse 1s ease-in-out 3;
+    }
+
+    @keyframes callPulse {
+      0%, 100% { background: rgba(201,169,98,0.15); }
+      50% { background: rgba(201,169,98,0.3); }
+    }
+
+    .wait-num {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(59,130,246,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: var(--info);
+      flex-shrink: 0;
+    }
+
+    .wait-item.calling .wait-num {
+      background: var(--gold);
+      color: var(--primary);
+      animation: pulseGlow 1.5s infinite;
+    }
+
+    .wait-info { flex: 1; }
+
+    .wait-name {
+      font-size: 1.3rem;
+      font-weight: 800;
+    }
+
+    .wait-doctor {
+      font-size: 0.9rem;
+      color: var(--gold);
+      opacity: 0.8;
+    }
+
+    .wait-clinic {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .no-waiting {
+      text-align: center;
+      padding: 60px 20px;
+      color: rgba(255,255,255,0.2);
+    }
+
+    .no-waiting i { font-size: 3rem; margin-bottom: 10px; display: block; }
+
+    .fullscreen-btn {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.2rem;
+      z-index: 100;
+      transition: 0.2s;
+    }
+
+    .fullscreen-btn:hover { background: var(--gold); color: var(--primary); }
+
+    .arrow-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 15px;
+      font-size: 1.1rem;
+      color: var(--success);
+      font-weight: 700;
+      animation: arrowBlink 1s infinite;
+    }
+
+    @keyframes arrowBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-right">
+    <img src="https://www.m2020m.org/logo2026.jpg" alt="شعار">
+    <div>
+      <h1>مجمع مكة الطبي بالزاهر</h1>
+      <p>نظام إدارة الطوابير - شاشة العرض</p>
+    </div>
+  </div>
+  <div class="header-left">
+    <div>
+      <div class="clock" id="clock">00:00</div>
+      <div class="date-display" id="dateDisplay"></div>
+    </div>
+  </div>
+</div>
+
+<div class="filter-bar" id="filterBar"></div>
+
+<div class="main-content">
+  <div class="current-section" id="currentSection">
+    <div class="current-empty">
+      <i class="fas fa-clock"></i>
+      <div style="font-size:1.3rem">في انتظار المراجعين</div>
+    </div>
+  </div>
+
+  <div class="waiting-section" id="waitingSection">
+    <div class="waiting-title">
+      <i class="fas fa-list-ol"></i> القادمون
+      <span class="count" id="waitingCount">0</span>
+    </div>
+    <div id="waitingList">
+      <div class="no-waiting">
+        <i class="fas fa-check-circle"></i>
+        <div>لا يوجد مراجعين بالانتظار</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="fullscreen-btn" onclick="toggleFullscreen()" title="ملء الشاشة">
+  <i class="fas fa-expand"></i>
+</button>
+
+<script type="module">
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, getDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
+  authDomain: "insurance-check-6cec9.firebaseapp.com",
+  projectId: "insurance-check-6cec9",
+  storageBucket: "insurance-check-6cec9.appspot.com",
+  messagingSenderId: "992769471393",
+  appId: "1:992769471393:web:c8a9400210a0e7901011e0"
+};
+
+let app;
+if (getApps().length === 0) { app = initializeApp(firebaseConfig); } else { app = getApp(); }
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+let allQueue = [];
+let filterClinic = '';
+let lastCalledId = '';
+let voiceEnabled = true;
+let listenerStarted = false;
+
+const OWNER_EMAILS = ['husseinbabsail@gmail.com', 'hbabsail@hotmail.com'];
+
+const params = new URLSearchParams(window.location.search);
+if (params.get('clinic')) {
+  filterClinic = params.get('clinic');
+}
+
+async function checkAccess(user) {
+  const email = user.email?.toLowerCase();
+  if (OWNER_EMAILS.includes(email)) return true;
+  try {
+    const roleDoc = await getDoc(doc(db, 'staff_roles', user.uid));
+    if (!roleDoc.exists()) return false;
+    const data = roleDoc.data();
+    if (data.status === 'suspended') return false;
+    if (['owner', 'admin'].includes(data.role)) return true;
+    return (data.allowedSystems || []).includes('queue');
+  } catch (e) {
+    return true;
+  }
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    const hasAccess = await checkAccess(user);
+    if (hasAccess) {
+      document.getElementById('authOverlay')?.remove();
+      if (!listenerStarted) {
+        listenerStarted = true;
+        startQueueListener();
+      }
+    } else {
+      const overlay = document.getElementById('authOverlay') || document.createElement('div');
+      overlay.id = 'authOverlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,22,40,0.97);z-index:99999;display:flex;align-items:center;justify-content:center;';
+      overlay.innerHTML = '<div style="background:white;border-radius:20px;padding:40px;text-align:center;font-family:Tajawal,sans-serif;"><h2 style="color:#ef4444;">غير مصرح</h2><p>ليس لديك صلاحية</p></div>';
+      if (!overlay.parentNode) document.body.appendChild(overlay);
+    }
+  } else {
+    showAuthOverlay();
+  }
+});
+
+function showAuthOverlay() {
+  if (document.getElementById('authOverlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'authOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,22,40,0.97);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:white;border-radius:20px;padding:40px;max-width:400px;width:90%;text-align:center;font-family:Tajawal,sans-serif;">
+      <img src="https://www.m2020m.org/logo2026.jpg" style="width:80px;border-radius:50%;margin-bottom:15px;border:3px solid #c9a962;">
+      <h2 style="color:#1e3a5f;margin-bottom:5px;">شاشة الطوابير</h2>
+      <p style="color:#94a3b8;margin-bottom:25px;font-size:0.9rem;">سجّل دخول لتفعيل الشاشة</p>
+      <input type="email" id="authEmail" placeholder="البريد الإلكتروني" style="width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:10px;margin-bottom:10px;font-family:inherit;font-size:1rem;text-align:right;">
+      <input type="password" id="authPassword" placeholder="كلمة المرور" style="width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:10px;margin-bottom:15px;font-family:inherit;font-size:1rem;text-align:right;">
+      <button id="authLoginBtn" style="width:100%;padding:14px;background:linear-gradient(135deg,#c9a962,#f4d03f);color:#1e3a5f;border:none;border-radius:12px;font-family:inherit;font-size:1.1rem;font-weight:800;cursor:pointer;">تسجيل الدخول</button>
+      <p id="authError" style="color:#ef4444;margin-top:10px;font-size:0.85rem;display:none;"></p>
+      <p style="color:#94a3b8;margin-top:15px;font-size:0.75rem;">سجّل دخول مرة واحدة وسيبقى الجهاز مفعّلاً</p>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('authLoginBtn').onclick = async () => {
+    const email = document.getElementById('authEmail').value.trim();
+    const pass = document.getElementById('authPassword').value;
+    const errEl = document.getElementById('authError');
+    if (!email || !pass) { errEl.textContent = 'أدخل البريد وكلمة المرور'; errEl.style.display = 'block'; return; }
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (e) {
+      errEl.textContent = 'خطأ في تسجيل الدخول - تحقق من البيانات';
+      errEl.style.display = 'block';
+    }
+  };
+  document.getElementById('authPassword')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('authLoginBtn').click();
+  });
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('dateDisplay').textContent = now.toLocaleDateString('ar-SA', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+function speakName(name, doctor, clinic) {
+  if (!voiceEnabled) return;
+  if (!('speechSynthesis' in window)) return;
+
+  window.speechSynthesis.cancel();
+
+  const text = `${name}... ${name}... تفضل إلى ${doctor}... ${clinic}`;
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ar-SA';
+  utter.rate = 0.85;
+  utter.pitch = 1;
+  utter.volume = 1;
+
+  const voices = window.speechSynthesis.getVoices();
+  const arVoice = voices.find(v => v.lang.startsWith('ar'));
+  if (arVoice) utter.voice = arVoice;
+
+  const chime = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+  chime.volume = 0.3;
+  chime.play().catch(() => {});
+
+  setTimeout(() => {
+    window.speechSynthesis.speak(utter);
+  }, 300);
+}
+
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
+
+function renderFilters() {
+  const bar = document.getElementById('filterBar');
+  const clinics = [...new Set(allQueue.map(q => q.clinicName).filter(Boolean))];
+
+  bar.innerHTML = `<div class="filter-chip ${!filterClinic ? 'active' : ''}" onclick="setFilter('')">
+    <i class="fas fa-th-large"></i> جميع العيادات
+  </div>`;
+
+  clinics.forEach(c => {
+    const count = allQueue.filter(q => q.clinicName === c && (q.status === 'waiting' || q.status === 'called')).length;
+    bar.innerHTML += `<div class="filter-chip ${filterClinic === c ? 'active' : ''}" onclick="setFilter('${c}')">
+      ${c} (${count})
+    </div>`;
+  });
+}
+
+window.setFilter = function(clinic) {
+  filterClinic = clinic;
+  renderDisplay();
+  renderFilters();
+};
+
+function renderDisplay() {
+  let list = [...allQueue];
+  if (filterClinic) {
+    list = list.filter(q => q.clinicName === filterClinic);
+  }
+
+  const called = list.filter(q => q.status === 'called');
+  const waiting = list.filter(q => q.status === 'waiting');
+  const current = called.length > 0 ? called[called.length - 1] : null;
+
+  const currentEl = document.getElementById('currentSection');
+  if (current) {
+    currentEl.innerHTML = `
+      <div class="current-label"><i class="fas fa-bullhorn"></i> المريض الحالي</div>
+      <div class="current-number">${current.number}</div>
+      <div class="current-name">${current.patientName}</div>
+      <div class="current-doctor"><i class="fas fa-stethoscope" style="margin-left:8px"></i>${current.doctorName}</div>
+      <div class="current-clinic"><i class="fas fa-door-open"></i> ${current.clinicName}</div>
+      <div class="arrow-indicator">
+        <i class="fas fa-arrow-left"></i> توجه إلى ${current.clinicName}
+      </div>
+    `;
+
+    if (current.id !== lastCalledId) {
+      lastCalledId = current.id;
+      speakName(current.patientName, current.doctorName, current.clinicName);
+    }
+  } else {
+    currentEl.innerHTML = `
+      <div class="current-empty">
+        <i class="fas fa-clock"></i>
+        <div style="font-size:1.3rem">في انتظار المراجعين</div>
+      </div>
+    `;
+  }
+
+  const waitEl = document.getElementById('waitingList');
+  document.getElementById('waitingCount').textContent = waiting.length;
+
+  if (!waiting.length) {
+    waitEl.innerHTML = `
+      <div class="no-waiting">
+        <i class="fas fa-check-circle"></i>
+        <div>لا يوجد مراجعين بالانتظار</div>
+      </div>
+    `;
+    return;
+  }
+
+  waitEl.innerHTML = waiting.map((q, i) => `
+    <div class="wait-item ${i === 0 ? '' : ''}">
+      <div class="wait-num">${q.number}</div>
+      <div class="wait-info">
+        <div class="wait-name">${q.patientName}</div>
+        <div class="wait-doctor"><i class="fas fa-stethoscope" style="margin-left:4px"></i>${q.doctorName}</div>
+        <div class="wait-clinic"><i class="fas fa-door-open" style="margin-left:4px"></i>${q.clinicName}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function startQueueListener() {
+  const today = new Date().toISOString().split('T')[0];
+  const q2 = query(collection(db, 'queue'), where('date', '==', today), orderBy('createdAt', 'asc'));
+
+  onSnapshot(q2, (snapshot) => {
+    allQueue = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderDisplay();
+    renderFilters();
+  }, (error) => {
+    console.error('Firestore error:', error);
+    if (error.code === 'failed-precondition') {
+      const fallbackQ = query(collection(db, 'queue'), where('date', '==', today));
+      onSnapshot(fallbackQ, (snapshot) => {
+        allQueue = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        allQueue.sort((a, b) => {
+          const ta = a.createdAt?.toMillis?.() || 0;
+          const tb = b.createdAt?.toMillis?.() || 0;
+          return ta - tb;
+        });
+        renderDisplay();
+        renderFilters();
+      });
+    }
+  });
+}
+
+window.toggleFullscreen = function() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+};
+
+document.addEventListener('click', () => {
+  if ('speechSynthesis' in window) {
+    const u = new SpeechSynthesisUtterance('');
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+  }
+}, { once: true });
+</script>
+</body>
+</html>
