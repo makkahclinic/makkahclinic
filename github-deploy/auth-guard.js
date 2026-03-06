@@ -126,7 +126,7 @@ const AuthGuard = {
         }
     },
 
-    systemIds: ['complaints', 'incidents', 'risks', 'risk', 'rounds', 'calibration', 'maintenance', 'needlestick', 'eoc', 'cbahi'],
+    systemIds: ['complaints', 'incidents', 'risks', 'risk', 'rounds', 'calibration', 'maintenance', 'needlestick', 'eoc', 'cbahi', 'queue', 'lab'],
 
     canAccess(pageType) {
         const allowedRoles = this.pagePermissions[pageType] || this.pagePermissions['public'];
