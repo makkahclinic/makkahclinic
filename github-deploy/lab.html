@@ -161,6 +161,22 @@
     .modal-header h3 { font-size:1.1rem; color:var(--primary); }
     .modal-close { width:32px; height:32px; border-radius:50%; border:none; background:#f1f5f9; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; }
 
+    .autofill-box { background:linear-gradient(135deg,#f0fdf4,#ecfdf5); border:2px solid var(--lab-green); border-radius:12px; padding:14px 16px; margin-bottom:16px; position:relative; }
+    .autofill-box label { display:block; font-weight:800; font-size:0.9rem; color:var(--lab-dark); margin-bottom:8px; }
+    .autofill-box label i { color:var(--lab-green); margin-left:6px; }
+    .autofill-input { width:100%; padding:10px 14px; border:2px solid #d1fae5; border-radius:10px; font-family:inherit; font-size:0.9rem; background:white; outline:none; transition:0.2s; }
+    .autofill-input:focus { border-color:var(--lab-green); box-shadow:0 0 0 3px rgba(5,150,105,0.15); }
+    .autofill-input::placeholder { color:#94a3b8; }
+    .autofill-dropdown { position:absolute; left:16px; right:16px; top:100%; background:white; border:2px solid var(--lab-green); border-top:none; border-radius:0 0 12px 12px; max-height:280px; overflow-y:auto; z-index:10000; display:none; box-shadow:0 8px 24px rgba(0,0,0,0.12); }
+    .autofill-dropdown.show { display:block; }
+    .autofill-item { padding:10px 14px; cursor:pointer; border-bottom:1px solid #f1f5f9; transition:0.15s; display:flex; justify-content:space-between; align-items:center; }
+    .autofill-item:hover { background:#f0fdf4; }
+    .autofill-item:last-child { border-bottom:none; }
+    .autofill-item .af-name { font-weight:700; font-size:0.85rem; color:var(--primary); }
+    .autofill-item .af-name-en { font-size:0.78rem; color:var(--gray); margin-right:6px; }
+    .autofill-item .af-section { font-size:0.7rem; color:var(--lab-green); background:#d1fae5; padding:2px 8px; border-radius:8px; font-weight:600; white-space:nowrap; }
+    .autofill-hint { font-size:0.75rem; color:var(--gray); margin-top:6px; display:flex; align-items:center; gap:4px; }
+
     .toast { position:fixed; bottom:25px; left:50%; transform:translateX(-50%) translateY(100px); background:var(--lab-green); color:white; padding:12px 24px; border-radius:12px; font-weight:700; z-index:99999; transition:0.3s; box-shadow:0 8px 30px rgba(0,0,0,0.3); font-size:0.9rem; }
     .toast.show { transform:translateX(-50%) translateY(0); }
     .toast.error { background:var(--danger); }
@@ -451,6 +467,12 @@
     <div class="modal-header">
       <h3><i class="fas fa-plus-circle" style="color:var(--lab-green)"></i> إضافة اختبار جديد</h3>
       <button class="modal-close" onclick="closeModal('addTestModal')">&times;</button>
+    </div>
+    <div class="autofill-box">
+      <label><i class="fas fa-magic"></i> اختر التحليل من القائمة - يتعبأ تلقائياً</label>
+      <input type="text" class="autofill-input" id="autofillSearch" placeholder="ابحث بالعربي أو الإنجليزي... مثال: CBC أو سكر أو Glucose" autocomplete="off">
+      <div class="autofill-dropdown" id="autofillDropdown"></div>
+      <div class="autofill-hint"><i class="fas fa-info-circle"></i> اختر تحليل من 146 نطاق دولي وسيتم تعبئة جميع الحقول تلقائياً</div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>اسم الفحص بالعربي</label><input type="text" id="testNameAr" placeholder="مثال: صورة الدم الكاملة"></div>
@@ -833,8 +855,86 @@ function switchSub(tab, sub) {
   event.target.closest('.sub-pill').classList.add('active');
 }
 
-function openAddTestModal() { document.getElementById('addTestModal').classList.add('show'); }
+function openAddTestModal() {
+  document.getElementById('addTestModal').classList.add('show');
+  document.getElementById('autofillSearch').value = '';
+  document.getElementById('autofillDropdown').classList.remove('show');
+}
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+const sectionToDept = {
+  'كيمياء الدم':'chemistry','كلى':'chemistry','وظائف كبد':'chemistry','إنزيمات':'chemistry',
+  'دهون':'chemistry','سكري':'chemistry','كيمياء/تغذية':'chemistry','كيمياء/قلب':'chemistry',
+  'أمراض الدم':'hematology','تخثر':'coagulation',
+  'مناعة ذاتية':'immunology','مناعة':'immunology',
+  'غدة درقية':'hormones','هرمونات حمل':'hormones','غدد/خصوبة':'hormones',
+  'بول':'urinalysis','فيتامينات':'chemistry','حديد':'hematology',
+  'غدد':'hormones','واسمات أورام':'chemistry','CSF':'chemistry','غازات':'chemistry'
+};
+function mapSectionToDept(section) {
+  const ar = section.split('|')[0].trim();
+  for (const key in sectionToDept) { if (ar.includes(key)) return sectionToDept[key]; }
+  return 'other';
+}
+function parseRange(rc) {
+  if (!rc) return { low: '', high: '' };
+  const cleaned = rc.replace(/–/g, '-').replace(/−/g, '-');
+  const m = cleaned.match(/([\d.]+)\s*-\s*([\d.]+)/);
+  if (m) return { low: parseFloat(m[1]), high: parseFloat(m[2]) };
+  const lt = cleaned.match(/<\s*([\d.]+)/);
+  if (lt) return { low: 0, high: parseFloat(lt[1]) };
+  const gt = cleaned.match(/>\s*([\d.]+)/);
+  if (gt) return { low: parseFloat(gt[1]), high: 999 };
+  return { low: '', high: '' };
+}
+
+(function initAutofill() {
+  const input = document.getElementById('autofillSearch');
+  const dropdown = document.getElementById('autofillDropdown');
+  let debounceTimer;
+  input.addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const q = this.value.trim().toLowerCase();
+      if (q.length < 1) { dropdown.classList.remove('show'); return; }
+      const results = REF_RANGES.filter(r =>
+        r.ar.toLowerCase().includes(q) || r.en.toLowerCase().includes(q) || r.s.toLowerCase().includes(q)
+      ).slice(0, 15);
+      if (!results.length) {
+        dropdown.innerHTML = '<div style="padding:12px;text-align:center;color:#94a3b8;font-size:0.85rem">لا توجد نتائج</div>';
+        dropdown.classList.add('show'); return;
+      }
+      dropdown.innerHTML = results.map((r, i) => {
+        const secAr = r.s.split('|')[0].trim();
+        return `<div class="autofill-item" data-idx="${REF_RANGES.indexOf(r)}"><div><span class="af-name">${r.ar}</span><span class="af-name-en">${r.en}</span></div><span class="af-section">${secAr}</span></div>`;
+      }).join('');
+      dropdown.classList.add('show');
+    }, 150);
+  });
+  dropdown.addEventListener('click', function(e) {
+    const item = e.target.closest('.autofill-item');
+    if (!item) return;
+    const r = REF_RANGES[parseInt(item.dataset.idx)];
+    const range = parseRange(r.rc);
+    document.getElementById('testNameAr').value = r.ar;
+    document.getElementById('testNameEn').value = r.en;
+    document.getElementById('testUnit').value = r.uc || '';
+    document.getElementById('testRefLow').value = range.low;
+    document.getElementById('testRefHigh').value = range.high;
+    document.getElementById('testNotes').value = r.n || '';
+    const dept = mapSectionToDept(r.s);
+    const deptSel = document.getElementById('testDepartment');
+    for (let i = 0; i < deptSel.options.length; i++) {
+      if (deptSel.options[i].value === dept) { deptSel.selectedIndex = i; break; }
+    }
+    input.value = r.ar + ' - ' + r.en;
+    dropdown.classList.remove('show');
+    showToast('تم تعبئة البيانات تلقائياً ✓');
+  });
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.autofill-box')) dropdown.classList.remove('show');
+  });
+})();
 function showToast(msg,type='') { const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show '+type; setTimeout(()=>t.className='toast',3000); }
 
 function printCurrentSection() {
@@ -1431,6 +1531,7 @@ async function saveTest() {
     tests.push({id:result.testId,...data,samples:Array(20).fill(null).map(()=>({sampleId:'',sex:'',age:'',result:'',withinRange:null,remarks:''})),status:'new',signatures:{performer:'',quality:'',director:''},createdAt:new Date().toISOString(),verifiedAt:null});
     saveLocalBackup();
     document.querySelectorAll('#addTestModal input,#addTestModal select').forEach(el=>{if(el.type==='select-one')el.selectedIndex=0;else el.value='';});
+    document.getElementById('autofillSearch').value='';
     closeModal('addTestModal');
     showToast('تم إضافة: '+nameAr);
     renderTests(); updateDashboard();
