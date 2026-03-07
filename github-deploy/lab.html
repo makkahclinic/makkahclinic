@@ -397,16 +397,46 @@
 
 <!-- ==================== TAB 6: QUALITY CONTROL ==================== -->
 <div id="tab-qc" class="tab-content">
-  <div class="sub-pills">
-    <button class="sub-pill active" onclick="switchSub('qc','qc01')"><i class="fas fa-chart-bar"></i> QC-01 سجل IQC</button>
-    <button class="sub-pill" onclick="switchSub('qc','qc02')"><i class="fas fa-exclamation-triangle"></i> QC-02 إخفاقات CAPA</button>
-    <button class="sub-pill" onclick="switchSub('qc','pt01')"><i class="fas fa-trophy"></i> PT-01 اختبار الكفاءة</button>
-    <button class="sub-pill" onclick="switchSub('qc','co01')"><i class="fas fa-exchange-alt"></i> CO-01 دراسة الارتباط</button>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+    <div class="card" style="border:3px solid var(--lab-green);cursor:pointer;transition:0.2s" onclick="showQCSection('daily')" id="qc-card-daily">
+      <div class="card-body" style="text-align:center;padding:20px">
+        <i class="fas fa-clipboard-check" style="font-size:2.5rem;color:var(--lab-green);margin-bottom:10px"></i>
+        <h3 style="font-size:1.1rem;font-weight:800;color:var(--primary);margin-bottom:6px">ضبط الجودة اليومي (Daily QC)</h3>
+        <p style="font-size:0.82rem;color:var(--gray)">تشغيل عينات الكنترول يومياً + CAPA عند الإخفاق</p>
+        <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+          <span style="background:#d1fae5;color:#065f46;padding:4px 10px;border-radius:12px;font-size:0.72rem;font-weight:700">QC-01 سجل IQC</span>
+          <span style="background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:12px;font-size:0.72rem;font-weight:700">QC-02 CAPA</span>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="border:3px solid #e5e7eb;cursor:pointer;transition:0.2s" onclick="showQCSection('calibration')" id="qc-card-calibration">
+      <div class="card-body" style="text-align:center;padding:20px">
+        <i class="fas fa-tachometer-alt" style="font-size:2.5rem;color:var(--info);margin-bottom:10px"></i>
+        <h3 style="font-size:1.1rem;font-weight:800;color:var(--primary);margin-bottom:6px">المعايرة والكفاءة (Calibration & PT)</h3>
+        <p style="font-size:0.82rem;color:var(--gray)">اختبارات الكفاءة الخارجية + دراسة الارتباط بين الأجهزة</p>
+        <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+          <span style="background:#dbeafe;color:#1e40af;padding:4px 10px;border-radius:12px;font-size:0.72rem;font-weight:700">PT-01 اختبار الكفاءة</span>
+          <span style="background:#ede9fe;color:#5b21b6;padding:4px 10px;border-radius:12px;font-size:0.72rem;font-weight:700">CO-01 ارتباط الأجهزة</span>
+        </div>
+      </div>
+    </div>
   </div>
-  <div id="sub-qc-qc01" class="sub-content active"></div>
-  <div id="sub-qc-qc02" class="sub-content"></div>
-  <div id="sub-qc-pt01" class="sub-content"></div>
-  <div id="sub-qc-co01" class="sub-content"></div>
+  <div id="qc-section-daily" style="display:block">
+    <div class="sub-pills">
+      <button class="sub-pill active" onclick="switchSub('qc','qc01')"><i class="fas fa-chart-bar"></i> QC-01 سجل IQC اليومي</button>
+      <button class="sub-pill" onclick="switchSub('qc','qc02')"><i class="fas fa-exclamation-triangle"></i> QC-02 إخفاقات CAPA</button>
+    </div>
+    <div id="sub-qc-qc01" class="sub-content active"></div>
+    <div id="sub-qc-qc02" class="sub-content"></div>
+  </div>
+  <div id="qc-section-calibration" style="display:none">
+    <div class="sub-pills">
+      <button class="sub-pill active" onclick="switchSubCal('pt01')"><i class="fas fa-trophy"></i> PT-01 اختبار الكفاءة</button>
+      <button class="sub-pill" onclick="switchSubCal('co01')"><i class="fas fa-exchange-alt"></i> CO-01 دراسة الارتباط</button>
+    </div>
+    <div id="sub-qc-pt01" class="sub-content active"></div>
+    <div id="sub-qc-co01" class="sub-content"></div>
+  </div>
 </div>
 
 <!-- ==================== TAB 7: EQUIPMENT ==================== -->
@@ -804,11 +834,13 @@ async function loadSheetData(sheetName) {
   }
 }
 
-async function addSheetRow(sheetName, rowData) {
-  showLoading('جاري الحفظ...');
+async function addSheetRow(sheetName, rowData, filePayload) {
+  showLoading(filePayload ? 'جاري الحفظ ورفع الملف...' : 'جاري الحفظ...');
   try {
-    const result = await apiPost({action:'addRow',sheet:sheetName,data:rowData});
-    showToast('تم الحفظ بنجاح');
+    const payload = {action:'addRow',sheet:sheetName,data:rowData};
+    if (filePayload) payload.fileData = filePayload;
+    const result = await apiPost(payload);
+    showToast(filePayload ? 'تم الحفظ ورفع الملف بنجاح' : 'تم الحفظ بنجاح');
     await loadSheetData(sheetName);
     hideLoading();
     return result;
@@ -970,6 +1002,86 @@ function searchRefRanges(q) {
     if (!e.target.closest('.autofill-box')) dropdown.classList.remove('show');
   });
 })();
+function showQCSection(section) {
+  const daily = document.getElementById('qc-section-daily');
+  const cal = document.getElementById('qc-section-calibration');
+  const cardD = document.getElementById('qc-card-daily');
+  const cardC = document.getElementById('qc-card-calibration');
+  if (section==='daily') {
+    daily.style.display='block'; cal.style.display='none';
+    cardD.style.borderColor='var(--lab-green)'; cardC.style.borderColor='#e5e7eb';
+  } else {
+    daily.style.display='none'; cal.style.display='block';
+    cardD.style.borderColor='#e5e7eb'; cardC.style.borderColor='var(--info)';
+  }
+}
+function switchSubCal(sub) {
+  document.querySelectorAll('#qc-section-calibration .sub-pill').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('#qc-section-calibration .sub-content').forEach(c=>c.classList.remove('active'));
+  document.getElementById('sub-qc-'+sub).classList.add('active');
+  event.target.closest('.sub-pill').classList.add('active');
+}
+function printQCCertificate(record, type) {
+  const isPass = (record['الحالة']||record['مقبول'])==='Pass'||(record['مقبول']==='نعم');
+  const resultText = isPass ? 'مقبول' : 'غير مقبول';
+  const resultColor = isPass ? '#28a745' : '#dc3545';
+  const resultBg = isPass ? '#d4edda' : '#f8d7da';
+  const certId = (type==='qc'?'QC-':'PT-') + Date.now().toString(36).toUpperCase();
+  const title = type==='qc' ? 'شهادة ضبط الجودة اليومي' : 'شهادة اختبار الكفاءة';
+  const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent('https://m2020m.org/lab.html#'+certId);
+  let infoHtml = '';
+  if (type==='qc') {
+    infoHtml = `
+      <div class="info-item"><div class="info-label">الجهاز</div><div class="info-value">${record['الجهاز']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">القسم</div><div class="info-value">${record['القسم']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">الفحص</div><div class="info-value">${record['الفحص']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">المستوى</div><div class="info-value">${record['مستوى QC']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">المجال المقبول</div><div class="info-value">${record['المجال المقبول']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">النتيجة</div><div class="info-value" style="font-weight:800;color:${resultColor}">${record['النتيجة']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">التاريخ</div><div class="info-value">${record['التاريخ']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">الإجراء</div><div class="info-value">${record['الإجراء']||'لا يوجد'}</div></div>`;
+  } else {
+    infoHtml = `
+      <div class="info-item"><div class="info-label">المزود</div><div class="info-value">${record['المزود']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">الدورة</div><div class="info-value">${record['الدورة']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">القسم</div><div class="info-value">${record['القسم']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">الفحص</div><div class="info-value">${record['الفحص']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">تاريخ الاستلام</div><div class="info-value">${record['تاريخ الاستلام']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">تاريخ الإرسال</div><div class="info-value">${record['تاريخ الإرسال']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">النتيجة</div><div class="info-value">${record['النتيجة']||'-'}</div></div>
+      <div class="info-item"><div class="info-label">القرار</div><div class="info-value" style="font-weight:800;color:${resultColor}">${resultText}</div></div>`;
+  }
+  const w = window.open('','_blank','width=800,height=700');
+  if (!w) { showToast('الرجاء السماح بالنوافذ المنبثقة','error'); return; }
+  w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>${title}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Tajawal',sans-serif;background:#f5f5f5;padding:20px}
+    .certificate{max-width:700px;margin:0 auto;background:white;border:3px solid #1e3a5f;border-radius:8px;padding:30px;box-shadow:0 4px 20px rgba(0,0,0,0.1)}
+    .header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #c9a962;padding-bottom:20px;margin-bottom:25px}
+    .logo{height:90px;object-fit:contain}.title-section{text-align:center;flex-grow:1}
+    .title{font-size:24px;font-weight:700;color:#1e3a5f;margin-bottom:5px}.subtitle{font-size:14px;color:#666}.cert-id{font-size:12px;color:#999;margin-top:5px}
+    .result-badge{display:inline-block;padding:10px 30px;border-radius:30px;font-size:18px;font-weight:700;background:${resultBg};color:${resultColor};border:2px solid ${resultColor}}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:25px 0}
+    .info-item{background:#f8f9fa;border-radius:8px;padding:15px;border-right:4px solid #c9a962}
+    .info-label{font-size:12px;color:#666;margin-bottom:5px}.info-value{font-size:16px;font-weight:600;color:#1e3a5f}
+    .qr-section{display:flex;justify-content:center;margin-top:25px;padding-top:20px;border-top:1px dashed #ddd}
+    .footer{margin-top:25px;text-align:center;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:15px}
+    .print-btn{display:block;width:200px;margin:20px auto;padding:12px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;font-family:inherit}
+    @media print{body{background:white;padding:0}.print-btn{display:none}.certificate{border:none;box-shadow:none}}</style></head>
+    <body><div class="certificate"><div class="header">
+    <img src="https://www.m2020m.org/logo2026.jpg" alt="شعار المجمع" class="logo">
+    <div class="title-section"><h1 class="title">${title}</h1><p class="subtitle">مجمع مكة الطبي بالزاهر</p><p class="cert-id">رقم الشهادة: ${certId}</p></div>
+    <div class="result-badge">${resultText}</div></div>
+    <div class="info-grid">${infoHtml}</div>
+    <div class="qr-section"><div style="text-align:center"><img src="${qrUrl}" alt="QR" style="width:150px;height:150px;border:1px solid #eee;border-radius:8px;padding:5px;background:white">
+    <p style="font-size:11px;color:#888;margin-top:8px">امسح للتحقق من الشهادة</p></div></div>
+    <div style="display:flex;justify-content:space-between;margin-top:25px;padding-top:15px;border-top:1px solid #ddd">
+    <div style="text-align:right"><p style="font-size:11px;color:#666;margin-bottom:3px">مسؤول الجودة</p><div style="border-bottom:1px solid #999;width:100px;margin-top:20px"></div><p style="font-size:9px;color:#aaa;margin-top:3px">التوقيع</p></div>
+    <div style="text-align:right"><p style="font-size:11px;color:#666;margin-bottom:3px">مدير المختبر</p><div style="border-bottom:1px solid #999;width:100px;margin-top:20px"></div><p style="font-size:9px;color:#aaa;margin-top:3px">التوقيع</p></div></div>
+    <div class="footer"><p>تم إصدار هذه الشهادة إلكترونياً من بوابة المختبر الإلكترونية</p><p>مجمع مكة الطبي بالزاهر - ${new Date().toLocaleDateString('ar-SA')}</p></div>
+    </div><button class="print-btn" onclick="window.print()"><i class="fas fa-print"></i> طباعة الشهادة</button></body></html>`);
+  w.document.close();
+}
 function showToast(msg,type='') { const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show '+type; setTimeout(()=>t.className='toast',3000); }
 
 function printCurrentSection() {
@@ -1084,6 +1196,9 @@ function buildCRUDSection(opts) {
     if (f.type === 'select') {
       return `<div class="form-group"><label>${f.label}</label><select id="${containerId}_${f.key}">${f.options.map(o=>`<option value="${o.value}">${o.label}</option>`).join('')}</select></div>`;
     }
+    if (f.type === 'file') {
+      return `<div class="form-group"><label>${f.label}</label><input type="file" id="${containerId}_${f.key}" accept="image/*,application/pdf"><span id="${containerId}_${f.key}_status" style="font-size:0.75rem;color:var(--gray);margin-top:4px;display:block"></span></div>`;
+    }
     return `<div class="form-group"><label>${f.label}</label><input type="${f.type||'text'}" id="${containerId}_${f.key}" placeholder="${f.placeholder||''}"></div>`;
   }).join('');
 
@@ -1118,12 +1233,24 @@ function buildCRUDSection(opts) {
 
   window['saveForm_'+containerId] = async () => {
     const data = {};
-    fields.forEach(f => {
+    let filePayload = null;
+    for (const f of fields) {
       const el = document.getElementById(containerId+'_'+f.key);
-      data[f.sheetKey || f.label] = el.value;
-      el.value = f.type==='select' ? el.options[0].value : '';
-    });
-    await addSheetRow(sheetName, data);
+      if (f.type==='file') {
+        const file = el.files && el.files[0];
+        if (file) {
+          if (file.size > 10*1024*1024) { showToast('حجم الملف يتجاوز 10 ميجابايت','error'); return; }
+          const b64 = await new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(file); });
+          filePayload = {fileName:file.name, mimeType:file.type, base64:b64};
+          data[f.sheetKey||f.label] = file.name;
+        }
+        el.value='';
+      } else {
+        data[f.sheetKey || f.label] = el.value;
+        el.value = f.type==='select' ? el.options[0].value : '';
+      }
+    }
+    await addSheetRow(sheetName, data, filePayload);
     document.getElementById(containerId+'_form').style.display = 'none';
     renderCRUDRows(sheetName, containerId, tableHeaders, renderRow);
   };
@@ -1167,12 +1294,13 @@ function renderQCTab() {
       {key:'result',label:'النتيجة',sheetKey:'النتيجة',placeholder:'15.5'},
       {key:'status',label:'الحالة',sheetKey:'الحالة',type:'select',options:[{value:'Pass',label:'Pass'},{value:'Fail',label:'Fail'}]},
       {key:'action',label:'الإجراء',sheetKey:'الإجراء',placeholder:'لا يوجد'},
+      {key:'attachment',label:'إرفاق ملف (PDF/صورة)',sheetKey:'المرفق',type:'file'},
     ],
-    tableHeaders:['التاريخ','القسم','الجهاز','الفحص','المستوى','المجال','النتيجة','الحالة','الإجراء'],
-    renderRow: r => `<td>${r['التاريخ']}</td><td>${r['القسم']}</td><td>${r['الجهاز']}</td><td>${r['الفحص']}</td><td>${r['مستوى QC']}</td><td>${r['المجال المقبول']}</td><td style="font-weight:700">${r['النتيجة']}</td><td class="${r['الحالة']==='Pass'?'pass':'fail'}">${r['الحالة']}</td><td>${r['الإجراء']}</td>`,
+    tableHeaders:['التاريخ','القسم','الجهاز','الفحص','المستوى','المجال','النتيجة','الحالة','الإجراء','مرفق','شهادة'],
+    renderRow: r => { const att=r['المرفق']||r['رابط الملف']||''; const hasAtt=att&&att!=='N/A'&&!att.endsWith('.pdf')&&!att.endsWith('.png')&&!att.endsWith('.jpg')?false:att&&att!=='N/A'; return `<td>${r['التاريخ']}</td><td>${r['القسم']}</td><td>${r['الجهاز']}</td><td>${r['الفحص']}</td><td>${r['مستوى QC']}</td><td>${r['المجال المقبول']}</td><td style="font-weight:700">${r['النتيجة']}</td><td class="${r['الحالة']==='Pass'?'pass':'fail'}">${r['الحالة']}</td><td>${r['الإجراء']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?`<a href="${r['رابط الملف']}" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>`:(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "qc")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`; },
     containerId:'sub-qc-qc01'
   });
-  registerCRUD('sub-qc-qc01',{tableHeaders:['التاريخ','القسم','الجهاز','الفحص','المستوى','المجال','النتيجة','الحالة','الإجراء'],renderRow:r=>`<td>${r['التاريخ']}</td><td>${r['القسم']}</td><td>${r['الجهاز']}</td><td>${r['الفحص']}</td><td>${r['مستوى QC']}</td><td>${r['المجال المقبول']}</td><td style="font-weight:700">${r['النتيجة']}</td><td class="${r['الحالة']==='Pass'?'pass':'fail'}">${r['الحالة']}</td><td>${r['الإجراء']}</td>`});
+  registerCRUD('sub-qc-qc01',{tableHeaders:['التاريخ','القسم','الجهاز','الفحص','المستوى','المجال','النتيجة','الحالة','الإجراء','مرفق','شهادة'],renderRow:r=>{ return `<td>${r['التاريخ']}</td><td>${r['القسم']}</td><td>${r['الجهاز']}</td><td>${r['الفحص']}</td><td>${r['مستوى QC']}</td><td>${r['المجال المقبول']}</td><td style="font-weight:700">${r['النتيجة']}</td><td class="${r['الحالة']==='Pass'?'pass':'fail'}">${r['الحالة']}</td><td>${r['الإجراء']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?`<a href="${r['رابط الملف']}" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>`:(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "qc")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`; }});
 
   buildCRUDSection({
     sheetName:'QC_CAPA', title:'QC-02 إخفاقات IQC وCAPA', icon:'exclamation-triangle', policyKey:'qc',
@@ -1205,11 +1333,11 @@ function renderQCTab() {
       {key:'result',label:'النتيجة',sheetKey:'النتيجة',placeholder:'Acceptable'},
       {key:'accepted',label:'مقبول',sheetKey:'مقبول',type:'select',options:[{value:'نعم',label:'نعم'},{value:'لا',label:'لا'}]},
     ],
-    tableHeaders:['المزود','الدورة','القسم','الفحص','الاستلام','الإرسال','النتيجة','مقبول'],
-    renderRow: r => `<td>${r['المزود']}</td><td>${r['الدورة']}</td><td>${r['القسم']}</td><td>${r['الفحص']}</td><td>${r['تاريخ الاستلام']}</td><td>${r['تاريخ الإرسال']}</td><td>${r['النتيجة']}</td><td class="${r['مقبول']==='نعم'?'pass':'fail'}">${r['مقبول']}</td>`,
+    tableHeaders:['المزود','الدورة','القسم','الفحص','الاستلام','الإرسال','النتيجة','مقبول','شهادة'],
+    renderRow: r => `<td>${r['المزود']}</td><td>${r['الدورة']}</td><td>${r['القسم']}</td><td>${r['الفحص']}</td><td>${r['تاريخ الاستلام']}</td><td>${r['تاريخ الإرسال']}</td><td>${r['النتيجة']}</td><td class="${r['مقبول']==='نعم'?'pass':'fail'}">${r['مقبول']}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "pt")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`,
     containerId:'sub-qc-pt01'
   });
-  registerCRUD('sub-qc-pt01',{tableHeaders:['المزود','الدورة','القسم','الفحص','الاستلام','الإرسال','النتيجة','مقبول'],renderRow:r=>`<td>${r['المزود']}</td><td>${r['الدورة']}</td><td>${r['القسم']}</td><td>${r['الفحص']}</td><td>${r['تاريخ الاستلام']}</td><td>${r['تاريخ الإرسال']}</td><td>${r['النتيجة']}</td><td class="${r['مقبول']==='نعم'?'pass':'fail'}">${r['مقبول']}</td>`});
+  registerCRUD('sub-qc-pt01',{tableHeaders:['المزود','الدورة','القسم','الفحص','الاستلام','الإرسال','النتيجة','مقبول','شهادة'],renderRow:r=>`<td>${r['المزود']}</td><td>${r['الدورة']}</td><td>${r['القسم']}</td><td>${r['الفحص']}</td><td>${r['تاريخ الاستلام']}</td><td>${r['تاريخ الإرسال']}</td><td>${r['النتيجة']}</td><td class="${r['مقبول']==='نعم'?'pass':'fail'}">${r['مقبول']}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "pt")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`});
 
   buildCRUDSection({
     sheetName:'Correlation', title:'CO-01 دراسة الارتباط بين الأجهزة', icon:'exchange-alt', policyKey:'correlation',
