@@ -253,6 +253,7 @@
   <div class="topbar-left">
     <button class="topbar-btn green" onclick="openAddTestModal()"><i class="fas fa-plus"></i> إضافة اختبار</button>
     <button class="topbar-btn" onclick="printCurrentSection()"><i class="fas fa-print"></i> طباعة</button>
+    <button class="topbar-btn gold" id="refreshBtn" onclick="refreshAllData()"><i class="fas fa-sync-alt"></i> تحديث</button>
     <a href="admin-dashboard.html" class="topbar-btn"><i class="fas fa-arrow-right"></i> العودة</a>
   </div>
 </div>
@@ -2345,6 +2346,53 @@ function selectDevice(containerId, assetId, deviceName, roomName) {
   if (dept) {
     const deptEl = document.getElementById(containerId + '_dept');
     if (deptEl) { for (let i=0;i<deptEl.options.length;i++) { if (deptEl.options[i].value===dept) { deptEl.selectedIndex=i; break; } } }
+  }
+}
+
+async function refreshAllData() {
+  const btn = document.getElementById('refreshBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> جاري التحديث...';
+  }
+  try {
+    sheetCache = {};
+    await Promise.all([
+      loadTestsFromServer(),
+      loadLabAssets(),
+      loadSheetData('QCLog'),
+      loadSheetData('QC_CAPA'),
+      loadSheetData('CAPA_Log'),
+      loadSheetData('Maintenance'),
+      loadSheetData('Temperature'),
+      loadSheetData('SpecimenRejection'),
+      loadSheetData('CriticalValues'),
+      loadSheetData('CorrectedReports'),
+      loadSheetData('SampleRetention'),
+      loadSheetData('Training'),
+      loadSheetData('Competency'),
+      loadSheetData('SafetyRounds'),
+      loadSheetData('Indicators'),
+      loadSheetData('InternalAudit'),
+      loadSheetData('EvidenceTracker'),
+      loadSheetData('StdChecks'),
+      loadSheetData('LotVerify'),
+      loadSheetData('Correlation'),
+      loadSheetData('PT_EQA')
+    ]);
+    const activeTab = document.querySelector('.tab-content.active');
+    if (activeTab) {
+      const tabId = activeTab.id.replace('tab-','');
+      switchTab(tabId);
+    }
+    showToast('تم تحديث جميع البيانات بنجاح', 'success');
+  } catch(e) {
+    showToast('حدث خطأ أثناء التحديث', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-sync-alt"></i> تحديث';
+    }
   }
 }
 
