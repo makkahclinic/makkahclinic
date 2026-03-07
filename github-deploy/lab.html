@@ -710,6 +710,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbw8NXbrsFs3NAE_uKxge81K
 let tests = [];
 let sheetCache = {};
 let evidenceData = [];
+let labAssets = [];
 
 const DRIVE_DOCS = [
   {id:'1su2DFSDxzkQ5eOXcEyEchg5PG30xYoH5_UkxfPbWYjU',title:'فهرس وثائق المختبر',type:'guide',num:'MMC-LAB-IDX-001'},
@@ -1397,6 +1398,7 @@ function renderQCTab() {
     containerId:'sub-qc-co01'
   });
   registerCRUD('sub-qc-co01',{tableHeaders:['الفحص','الجهاز1','الجهاز2','العينات','المعيار','النتيجة','القرار'],renderRow:r=>`<td>${r['الفحص']}</td><td>${r['الجهاز1']}</td><td>${r['الجهاز2']}</td><td>${r['عدد العينات']}</td><td>${r['معيار القبول']}</td><td>${r['النتيجة']}</td><td class="${r['القرار']==='مقبول'?'pass':'fail'}">${r['القرار']}</td>`});
+  setTimeout(() => { initDevicePicker('sub-qc-qc01'); }, 200);
 }
 
 function renderEquipmentTab() {
@@ -1899,9 +1901,92 @@ function renderVerificationLog() {
   c.innerHTML=html;
 }
 
+async function loadLabAssets() {
+  try {
+    const data = await apiGet({action:'getSheet',sheet:'AssetTasks'});
+    labAssets = (data.rows || []).map(r => ({
+      id: r.TaskID || r['TaskID'] || '',
+      name: r.TaskName || r['TaskName'] || '',
+      dept: r.Department || r['Department'] || '',
+      freq: r.ExpectedFrequency || r['ExpectedFrequency'] || '',
+      assetId: r.PhysicalAssetID || r['PhysicalAssetID'] || '',
+      device: r.PhysicalDeviceName || r['PhysicalDeviceName'] || '',
+      room: r.RoomCode || r['RoomCode'] || '',
+      roomName: r.RoomName || r['RoomName'] || ''
+    }));
+    console.log('✅ Loaded ' + labAssets.length + ' lab assets');
+  } catch(e) {
+    console.warn('Could not load AssetTasks:', e.message);
+  }
+}
+
+function getUniqueDevices() {
+  const map = {};
+  labAssets.forEach(a => {
+    if (a.assetId && !map[a.assetId]) {
+      map[a.assetId] = { id: a.assetId, device: a.device, room: a.roomName, tasks: [] };
+    }
+    if (a.assetId && map[a.assetId]) map[a.assetId].tasks.push(a.name);
+  });
+  return Object.values(map);
+}
+
+function initDevicePicker(containerId) {
+  const deviceInput = document.getElementById(containerId + '_device');
+  if (!deviceInput || !labAssets.length) return;
+  const wrapper = deviceInput.parentElement;
+  wrapper.style.position = 'relative';
+  const listId = containerId + '_deviceList';
+  let listEl = document.getElementById(listId);
+  if (!listEl) {
+    listEl = document.createElement('div');
+    listEl.id = listId;
+    listEl.style.cssText = 'position:absolute;top:100%;left:0;right:0;max-height:200px;overflow-y:auto;background:white;border:2px solid var(--lab-green);border-radius:8px;z-index:999;display:none;box-shadow:0 8px 24px rgba(0,0,0,0.15)';
+    wrapper.appendChild(listEl);
+  }
+  const devices = getUniqueDevices();
+  deviceInput.addEventListener('focus', () => { renderDeviceList(listEl, devices, '', containerId); listEl.style.display = 'block'; });
+  deviceInput.addEventListener('input', () => { renderDeviceList(listEl, devices, deviceInput.value, containerId); listEl.style.display = 'block'; });
+  document.addEventListener('click', (e) => { if (!wrapper.contains(e.target)) listEl.style.display = 'none'; });
+}
+
+function renderDeviceList(listEl, devices, query, containerId) {
+  const q = (query||'').toLowerCase();
+  const filtered = devices.filter(d => !q || d.device.toLowerCase().includes(q) || d.id.toLowerCase().includes(q) || d.room.includes(q));
+  if (!filtered.length) { listEl.innerHTML = '<div style="padding:10px;color:var(--gray);text-align:center;font-size:0.85rem">لا يوجد أجهزة مطابقة</div>'; return; }
+  listEl.innerHTML = filtered.map(d => `
+    <div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;transition:0.15s" 
+         onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='white'"
+         onclick="selectDevice('${containerId}','${d.id.replace(/'/g,"\\'")}','${d.device.replace(/'/g,"\\'")}','${d.room.replace(/'/g,"\\'")}')">
+      <div style="font-weight:700;font-size:0.9rem;color:var(--primary)">${d.device}</div>
+      <div style="font-size:0.75rem;color:var(--gray);display:flex;gap:8px;margin-top:2px">
+        <span><i class="fas fa-barcode"></i> ${d.id}</span>
+        <span><i class="fas fa-door-open"></i> ${d.room}</span>
+      </div>
+      <div style="font-size:0.7rem;color:#6b7280;margin-top:2px">${d.tasks.slice(0,2).join(' • ')}</div>
+    </div>
+  `).join('');
+}
+
+function selectDevice(containerId, assetId, deviceName, roomName) {
+  const deviceInput = document.getElementById(containerId + '_device');
+  if (deviceInput) deviceInput.value = deviceName + ' (' + assetId + ')';
+  const listEl = document.getElementById(containerId + '_deviceList');
+  if (listEl) listEl.style.display = 'none';
+  const deptMap = { 'الكيمياء الحيوية':'كيمياء', 'أمراض الدم':'دمويات', 'المختبر الكيميائي':'كيمياء', 'قسم الهرمونات':'مناعة' };
+  const dept = deptMap[roomName] || '';
+  if (dept) {
+    const deptEl = document.getElementById(containerId + '_dept');
+    if (deptEl) { for (let i=0;i<deptEl.options.length;i++) { if (deptEl.options[i].value===dept) { deptEl.selectedIndex=i; break; } } }
+  }
+}
+
 async function initApp() {
   await loadTestsFromServer();
   renderDocs();
+  loadLabAssets().then(() => {
+    setTimeout(() => { initDevicePicker('sub-qc-qc01'); }, 1000);
+  });
   loadSheetData('QCLog');
   loadSheetData('CAPA_Log');
   loadSheetData('Maintenance');
