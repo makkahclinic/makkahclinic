@@ -1563,15 +1563,32 @@ async function saveCAPAForm() {
     const el = document.getElementById('sub-qc-qc02_'+f);
     data[sheetKeys[i]] = el ? el.value : '';
   });
+  const preventiveValue = data['الإجراء الوقائي'] || '';
 
   showLoading('جاري الحفظ...');
   try {
+    let savedId = editId;
     if (editId) {
       await updateSheetRow('QC_CAPA', editId, data);
       showToast('تم تحديث CAPA بنجاح', 'success');
     } else {
-      await addSheetRow('QC_CAPA', data);
+      const result = await addSheetRow('QC_CAPA', data);
+      savedId = result?.id || '';
       showToast('تم إضافة CAPA بنجاح', 'success');
+    }
+    if (preventiveValue && savedId) {
+      try {
+        const urls = [
+          'https://makkahclinic-m2020m.replit.app/api/lab/update-capa-preventive',
+          'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/lab/update-capa-preventive'
+        ];
+        for (const url of urls) {
+          try {
+            const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rowId:savedId, value:preventiveValue})});
+            if (r.ok) break;
+          } catch(e) {}
+        }
+      } catch(e) { console.warn('Preventive save fallback:', e); }
     }
     cancelCAPAEdit();
     await renderCAPACards();
