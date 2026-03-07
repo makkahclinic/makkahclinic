@@ -831,13 +831,18 @@ async function loadTestsFromServer() {
 
 function saveLocalBackup() { try{localStorage.setItem('lab_tests_backup',JSON.stringify(tests))}catch(e){} }
 
-async function loadSheetData(sheetName) {
+async function loadSheetData(sheetName, retries) {
+  retries = retries || 0;
   try {
     const data = await apiGet({action:'getSheet',sheet:sheetName});
     sheetCache[sheetName] = data.rows || [];
     return sheetCache[sheetName];
   } catch(e) {
-    console.error('Load sheet error:', sheetName, e);
+    console.warn('Load sheet ' + sheetName + ' attempt ' + (retries+1) + ':', e.message);
+    if (retries < 2) {
+      await new Promise(r => setTimeout(r, 2000 * (retries+1)));
+      return loadSheetData(sheetName, retries + 1);
+    }
     return sheetCache[sheetName] || [];
   }
 }
@@ -2034,10 +2039,10 @@ async function initApp() {
   loadLabAssets().then(() => {
     setTimeout(() => { initDevicePicker('sub-qc-qc01'); }, 1000);
   });
-  loadSheetData('QCLog');
-  loadSheetData('CAPA_Log');
-  loadSheetData('Maintenance');
-  loadSheetData('Temperature');
+  await loadSheetData('QCLog');
+  await loadSheetData('CAPA_Log');
+  await loadSheetData('Maintenance');
+  await loadSheetData('Temperature');
 }
 
 initApp();
