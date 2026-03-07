@@ -1482,7 +1482,7 @@ async function renderCAPACards() {
       {label:'التحقق من الفعالية',value:r['التحقق من الفعالية'],icon:'check-double',color:'#16a34a'},
     ];
 
-    const filledSteps = steps.filter(s => s.value && s.value.trim()).length;
+    const filledSteps = steps.filter(s => s.value && String(s.value).trim()).length;
     const progressPct = Math.round((filledSteps / steps.length) * 100);
 
     html += `
@@ -1509,13 +1509,13 @@ async function renderCAPACards() {
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px">
           ${steps.map((s,i) => `
-            <div style="display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:8px;background:${s.value && s.value.trim() ? '#f8fafc' : '#fef2f2'}">
-              <div style="width:28px;height:28px;border-radius:50%;background:${s.value && s.value.trim() ? s.color : '#d1d5db'};color:white;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0">
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:8px;background:${s.value && String(s.value).trim() ? '#f8fafc' : '#fef2f2'}">
+              <div style="width:28px;height:28px;border-radius:50%;background:${s.value && String(s.value).trim() ? s.color : '#d1d5db'};color:white;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0">
                 <i class="fas fa-${s.icon}"></i>
               </div>
               <div style="flex:1;min-width:0">
                 <div style="font-size:0.7rem;color:var(--gray);font-weight:600">${i+1}. ${s.label}</div>
-                <div style="font-size:0.8rem;color:${s.value && s.value.trim() ? 'var(--primary)' : '#dc2626'};font-weight:${s.value?'500':'700'};word-break:break-word">${s.value && s.value.trim() ? s.value : 'لم يُحدد بعد'}</div>
+                <div style="font-size:0.8rem;color:${s.value && String(s.value).trim() ? 'var(--primary)' : '#dc2626'};font-weight:${s.value?'500':'700'};word-break:break-word">${s.value && String(s.value).trim() ? s.value : 'لم يُحدد بعد'}</div>
               </div>
             </div>
           `).join('')}
@@ -2352,10 +2352,13 @@ async function initApp() {
   await loadTestsFromServer();
   renderDocs();
   loadLabAssets();
-  await loadSheetData('QCLog');
-  await loadSheetData('CAPA_Log');
-  await loadSheetData('Maintenance');
-  await loadSheetData('Temperature');
+  await Promise.all([
+    loadSheetData('QCLog'),
+    loadSheetData('QC_CAPA'),
+    loadSheetData('CAPA_Log'),
+    loadSheetData('Maintenance'),
+    loadSheetData('Temperature')
+  ]);
 }
 
 initApp();
