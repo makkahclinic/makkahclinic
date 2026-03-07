@@ -9,7 +9,8 @@
 const LAB_CONFIG = {
   TIMEZONE: 'Asia/Riyadh',
   PASS_THRESHOLD: 18,
-  TOTAL_SAMPLES: 20
+  TOTAL_SAMPLES: 20,
+  DRIVE_FOLDER_ID: ''
 };
 
 const SHEET_DEFS = {
@@ -17,7 +18,7 @@ const SHEET_DEFS = {
   Samples:           ['testId','sampleIndex','sampleId','sex','age','result','withinRange','remarks','updatedAt'],
   Dashboard:         ['metric','value','updatedAt'],
   EvidenceTracker:   ['المعيار','المتطلب','الوثيقة الداعمة','المسؤول','الحالة','ملاحظات','updatedAt'],
-  QCLog:             ['id','التاريخ','القسم','الجهاز','الفحص','مستوى QC','المجال المقبول','النتيجة','الحالة','الإجراء','المراجع','createdAt'],
+  QCLog:             ['id','التاريخ','القسم','الجهاز','الفحص','مستوى QC','المجال المقبول','النتيجة','الحالة','الإجراء','المرفق','رابط الملف','المراجع','createdAt'],
   QC_CAPA:           ['id','التاريخ','القسم/الجهاز','الفحص','المشكلة','الاحتواء الفوري','السبب الجذري','الإجراء التصحيحي','التحقق من الفعالية','الحالة','اعتماد','createdAt'],
   PT_EQA:            ['id','المزود','الدورة','القسم','الفحص','تاريخ الاستلام','تاريخ الإرسال','النتيجة','مقبول','CAPA','مراجعة','createdAt'],
   SpecimenRejection: ['id','التاريخ','MRN','اسم المريض','القسم','نوع العينة','سبب الرفض','القرار','أُبلغت الجهة','الموظف','ملاحظات','createdAt'],
@@ -68,7 +69,7 @@ function doPost(e) {
       case 'finalizeTest':     return ok(finalizeTest_(ss, body.testId));
       case 'deleteTest':       return ok(deleteTest_(ss, body.testId));
       case 'importBulk':       return ok(importBulkTests_(ss, body.tests));
-      case 'addRow':           return ok(addRow_(ss, body.sheet, body.data));
+      case 'addRow':           return ok(addRow_(ss, body.sheet, body.data, body.fileData));
       case 'updateRow':        return ok(updateRow_(ss, body.sheet, body.rowId, body.data));
       case 'deleteRow':        return ok(deleteRow_(ss, body.sheet, body.rowId));
       case 'bulkUpdate':       return ok(bulkUpdate_(ss, body.sheet, body.rows));
@@ -111,18 +112,38 @@ function getSheetRows_(ss, sheetName) {
   return { rows: getSheetData_(ss, sheetName), headers: SHEET_DEFS[sheetName] };
 }
 
-function addRow_(ss, sheetName, data) {
+function addRow_(ss, sheetName, data, fileData) {
   if (!SHEET_DEFS[sheetName]) throw new Error('Unknown sheet: ' + sheetName);
   var sh = ss.getSheetByName(sheetName);
   var headers = SHEET_DEFS[sheetName];
   var now = Utilities.formatDate(new Date(), LAB_CONFIG.TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+  var fileLink = '';
+  if (fileData && fileData.base64) {
+    try {
+      var blob = Utilities.newBlob(Utilities.base64Decode(fileData.base64), fileData.mimeType || 'application/octet-stream', fileData.fileName || 'attachment');
+      var folderId = LAB_CONFIG.DRIVE_FOLDER_ID || '';
+      var folder;
+      if (folderId) {
+        folder = DriveApp.getFolderById(folderId);
+      } else {
+        var folders = DriveApp.getFoldersByName('Lab_Attachments');
+        folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Lab_Attachments');
+      }
+      var file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      fileLink = file.getUrl();
+    } catch(ex) {
+      Logger.log('File upload error: ' + ex.message);
+    }
+  }
   var row = headers.map(function(h) {
     if (h === 'id') return 'R-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substr(2,3).toUpperCase();
     if (h === 'createdAt' || h === 'updatedAt') return now;
+    if (h === 'رابط الملف' && fileLink) return fileLink;
     return data[h] !== undefined ? data[h] : '';
   });
   sh.appendRow(row);
-  return { message: 'تم الإضافة بنجاح', id: row[headers.indexOf('id')] || '' };
+  return { message: fileLink ? 'تم الإضافة ورفع الملف بنجاح' : 'تم الإضافة بنجاح', id: row[headers.indexOf('id')] || '', fileLink: fileLink };
 }
 
 function updateRow_(ss, sheetName, rowId, data) {
