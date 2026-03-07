@@ -1010,6 +1010,29 @@ function searchRefRanges(q) {
     if (!e.target.closest('.autofill-box')) dropdown.classList.remove('show');
   });
 })();
+function autoOpenCAPAForm(qcData) {
+  setTimeout(() => {
+    document.querySelectorAll('#qc-section-daily .sub-pill').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('#qc-section-daily .sub-content').forEach(c=>c.classList.remove('active'));
+    const qc02Sub = document.getElementById('sub-qc-qc02');
+    if (qc02Sub) qc02Sub.classList.add('active');
+    const pills = document.querySelectorAll('#qc-section-daily .sub-pill');
+    if (pills[1]) pills[1].classList.add('active');
+    setTimeout(() => {
+      const capaForm = document.getElementById('sub-qc-qc02_form');
+      if (capaForm) capaForm.style.display = 'block';
+      const setVal = (key, val) => { const el = document.getElementById('sub-qc-qc02_'+key); if (el) el.value = val; };
+      setVal('date', qcData.date || '');
+      setVal('dept', (qcData.dept||'') + ' / ' + (qcData.device||''));
+      setVal('test', qcData.test || '');
+      setVal('problem', 'QC Fail - النتيجة: ' + (qcData.result||'') + ' | المجال: ' + (qcData.range||'') + ' | المستوى: ' + (qcData.level||''));
+      setVal('contain', 'تعليق الفحص');
+      setVal('status', 'Open');
+      showToast('⚠️ تم فتح نموذج CAPA تلقائياً لأن نتيجة QC = Fail', 'error');
+      if (capaForm) capaForm.scrollIntoView({behavior:'smooth', block:'center'});
+    }, 300);
+  }, 500);
+}
 function showQCSection(section) {
   const daily = document.getElementById('qc-section-daily');
   const cal = document.getElementById('qc-section-calibration');
@@ -1242,6 +1265,7 @@ function buildCRUDSection(opts) {
   window['saveForm_'+containerId] = async () => {
     const data = {};
     let filePayload = null;
+    const formValues = {};
     for (const f of fields) {
       const el = document.getElementById(containerId+'_'+f.key);
       if (f.type==='file') {
@@ -1254,6 +1278,7 @@ function buildCRUDSection(opts) {
         }
         el.value='';
       } else {
+        formValues[f.key] = el.value;
         data[f.sheetKey || f.label] = el.value;
         el.value = f.type==='select' ? el.options[0].value : '';
       }
@@ -1261,6 +1286,9 @@ function buildCRUDSection(opts) {
     await addSheetRow(sheetName, data, filePayload);
     document.getElementById(containerId+'_form').style.display = 'none';
     renderCRUDRows(sheetName, containerId, tableHeaders, renderRow);
+    if (containerId === 'sub-qc-qc01' && formValues.status === 'Fail') {
+      autoOpenCAPAForm(formValues);
+    }
   };
 
   renderCRUDRows(sheetName, containerId, tableHeaders, renderRow);
