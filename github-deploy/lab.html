@@ -1469,6 +1469,7 @@ function renderEquipmentTab() {
     containerId:'sub-equipment-rg01'
   });
   registerCRUD('sub-equipment-rg01',{tableHeaders:['الفحص','اللوت القديم','الجديد','المعيار','النتيجة','الحالة','التاريخ'],renderRow:r=>`<td>${r['الفحص']}</td><td>${r['اللوت القديم']}</td><td>${r['اللوت الجديد']}</td><td>${r['معيار القبول']}</td><td>${r['النتيجة']}</td><td class="${r['Pass/Fail']==='Pass'?'pass':'fail'}">${r['Pass/Fail']}</td><td>${r['التاريخ']}</td>`});
+  setTimeout(() => { initDevicePicker('sub-equipment-eq01'); }, 200);
 }
 
 function renderSpecimensTab() {
@@ -1924,7 +1925,7 @@ function getUniqueDevices() {
   const map = {};
   labAssets.forEach(a => {
     if (a.assetId && !map[a.assetId]) {
-      map[a.assetId] = { id: a.assetId, device: a.device, room: a.roomName, tasks: [] };
+      map[a.assetId] = { id: a.assetId, device: a.device, room: a.roomName, roomCode: a.room, dept: a.dept, tasks: [] };
     }
     if (a.assetId && map[a.assetId]) map[a.assetId].tasks.push(a.name);
   });
@@ -1973,8 +1974,23 @@ function selectDevice(containerId, assetId, deviceName, roomName) {
   if (deviceInput) deviceInput.value = deviceName + ' (' + assetId + ')';
   const listEl = document.getElementById(containerId + '_deviceList');
   if (listEl) listEl.style.display = 'none';
-  const deptMap = { 'الكيمياء الحيوية':'كيمياء', 'أمراض الدم':'دمويات', 'المختبر الكيميائي':'كيمياء', 'قسم الهرمونات':'مناعة' };
-  const dept = deptMap[roomName] || '';
+  const roomDeptMap = {
+    'الكيمياء الحيوية':'كيمياء', 'المختبر الكيميائي':'كيمياء',
+    'أمراض الدم':'دمويات',
+    'قسم الهرمونات':'مناعة',
+    'التخثر':'تخثر'
+  };
+  const deviceDeptMap = {
+    'Hematology':'دمويات', 'CBC':'دمويات',
+    'Chemistry':'كيمياء', 'Biochemistry':'كيمياء', 'Cormay':'كيمياء', 'Biosystem':'كيمياء', 'A1c':'كيمياء',
+    'Hormone':'مناعة', 'ECL':'مناعة', 'Vidas':'مناعة', 'Immunology':'مناعة'
+  };
+  let dept = roomDeptMap[roomName] || '';
+  if (!dept) {
+    for (const [kw, d] of Object.entries(deviceDeptMap)) {
+      if (deviceName.toLowerCase().includes(kw.toLowerCase())) { dept = d; break; }
+    }
+  }
   if (dept) {
     const deptEl = document.getElementById(containerId + '_dept');
     if (deptEl) { for (let i=0;i<deptEl.options.length;i++) { if (deptEl.options[i].value===dept) { deptEl.selectedIndex=i; break; } } }
