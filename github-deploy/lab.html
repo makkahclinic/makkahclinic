@@ -1593,13 +1593,22 @@ async function saveCAPAForm() {
 
   showLoading('جاري الحفظ...');
   try {
-    if (editId) {
-      await capaApiFetch('PUT', {rowId: editId, data});
-      showToast('تم تحديث CAPA بنجاح', 'success');
-    } else {
-      await capaApiFetch('POST', {data});
-      showToast('تم إضافة CAPA بنجاح', 'success');
+    let usedDirectApi = false;
+    try {
+      if (editId) {
+        await capaApiFetch('PUT', {rowId: editId, data});
+      } else {
+        await capaApiFetch('POST', {data});
+      }
+      usedDirectApi = true;
+    } catch(apiErr) {
+      if (editId) {
+        await updateSheetRow('QC_CAPA', editId, data);
+      } else {
+        await addSheetRow('QC_CAPA', data);
+      }
     }
+    showToast(editId ? 'تم تحديث CAPA بنجاح' : 'تم إضافة CAPA بنجاح', 'success');
     cancelCAPAEdit();
     sheetCache['QC_CAPA'] = null;
     await renderCAPACards();
@@ -1637,7 +1646,11 @@ async function deleteAndRefreshCAPA(id) {
   if (!confirm('حذف سجل CAPA؟')) return;
   showLoading('جاري الحذف...');
   try {
-    await capaApiFetch('DELETE', {rowId: id});
+    try {
+      await capaApiFetch('DELETE', {rowId: id});
+    } catch(apiErr) {
+      await deleteSheetRow('QC_CAPA', id);
+    }
     showToast('تم الحذف بنجاح', 'success');
     sheetCache['QC_CAPA'] = null;
     await renderCAPACards();
