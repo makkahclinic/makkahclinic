@@ -1413,10 +1413,12 @@ function renderCAPASection() {
           <h4 style="margin:0 0 12px;color:var(--primary);font-size:0.95rem"><i class="fas fa-file-medical-alt"></i> نموذج CAPA</h4>
           <input type="hidden" id="sub-qc-qc02_editId" value="">
           <div class="form-row">${formFieldsHTML}</div>
-          <div style="display:flex;gap:8px;margin-top:8px">
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn btn-sm" onclick="aiSuggestCAPA()" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);color:white;border:none;border-radius:8px;padding:8px 16px;font-weight:700;box-shadow:0 4px 12px rgba(99,102,241,0.3)"><i class="fas fa-robot"></i> اقتراح الذكاء الاصطناعي</button>
             <button class="btn btn-green btn-sm" onclick="saveCAPAForm()"><i class="fas fa-save"></i> حفظ</button>
             <button class="btn btn-sm" onclick="cancelCAPAEdit()" style="background:#e5e7eb;color:#374151"><i class="fas fa-times"></i> إلغاء</button>
           </div>
+          <div id="capa-ai-status" style="display:none;margin-top:8px;padding:10px;border-radius:8px;font-size:0.85rem"></div>
         </div>
         <div id="sub-qc-qc02_cards"></div>
       </div>
@@ -1605,6 +1607,72 @@ async function deleteAndRefreshCAPA(id) {
     await renderCAPACards();
   } catch(e) {
     showToast('خطأ: ' + e.message, 'error');
+  }
+}
+
+const CAPA_AI_URLS = [
+  'https://makkahclinic-m2020m.replit.app/api/lab/capa-ai',
+  'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/lab/capa-ai'
+];
+
+async function aiSuggestCAPA() {
+  const getVal = (key) => { const el = document.getElementById('sub-qc-qc02_'+key); return el ? el.value : ''; };
+  const problem = getVal('problem');
+  const dept = getVal('dept');
+  const test = getVal('test');
+
+  if (!problem && !dept && !test) {
+    showToast('يرجى تعبئة المشكلة أو القسم أو الفحص أولاً حتى يتمكن الذكاء الاصطناعي من التحليل', 'error');
+    return;
+  }
+
+  const statusEl = document.getElementById('capa-ai-status');
+  statusEl.style.display = 'block';
+  statusEl.style.background = 'linear-gradient(135deg,#ede9fe,#e0e7ff)';
+  statusEl.style.border = '1px solid #a78bfa';
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري تحليل البيانات بالذكاء الاصطناعي... يرجى الانتظار';
+
+  let resultParts = problem.match(/النتيجة:\s*([^\|]*)/);
+  let rangeParts = problem.match(/المجال:\s*([^\|]*)/);
+  let levelParts = problem.match(/المستوى:\s*([^\|]*)/);
+
+  try {
+    const body = JSON.stringify({
+      problem: problem,
+      dept: dept,
+      test: test,
+      result: resultParts ? resultParts[1].trim() : '',
+      range: rangeParts ? rangeParts[1].trim() : '',
+      level: levelParts ? levelParts[1].trim() : ''
+    });
+
+    let data = null;
+    for (const url of CAPA_AI_URLS) {
+      try {
+        const resp = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: body });
+        data = await resp.json();
+        if (!data.error) break;
+      } catch(urlErr) { continue; }
+    }
+    if (!data || data.error) throw new Error(data?.error || 'جميع خوادم الذكاء الاصطناعي غير متاحة');
+
+    const ai = data.data;
+    const setVal = (key, val) => { const el = document.getElementById('sub-qc-qc02_'+key); if (el && val) el.value = val; };
+    setVal('contain', ai.containment);
+    setVal('root', ai.rootCause);
+    setVal('corrective', ai.corrective);
+    setVal('preventive', ai.preventive);
+    setVal('verify', ai.verification);
+
+    statusEl.style.background = 'linear-gradient(135deg,#f0fdf4,#dcfce7)';
+    statusEl.style.border = '1px solid #86efac';
+    statusEl.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a"></i> تم ملء النموذج بنجاح بواسطة الذكاء الاصطناعي — يرجى المراجعة والتعديل حسب الحاجة ثم الحفظ';
+    showToast('تم تعبئة النموذج بالذكاء الاصطناعي - راجع واحفظ', 'success');
+  } catch(e) {
+    statusEl.style.background = '#fef2f2';
+    statusEl.style.border = '1px solid #fca5a5';
+    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#dc2626"></i> فشل التحليل: ' + e.message;
+    showToast('فشل اقتراح الذكاء الاصطناعي: ' + e.message, 'error');
   }
 }
 
