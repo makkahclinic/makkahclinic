@@ -1229,7 +1229,7 @@ function buildCRUDSection(opts) {
       return `<div class="form-group"><label>${f.label}</label><select id="${containerId}_${f.key}">${f.options.map(o=>`<option value="${o.value}">${o.label}</option>`).join('')}</select></div>`;
     }
     if (f.type === 'file') {
-      return `<div class="form-group"><label>${f.label}</label><input type="file" id="${containerId}_${f.key}" accept="image/*,application/pdf"><span id="${containerId}_${f.key}_status" style="font-size:0.75rem;color:var(--gray);margin-top:4px;display:block"></span></div>`;
+      return `<div class="form-group"><label>${f.label}</label><div style="position:relative"><input type="file" id="${containerId}_${f.key}" accept="image/*,application/pdf" style="opacity:0;position:absolute;width:100%;height:100%;cursor:pointer;z-index:2"><div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:2px dashed var(--lab-green);border-radius:10px;background:#f0fdf4;cursor:pointer"><i class="fas fa-cloud-upload-alt" style="color:var(--lab-green);font-size:1.2rem"></i><span style="color:var(--gray);font-size:0.85rem" id="${containerId}_${f.key}_label">اضغط لاختيار ملف (PDF أو صورة)</span></div></div><span id="${containerId}_${f.key}_status" style="font-size:0.75rem;color:var(--gray);margin-top:4px;display:block"></span></div>`;
     }
     return `<div class="form-group"><label>${f.label}</label><input type="${f.type||'text'}" id="${containerId}_${f.key}" placeholder="${f.placeholder||''}"></div>`;
   }).join('');
@@ -1257,6 +1257,14 @@ function buildCRUDSection(opts) {
         </div>
       </div>
     </div>`;
+
+  fields.filter(f=>f.type==='file').forEach(f => {
+    const fileEl = document.getElementById(containerId+'_'+f.key);
+    if (fileEl) fileEl.addEventListener('change', function() {
+      const lbl = document.getElementById(containerId+'_'+f.key+'_label');
+      if (lbl) lbl.textContent = this.files[0] ? this.files[0].name : 'اضغط لاختيار ملف (PDF أو صورة)';
+    });
+  });
 
   window['toggleForm_'+containerId] = () => {
     const form = document.getElementById(containerId+'_form');
@@ -1330,10 +1338,10 @@ function renderQCTab() {
       {key:'dept',label:'القسم',sheetKey:'القسم',type:'select',options:[{value:'كيمياء',label:'كيمياء'},{value:'دمويات',label:'دمويات'},{value:'مناعة',label:'مناعة'},{value:'تخثر',label:'تخثر'}]},
       {key:'device',label:'الجهاز',sheetKey:'الجهاز',placeholder:'اسم الجهاز'},
       {key:'test',label:'الفحص',sheetKey:'الفحص',placeholder:'اسم الفحص'},
-      {key:'level',label:'مستوى QC',sheetKey:'مستوى QC',type:'select',options:[{value:'L1',label:'Level 1'},{value:'L2',label:'Level 2'},{value:'L3',label:'Level 3'}]},
+      {key:'level',label:'مستوى QC',sheetKey:'مستوى QC',type:'select',options:[{value:'L1',label:'المستوى 1 (L1)'},{value:'L2',label:'المستوى 2 (L2)'},{value:'L3',label:'المستوى 3 (L3)'}]},
       {key:'range',label:'المجال المقبول',sheetKey:'المجال المقبول',placeholder:'10-20'},
       {key:'result',label:'النتيجة',sheetKey:'النتيجة',placeholder:'15.5'},
-      {key:'status',label:'الحالة',sheetKey:'الحالة',type:'select',options:[{value:'Pass',label:'Pass'},{value:'Fail',label:'Fail'}]},
+      {key:'status',label:'الحالة',sheetKey:'الحالة',type:'select',options:[{value:'Pass',label:'ناجح (Pass)'},{value:'Fail',label:'راسب (Fail)'}]},
       {key:'action',label:'الإجراء',sheetKey:'الإجراء',placeholder:'لا يوجد'},
       {key:'attachment',label:'إرفاق ملف (PDF/صورة)',sheetKey:'المرفق',type:'file'},
     ],
