@@ -1105,6 +1105,7 @@ function printQCCertificate(record, type) {
     <div class="title-section"><h1 class="title">${title}</h1><p class="subtitle">مجمع مكة الطبي بالزاهر</p><p class="cert-id">رقم الشهادة: ${certId}</p></div>
     <div class="result-badge">${resultText}</div></div>
     <div class="info-grid">${infoHtml}</div>
+    ${(record['رابط الملف']&&record['رابط الملف']!=='N/A')?`<div style="text-align:center;margin:20px 0;padding:15px;background:#f8f9fa;border-radius:10px;border:1px solid #eee"><p style="font-size:13px;color:#666;margin-bottom:10px;font-weight:600"><span style="color:#c9a962">&#9733;</span> المرفق / الصورة</p><a href="${record['رابط الملف']}" target="_blank" style="color:#1e3a5f;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:white;border-radius:8px;border:1px solid #ddd"><span style="font-size:1.2rem">&#128206;</span> فتح المرفق</a></div>`:''}
     <div class="qr-section"><div style="text-align:center"><img src="${qrUrl}" alt="QR" style="width:150px;height:150px;border:1px solid #eee;border-radius:8px;padding:5px;background:white">
     <p style="font-size:11px;color:#888;margin-top:8px">امسح للتحقق من الشهادة</p></div></div>
     <div style="display:flex;justify-content:space-between;margin-top:25px;padding-top:15px;border-top:1px solid #ddd">
@@ -1279,6 +1280,11 @@ function buildCRUDSection(opts) {
       const el = document.getElementById(containerId+'_'+f.key);
       if (f.type==='file') {
         const file = el.files && el.files[0];
+        if (!file && f.required) {
+          showToast('يجب إرفاق ملف (صورة أو PDF) قبل الحفظ', 'error');
+          el.parentElement.querySelector('div').style.borderColor = 'var(--danger)';
+          return;
+        }
         if (file) {
           if (file.size > 10*1024*1024) { showToast('حجم الملف يتجاوز 10 ميجابايت','error'); return; }
           const b64 = await new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(file); });
@@ -1286,6 +1292,8 @@ function buildCRUDSection(opts) {
           data[f.sheetKey||f.label] = file.name;
         }
         el.value='';
+        const lbl = document.getElementById(containerId+'_'+f.key+'_label');
+        if (lbl) lbl.textContent = 'اضغط لاختيار ملف (PDF أو صورة)';
       } else {
         formValues[f.key] = el.value;
         data[f.sheetKey || f.label] = el.value;
@@ -1343,7 +1351,7 @@ function renderQCTab() {
       {key:'result',label:'النتيجة',sheetKey:'النتيجة',placeholder:'15.5'},
       {key:'status',label:'الحالة',sheetKey:'الحالة',type:'select',options:[{value:'Pass',label:'ناجح (Pass)'},{value:'Fail',label:'راسب (Fail)'}]},
       {key:'action',label:'الإجراء',sheetKey:'الإجراء',placeholder:'لا يوجد'},
-      {key:'attachment',label:'إرفاق ملف (PDF/صورة)',sheetKey:'المرفق',type:'file'},
+      {key:'attachment',label:'إرفاق ملف (PDF/صورة) *',sheetKey:'المرفق',type:'file',required:true},
     ],
     tableHeaders:['التاريخ','القسم','الجهاز','الفحص','المستوى','المجال','النتيجة','الحالة','الإجراء','مرفق','شهادة'],
     renderRow: r => { const att=r['المرفق']||r['رابط الملف']||''; const hasAtt=att&&att!=='N/A'&&!att.endsWith('.pdf')&&!att.endsWith('.png')&&!att.endsWith('.jpg')?false:att&&att!=='N/A'; return `<td>${r['التاريخ']}</td><td>${r['القسم']}</td><td>${r['الجهاز']}</td><td>${r['الفحص']}</td><td>${r['مستوى QC']}</td><td>${r['المجال المقبول']}</td><td style="font-weight:700">${r['النتيجة']}</td><td class="${r['الحالة']==='Pass'?'pass':'fail'}">${r['الحالة']}</td><td>${r['الإجراء']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?`<a href="${r['رابط الملف']}" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>`:(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "qc")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`; },
