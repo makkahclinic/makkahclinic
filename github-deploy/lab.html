@@ -865,6 +865,21 @@ async function addSheetRow(sheetName, rowData, filePayload) {
   }
 }
 
+async function updateSheetRow(sheetName, rowId, data) {
+  showLoading('جاري التحديث...');
+  try {
+    await apiPost({action:'updateRow',sheet:sheetName,rowId:rowId,data:data});
+    showToast('تم التحديث بنجاح', 'success');
+    sheetCache[sheetName] = null;
+    await loadSheetData(sheetName);
+    hideLoading();
+  } catch(e) {
+    showToast('خطأ في التحديث: ' + e.message, 'error');
+    hideLoading();
+    throw e;
+  }
+}
+
 async function deleteSheetRow(sheetName, rowId) {
   if (!confirm('هل تريد الحذف؟')) return;
   showLoading('جاري الحذف...');
@@ -1037,6 +1052,7 @@ function autoOpenCAPAForm(qcData) {
     const pills = document.querySelectorAll('#qc-section-daily .sub-pill');
     if (pills[1]) pills[1].classList.add('active');
     setTimeout(() => {
+      document.getElementById('sub-qc-qc02_editId').value = '';
       const capaForm = document.getElementById('sub-qc-qc02_form');
       if (capaForm) capaForm.style.display = 'block';
       const setVal = (key, val) => { const el = document.getElementById('sub-qc-qc02_'+key); if (el) el.value = val; };
@@ -1044,9 +1060,9 @@ function autoOpenCAPAForm(qcData) {
       setVal('dept', (qcData.dept||'') + ' / ' + (qcData.device||''));
       setVal('test', qcData.test || '');
       setVal('problem', 'QC Fail - النتيجة: ' + (qcData.result||'') + ' | المجال: ' + (qcData.range||'') + ' | المستوى: ' + (qcData.level||''));
-      setVal('contain', 'تعليق الفحص');
+      setVal('contain', 'تعليق إصدار النتائج');
       setVal('status', 'Open');
-      showToast('⚠️ تم فتح نموذج CAPA تلقائياً لأن نتيجة QC = Fail', 'error');
+      showToast('تم فتح نموذج CAPA تلقائياً - يرجى تعبئة جميع الحقول', 'error');
       if (capaForm) capaForm.scrollIntoView({behavior:'smooth', block:'center'});
     }, 300);
   }, 500);
@@ -1358,6 +1374,240 @@ function registerCRUD(containerId, opts) {
   window['_crudOpts_'+containerId] = opts;
 }
 
+function renderCAPASection() {
+  const container = document.getElementById('sub-qc-qc02');
+  if (!container) return;
+
+  const capaFields = [
+    {key:'date',label:'التاريخ',sheetKey:'التاريخ',type:'date'},
+    {key:'dept',label:'القسم/الجهاز',sheetKey:'القسم/الجهاز',placeholder:'كيمياء / Cobas c311'},
+    {key:'test',label:'الفحص',sheetKey:'الفحص',placeholder:'Glucose'},
+    {key:'problem',label:'المشكلة',sheetKey:'المشكلة',placeholder:'QC Fail - Out of control'},
+    {key:'contain',label:'الاحتواء الفوري',sheetKey:'الاحتواء الفوري',placeholder:'تعليق إصدار النتائج - إعادة المعايرة'},
+    {key:'root',label:'السبب الجذري',sheetKey:'السبب الجذري',placeholder:'كاشف منتهي الصلاحية / تلوث العينة'},
+    {key:'corrective',label:'الإجراء التصحيحي',sheetKey:'الإجراء التصحيحي',placeholder:'تغيير الكاشف - إعادة المعايرة'},
+    {key:'preventive',label:'الإجراء الوقائي',sheetKey:'الإجراء الوقائي',placeholder:'جدولة مراجعة أسبوعية لتواريخ الكواشف'},
+    {key:'verify',label:'التحقق من الفعالية',sheetKey:'التحقق من الفعالية',placeholder:'QC pass لمدة 3 أيام متتالية'},
+    {key:'status',label:'الحالة',sheetKey:'الحالة',type:'select',options:[{value:'Open',label:'مفتوح (Open)'},{value:'In Progress',label:'قيد المعالجة'},{value:'Closed',label:'مغلق (Closed)'}]},
+    {key:'approval',label:'اعتماد',sheetKey:'اعتماد',placeholder:'اسم المسؤول'},
+  ];
+
+  const formFieldsHTML = capaFields.map(f => {
+    if (f.type === 'select') {
+      return `<div class="form-group"><label>${f.label}</label><select id="sub-qc-qc02_${f.key}">${f.options.map(o=>`<option value="${o.value}">${o.label}</option>`).join('')}</select></div>`;
+    }
+    return `<div class="form-group"><label>${f.label}</label><input type="${f.type||'text'}" id="sub-qc-qc02_${f.key}" placeholder="${f.placeholder||''}"></div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <span><i class="fas fa-exclamation-triangle"></i> QC-02 إخفاقات IQC وCAPA</span>
+        <div class="card-actions">
+          <a href="${POLICY_LINKS['qc']}" target="_blank" class="btn btn-outline btn-sm"><i class="fas fa-file-alt"></i> السياسة</a>
+          <button class="btn btn-green btn-sm" onclick="window['toggleForm_sub-qc-qc02']()"><i class="fas fa-plus"></i> إضافة CAPA جديد</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="sub-qc-qc02_form" style="display:none;margin-bottom:16px;padding:16px;background:#f8fafc;border-radius:10px;border:2px solid #e5e7eb;">
+          <h4 style="margin:0 0 12px;color:var(--primary);font-size:0.95rem"><i class="fas fa-file-medical-alt"></i> نموذج CAPA</h4>
+          <input type="hidden" id="sub-qc-qc02_editId" value="">
+          <div class="form-row">${formFieldsHTML}</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-green btn-sm" onclick="saveCAPAForm()"><i class="fas fa-save"></i> حفظ</button>
+            <button class="btn btn-sm" onclick="cancelCAPAEdit()" style="background:#e5e7eb;color:#374151"><i class="fas fa-times"></i> إلغاء</button>
+          </div>
+        </div>
+        <div id="sub-qc-qc02_cards"></div>
+      </div>
+    </div>`;
+
+  window['toggleForm_sub-qc-qc02'] = () => {
+    document.getElementById('sub-qc-qc02_editId').value = '';
+    const form = document.getElementById('sub-qc-qc02_form');
+    form.style.display = form.style.display==='none'?'block':'none';
+    capaFields.forEach(f => {
+      const el = document.getElementById('sub-qc-qc02_'+f.key);
+      if (el) el.value = f.type==='select' ? el.options[0].value : '';
+    });
+  };
+
+  renderCAPACards();
+}
+
+async function renderCAPACards() {
+  const rows = await loadSheetData('QC_CAPA');
+  const container = document.getElementById('sub-qc-qc02_cards');
+  if (!container) return;
+
+  if (!rows.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)"><i class="fas fa-check-circle" style="font-size:2rem;color:var(--success);display:block;margin-bottom:10px"></i>لا يوجد سجلات CAPA - ممتاز!</div>';
+    return;
+  }
+
+  const openCount = rows.filter(r => r['الحالة'] !== 'Closed').length;
+  const closedCount = rows.filter(r => r['الحالة'] === 'Closed').length;
+
+  let html = `<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <div style="flex:1;min-width:120px;padding:12px;background:#fef2f2;border-radius:10px;border:2px solid #fca5a5;text-align:center">
+      <div style="font-size:1.5rem;font-weight:800;color:#dc2626">${openCount}</div>
+      <div style="font-size:0.8rem;color:#991b1b">CAPA مفتوحة</div>
+    </div>
+    <div style="flex:1;min-width:120px;padding:12px;background:#f0fdf4;border-radius:10px;border:2px solid #86efac;text-align:center">
+      <div style="font-size:1.5rem;font-weight:800;color:#16a34a">${closedCount}</div>
+      <div style="font-size:0.8rem;color:#166534">CAPA مغلقة</div>
+    </div>
+    <div style="flex:1;min-width:120px;padding:12px;background:#eff6ff;border-radius:10px;border:2px solid #93c5fd;text-align:center">
+      <div style="font-size:1.5rem;font-weight:800;color:#2563eb">${rows.length}</div>
+      <div style="font-size:0.8rem;color:#1e40af">إجمالي</div>
+    </div>
+  </div>`;
+
+  rows.forEach(r => {
+    const isOpen = r['الحالة'] !== 'Closed';
+    const isInProgress = r['الحالة'] === 'In Progress';
+    const statusColor = isOpen ? (isInProgress ? '#f59e0b' : '#dc2626') : '#16a34a';
+    const statusBg = isOpen ? (isInProgress ? '#fffbeb' : '#fef2f2') : '#f0fdf4';
+    const statusBorder = isOpen ? (isInProgress ? '#fcd34d' : '#fca5a5') : '#86efac';
+    const statusText = isOpen ? (isInProgress ? 'قيد المعالجة' : 'مفتوح') : 'مغلق';
+
+    const steps = [
+      {label:'المشكلة',value:r['المشكلة'],icon:'exclamation-circle',color:'#dc2626'},
+      {label:'الاحتواء الفوري',value:r['الاحتواء الفوري'],icon:'hand-paper',color:'#f59e0b'},
+      {label:'السبب الجذري',value:r['السبب الجذري'],icon:'search',color:'#8b5cf6'},
+      {label:'الإجراء التصحيحي',value:r['الإجراء التصحيحي'],icon:'wrench',color:'#2563eb'},
+      {label:'الإجراء الوقائي',value:r['الإجراء الوقائي'],icon:'shield-alt',color:'#0891b2'},
+      {label:'التحقق من الفعالية',value:r['التحقق من الفعالية'],icon:'check-double',color:'#16a34a'},
+    ];
+
+    const filledSteps = steps.filter(s => s.value && s.value.trim()).length;
+    const progressPct = Math.round((filledSteps / steps.length) * 100);
+
+    html += `
+    <div style="background:white;border:2px solid ${statusBorder};border-radius:12px;margin-bottom:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:${statusBg};border-bottom:1px solid ${statusBorder}">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="background:${statusColor};color:white;padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:700">${statusText}</span>
+          <span style="font-weight:700;color:var(--primary);font-size:0.9rem">${r['القسم/الجهاز'] || '-'}</span>
+          <span style="color:var(--gray);font-size:0.8rem"><i class="fas fa-flask"></i> ${r['الفحص'] || '-'}</span>
+          <span style="color:var(--gray);font-size:0.75rem"><i class="fas fa-calendar"></i> ${r['التاريخ'] || '-'}</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          ${isOpen ? `<button onclick='editCAPARecord(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="btn btn-sm" style="font-size:0.75rem;padding:4px 10px;background:#2563eb;color:white;border:none;border-radius:6px"><i class="fas fa-edit"></i> تعديل</button>` : ''}
+          ${isOpen ? `<button onclick='closeCAPARecord("${r.id}")' class="btn btn-sm" style="font-size:0.75rem;padding:4px 10px;background:#16a34a;color:white;border:none;border-radius:6px"><i class="fas fa-check"></i> إغلاق</button>` : ''}
+          <button onclick="deleteAndRefreshCAPA('${r.id}')" class="btn btn-sm" style="font-size:0.75rem;padding:4px 10px;background:#dc2626;color:white;border:none;border-radius:6px"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+      <div style="padding:12px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+            <div style="width:${progressPct}%;height:100%;background:${progressPct===100?'#16a34a':progressPct>=50?'#f59e0b':'#dc2626'};border-radius:4px;transition:0.3s"></div>
+          </div>
+          <span style="font-size:0.75rem;font-weight:700;color:var(--gray)">${filledSteps}/${steps.length}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px">
+          ${steps.map((s,i) => `
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:8px;background:${s.value && s.value.trim() ? '#f8fafc' : '#fef2f2'}">
+              <div style="width:28px;height:28px;border-radius:50%;background:${s.value && s.value.trim() ? s.color : '#d1d5db'};color:white;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0">
+                <i class="fas fa-${s.icon}"></i>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:0.7rem;color:var(--gray);font-weight:600">${i+1}. ${s.label}</div>
+                <div style="font-size:0.8rem;color:${s.value && s.value.trim() ? 'var(--primary)' : '#dc2626'};font-weight:${s.value?'500':'700'};word-break:break-word">${s.value && s.value.trim() ? s.value : 'لم يُحدد بعد'}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        ${r['اعتماد'] ? `<div style="margin-top:8px;font-size:0.75rem;color:var(--gray)"><i class="fas fa-user-check"></i> اعتماد: ${r['اعتماد']}</div>` : ''}
+      </div>
+    </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function editCAPARecord(r) {
+  const form = document.getElementById('sub-qc-qc02_form');
+  if (!form) return;
+  form.style.display = 'block';
+  document.getElementById('sub-qc-qc02_editId').value = r.id || '';
+  const setVal = (key, val) => { const el = document.getElementById('sub-qc-qc02_'+key); if (el) el.value = val || ''; };
+  setVal('date', r['التاريخ']);
+  setVal('dept', r['القسم/الجهاز']);
+  setVal('test', r['الفحص']);
+  setVal('problem', r['المشكلة']);
+  setVal('contain', r['الاحتواء الفوري']);
+  setVal('root', r['السبب الجذري']);
+  setVal('corrective', r['الإجراء التصحيحي']);
+  setVal('preventive', r['الإجراء الوقائي']);
+  setVal('verify', r['التحقق من الفعالية']);
+  setVal('status', r['الحالة'] || 'Open');
+  setVal('approval', r['اعتماد']);
+  form.scrollIntoView({behavior:'smooth', block:'center'});
+  showToast('تم فتح السجل للتعديل', 'info');
+}
+
+async function saveCAPAForm() {
+  const editId = document.getElementById('sub-qc-qc02_editId').value;
+  const fields = ['date','dept','test','problem','contain','root','corrective','preventive','verify','status','approval'];
+  const sheetKeys = ['التاريخ','القسم/الجهاز','الفحص','المشكلة','الاحتواء الفوري','السبب الجذري','الإجراء التصحيحي','الإجراء الوقائي','التحقق من الفعالية','الحالة','اعتماد'];
+  const data = {};
+  fields.forEach((f, i) => {
+    const el = document.getElementById('sub-qc-qc02_'+f);
+    data[sheetKeys[i]] = el ? el.value : '';
+  });
+
+  showLoading('جاري الحفظ...');
+  try {
+    if (editId) {
+      await updateSheetRow('QC_CAPA', editId, data);
+      showToast('تم تحديث CAPA بنجاح', 'success');
+    } else {
+      await addSheetRow('QC_CAPA', data);
+      showToast('تم إضافة CAPA بنجاح', 'success');
+    }
+    cancelCAPAEdit();
+    await renderCAPACards();
+  } catch(e) {
+    showToast('خطأ: ' + e.message, 'error');
+  }
+  hideLoading();
+}
+
+function cancelCAPAEdit() {
+  document.getElementById('sub-qc-qc02_editId').value = '';
+  document.getElementById('sub-qc-qc02_form').style.display = 'none';
+  ['date','dept','test','problem','contain','root','corrective','preventive','verify','approval'].forEach(k => {
+    const el = document.getElementById('sub-qc-qc02_'+k);
+    if (el) el.value = '';
+  });
+  const statusEl = document.getElementById('sub-qc-qc02_status');
+  if (statusEl) statusEl.value = 'Open';
+}
+
+async function closeCAPARecord(id) {
+  if (!confirm('هل تريد إغلاق هذا الـ CAPA؟\nتأكد من اكتمال جميع الحقول قبل الإغلاق.')) return;
+  showLoading('جاري الإغلاق...');
+  try {
+    await updateSheetRow('QC_CAPA', id, {'الحالة': 'Closed'});
+    showToast('تم إغلاق CAPA بنجاح', 'success');
+    await renderCAPACards();
+  } catch(e) {
+    showToast('خطأ: ' + e.message, 'error');
+  }
+  hideLoading();
+}
+
+async function deleteAndRefreshCAPA(id) {
+  if (!confirm('حذف سجل CAPA؟')) return;
+  try {
+    await deleteSheetRow('QC_CAPA', id);
+    await renderCAPACards();
+  } catch(e) {
+    showToast('خطأ: ' + e.message, 'error');
+  }
+}
+
 function renderQCTab() {
   buildCRUDSection({
     sheetName:'QCLog', title:'QC-01 سجل ضبط الجودة الداخلي (IQC)', icon:'chart-bar', policyKey:'qc',
@@ -1379,24 +1629,7 @@ function renderQCTab() {
   });
   registerCRUD('sub-qc-qc01',{tableHeaders:['التاريخ','القسم','الجهاز','الفحص','المستوى','المجال','النتيجة','الحالة','الإجراء','مرفق','شهادة','CAPA'],renderRow:r=>{ return `<td>${r['التاريخ']}</td><td>${r['القسم']}</td><td>${r['الجهاز']}</td><td>${r['الفحص']}</td><td>${r['مستوى QC']}</td><td>${r['المجال المقبول']}</td><td style="font-weight:700">${r['النتيجة']}</td><td class="${r['الحالة']==='Pass'?'pass':'fail'}">${r['الحالة']}</td><td>${r['الإجراء']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?`<a href="${r['رابط الملف']}" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>`:(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "qc")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td><td>${r['الحالة']==='Fail'?`<button onclick='openCAPAFromRow(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="btn btn-sm" style="font-size:0.7rem;padding:4px 8px;background:#dc3545;color:white;border:none;border-radius:6px;animation:pulse 2s infinite"><i class="fas fa-exclamation-triangle"></i> CAPA</button>`:'<span style="color:#28a745;font-size:0.8rem">-</span>'}</td>`; }});
 
-  buildCRUDSection({
-    sheetName:'QC_CAPA', title:'QC-02 إخفاقات IQC وCAPA', icon:'exclamation-triangle', policyKey:'qc',
-    fields:[
-      {key:'date',label:'التاريخ',sheetKey:'التاريخ',type:'date'},
-      {key:'dept',label:'القسم/الجهاز',sheetKey:'القسم/الجهاز',placeholder:'كيمياء / Cobas'},
-      {key:'test',label:'الفحص',sheetKey:'الفحص',placeholder:'Glucose'},
-      {key:'problem',label:'المشكلة',sheetKey:'المشكلة',placeholder:'Out of control'},
-      {key:'contain',label:'الاحتواء',sheetKey:'الاحتواء الفوري',placeholder:'تعليق الفحص'},
-      {key:'root',label:'السبب الجذري',sheetKey:'السبب الجذري',placeholder:'كاشف منتهي'},
-      {key:'corrective',label:'الإجراء التصحيحي',sheetKey:'الإجراء التصحيحي',placeholder:'تغيير الكاشف'},
-      {key:'verify',label:'التحقق',sheetKey:'التحقق من الفعالية',placeholder:'QC pass'},
-      {key:'status',label:'الحالة',sheetKey:'الحالة',type:'select',options:[{value:'Open',label:'مفتوح'},{value:'Closed',label:'مغلق'}]},
-    ],
-    tableHeaders:['التاريخ','القسم','الفحص','المشكلة','السبب الجذري','الإجراء','الحالة'],
-    renderRow: r => `<td>${r['التاريخ']}</td><td>${r['القسم/الجهاز']}</td><td>${r['الفحص']}</td><td>${r['المشكلة']}</td><td>${r['السبب الجذري']}</td><td>${r['الإجراء التصحيحي']}</td><td class="${r['الحالة']==='Closed'?'pass':'fail'}">${r['الحالة']}</td>`,
-    containerId:'sub-qc-qc02'
-  });
-  registerCRUD('sub-qc-qc02',{tableHeaders:['التاريخ','القسم','الفحص','المشكلة','السبب الجذري','الإجراء','الحالة'],renderRow:r=>`<td>${r['التاريخ']}</td><td>${r['القسم/الجهاز']}</td><td>${r['الفحص']}</td><td>${r['المشكلة']}</td><td>${r['السبب الجذري']}</td><td>${r['الإجراء التصحيحي']}</td><td class="${r['الحالة']==='Closed'?'pass':'fail'}">${r['الحالة']}</td>`});
+  renderCAPASection();
 
   buildCRUDSection({
     sheetName:'PT_EQA', title:'PT-01 اختبارات الكفاءة الخارجية', icon:'trophy', policyKey:'pt',
