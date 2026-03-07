@@ -470,7 +470,7 @@
     </div>
     <div class="autofill-box">
       <label><i class="fas fa-magic"></i> اختر التحليل من القائمة - يتعبأ تلقائياً</label>
-      <input type="text" class="autofill-input" id="autofillSearch" placeholder="ابحث بالعربي أو الإنجليزي... مثال: CBC أو سكر أو Glucose" autocomplete="off">
+      <input type="text" class="autofill-input" id="autofillSearch" placeholder="اكتب CBC, LFT, سكر, دهون, صورة دم, وظائف كبد, Glucose..." autocomplete="off">
       <div class="autofill-dropdown" id="autofillDropdown"></div>
       <div class="autofill-hint"><i class="fas fa-info-circle"></i> اختر تحليل من 146 نطاق دولي وسيتم تعبئة جميع الحقول تلقائياً</div>
     </div>
@@ -888,6 +888,43 @@ function parseRange(rc) {
   return { low: '', high: '' };
 }
 
+const PANEL_ALIASES = {
+  'cbc':['Hematocrit','Hemoglobin','RBC','MCV','MCH','MCHC','WBC','Neutrophils','Lymphocytes','Monocytes','Eosinophils','Basophils','Platelet','Reticulocyte','ESR','هيماتوكريت','هيموغلوبين','كريات','صفائح','عدلات','خلايا','ترسيب'],
+  'صورة دم':['Hematocrit','Hemoglobin','RBC','MCV','MCH','MCHC','WBC','Neutrophils','Lymphocytes','Monocytes','Eosinophils','Basophils','Platelet','Reticulocyte','ESR','هيماتوكريت','هيموغلوبين','كريات','صفائح'],
+  'تعداد':['Hematocrit','Hemoglobin','RBC','MCV','MCH','MCHC','WBC','Neutrophils','Platelet','هيماتوكريت','هيموغلوبين','كريات','صفائح'],
+  'lft':['ALT','AST','ALP','Bilirubin','Albumin','Total protein','GGT','ناقلة','بيليروبين','ألبومين','بروتين'],
+  'وظائف كبد':['ALT','AST','ALP','Bilirubin','Albumin','Total protein','GGT','ناقلة','بيليروبين','ألبومين','بروتين'],
+  'rft':['Creatinine','Urea','BUN','eGFR','كرياتينين','يوريا'],
+  'وظائف كلى':['Creatinine','Urea','BUN','eGFR','كرياتينين','يوريا'],
+  'kft':['Creatinine','Urea','BUN','eGFR','كرياتينين','يوريا'],
+  'lipid':['Cholesterol','Triglyceride','HDL','LDL','كولسترول','دهون','بروتين دهني'],
+  'دهون':['Cholesterol','Triglyceride','HDL','LDL','كولسترول','دهون','بروتين دهني'],
+  'thyroid':['TSH','T3','T4','Free T','درقية'],
+  'غدة درقية':['TSH','T3','T4','Free T','درقية'],
+  'coagulation':['PT','INR','aPTT','Fibrinogen','بروثرومبين','تخثر'],
+  'تخثر':['PT','INR','aPTT','Fibrinogen','بروثرومبين','تخثر'],
+  'electrolytes':['Sodium','Potassium','Chloride','Bicarbonate','Calcium','Magnesium','Phosphorus','صوديوم','بوتاسيوم','كلوريد','كالسيوم','مغنيسيوم'],
+  'أملاح':['Sodium','Potassium','Chloride','Bicarbonate','Calcium','Magnesium','Phosphorus','صوديوم','بوتاسيوم','كلوريد','كالسيوم','مغنيسيوم'],
+  'سكر':['Glucose','HbA1c','Hemoglobin A1c','سكر','جلوكوز'],
+  'glucose':['Glucose','HbA1c','Hemoglobin A1c','سكر','جلوكوز'],
+  'iron':['Iron','Ferritin','TIBC','Transferrin','حديد','فيريتين'],
+  'حديد':['Iron','Ferritin','TIBC','Transferrin','حديد','فيريتين'],
+  'urine':['Urine','بول'],
+  'بول':['Urine','بول'],
+};
+function searchRefRanges(q) {
+  q = q.replace(/[.,;]/g,'').trim().toLowerCase();
+  if (q.length < 1) return [];
+  const panelKeys = Object.keys(PANEL_ALIASES).filter(k => q.includes(k) || k.includes(q));
+  if (panelKeys.length) {
+    const keywords = panelKeys.flatMap(k => PANEL_ALIASES[k]);
+    return REF_RANGES.filter(r => keywords.some(kw => r.en.toLowerCase().includes(kw.toLowerCase()) || r.ar.includes(kw))).slice(0, 25);
+  }
+  return REF_RANGES.filter(r =>
+    r.ar.toLowerCase().includes(q) || r.en.toLowerCase().includes(q) || r.s.toLowerCase().includes(q)
+  ).slice(0, 15);
+}
+
 (function initAutofill() {
   const input = document.getElementById('autofillSearch');
   const dropdown = document.getElementById('autofillDropdown');
@@ -895,13 +932,11 @@ function parseRange(rc) {
   input.addEventListener('input', function() {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      const q = this.value.trim().toLowerCase();
+      const q = this.value.trim();
       if (q.length < 1) { dropdown.classList.remove('show'); return; }
-      const results = REF_RANGES.filter(r =>
-        r.ar.toLowerCase().includes(q) || r.en.toLowerCase().includes(q) || r.s.toLowerCase().includes(q)
-      ).slice(0, 15);
+      const results = searchRefRanges(q);
       if (!results.length) {
-        dropdown.innerHTML = '<div style="padding:12px;text-align:center;color:#94a3b8;font-size:0.85rem">لا توجد نتائج</div>';
+        dropdown.innerHTML = '<div style="padding:12px;text-align:center;color:#94a3b8;font-size:0.85rem">لا توجد نتائج - جرب: CBC, سكر, LFT, دهون</div>';
         dropdown.classList.add('show'); return;
       }
       dropdown.innerHTML = results.map((r, i) => {
