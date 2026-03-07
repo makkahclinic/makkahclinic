@@ -1434,7 +1434,7 @@ function renderQCTab() {
     containerId:'sub-qc-co01'
   });
   registerCRUD('sub-qc-co01',{tableHeaders:['الفحص','الجهاز1','الجهاز2','العينات','المعيار','النتيجة','القرار'],renderRow:r=>`<td>${r['الفحص']}</td><td>${r['الجهاز1']}</td><td>${r['الجهاز2']}</td><td>${r['عدد العينات']}</td><td>${r['معيار القبول']}</td><td>${r['النتيجة']}</td><td class="${r['القرار']==='مقبول'?'pass':'fail'}">${r['القرار']}</td>`});
-  setTimeout(() => { initDevicePicker('sub-qc-qc01'); }, 200);
+  waitAndInitPicker('sub-qc-qc01');
 }
 
 function renderEquipmentTab() {
@@ -1505,7 +1505,7 @@ function renderEquipmentTab() {
     containerId:'sub-equipment-rg01'
   });
   registerCRUD('sub-equipment-rg01',{tableHeaders:['الفحص','اللوت القديم','الجديد','المعيار','النتيجة','الحالة','التاريخ'],renderRow:r=>`<td>${r['الفحص']}</td><td>${r['اللوت القديم']}</td><td>${r['اللوت الجديد']}</td><td>${r['معيار القبول']}</td><td>${r['النتيجة']}</td><td class="${r['Pass/Fail']==='Pass'?'pass':'fail'}">${r['Pass/Fail']}</td><td>${r['التاريخ']}</td>`});
-  setTimeout(() => { initDevicePicker('sub-equipment-eq01'); }, 200);
+  waitAndInitPicker('sub-equipment-eq01');
 }
 
 function renderSpecimensTab() {
@@ -1968,6 +1968,20 @@ function getUniqueDevices() {
   return Object.values(map);
 }
 
+function waitAndInitPicker(containerId) {
+  let attempts = 0;
+  const tryInit = () => {
+    attempts++;
+    const el = document.getElementById(containerId + '_device');
+    if (el && labAssets.length) {
+      initDevicePicker(containerId);
+    } else if (attempts < 20) {
+      setTimeout(tryInit, 500);
+    }
+  };
+  setTimeout(tryInit, 300);
+}
+
 function initDevicePicker(containerId) {
   const deviceInput = document.getElementById(containerId + '_device');
   if (!deviceInput || !labAssets.length) return;
@@ -2036,9 +2050,7 @@ function selectDevice(containerId, assetId, deviceName, roomName) {
 async function initApp() {
   await loadTestsFromServer();
   renderDocs();
-  loadLabAssets().then(() => {
-    setTimeout(() => { initDevicePicker('sub-qc-qc01'); }, 1000);
-  });
+  loadLabAssets();
   await loadSheetData('QCLog');
   await loadSheetData('CAPA_Log');
   await loadSheetData('Maintenance');
