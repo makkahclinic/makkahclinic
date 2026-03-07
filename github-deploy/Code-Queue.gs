@@ -13,7 +13,8 @@ const Q_CONFIG = {
   SHEETS: {
     LOG: 'QueueLog',
     DOCTORS: 'Doctors',
-    STATS: 'DailyStats'
+    STATS: 'DailyStats',
+    CLINICS: 'Clinics'
   },
   TIMEZONE: 'Asia/Riyadh'
 };
@@ -47,6 +48,8 @@ function doGet(e) {
         return respondOk_(getStats_(ss, e.parameter));
       case 'getDoctors':
         return respondOk_(getDoctors_(ss));
+      case 'getClinics':
+        return respondOk_(getClinics_(ss));
       case 'getLog':
         return respondOk_(getLog_(ss, e.parameter));
       default:
@@ -321,6 +324,21 @@ function getAllData_(ss, params) {
   const doctors = getDoctors_(ss);
   const stats = getStats_(ss, params);
   return { doctors, stats };
+}
+
+function getClinics_(ss) {
+  const sh = ss.getSheetByName(Q_CONFIG.SHEETS.CLINICS);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const data = sh.getDataRange().getValues();
+  const result = [];
+  for (let i = 1; i < data.length; i++) {
+    const name = String(data[i][0] || '').trim();
+    const code = String(data[i][1] || '').trim();
+    if (name) {
+      result.push({ name, code, clinic: code ? 'عيادة ' + code : '' });
+    }
+  }
+  return result;
 }
 
 function getDoctors_(ss) {
