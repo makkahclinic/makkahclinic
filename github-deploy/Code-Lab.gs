@@ -10,7 +10,7 @@ const LAB_CONFIG = {
   TIMEZONE: 'Asia/Riyadh',
   PASS_THRESHOLD: 18,
   TOTAL_SAMPLES: 20,
-  DRIVE_FOLDER_ID: ''
+  DRIVE_FOLDER_ID: '175tkpEMaK9Cd9X3q3stI62pRIlmgx5Wd'
 };
 
 const SHEET_DEFS = {
