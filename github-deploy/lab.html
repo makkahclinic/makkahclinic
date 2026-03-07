@@ -1443,7 +1443,7 @@ function renderCAPASection() {
 }
 
 async function renderCAPACards() {
-  const rows = await loadSheetData('QC_CAPA');
+  const rows = await loadCAPAData();
   const container = document.getElementById('sub-qc-qc02_cards');
   if (!container) return;
 
@@ -1554,6 +1554,33 @@ function editCAPARecord(r) {
   showToast('تم فتح السجل للتعديل', 'info');
 }
 
+const CAPA_API_URLS = [
+  'https://makkahclinic-m2020m.replit.app/api/lab/capa',
+  'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/lab/capa'
+];
+
+async function capaApiFetch(method, body) {
+  for (const url of CAPA_API_URLS) {
+    try {
+      const opts = {method, headers:{'Content-Type':'application/json'}};
+      if (body) opts.body = JSON.stringify(body);
+      const r = await fetch(url, opts);
+      if (r.ok) return await r.json();
+    } catch(e) {}
+  }
+  throw new Error('فشل الاتصال بالخادم');
+}
+
+async function loadCAPAData() {
+  try {
+    const result = await capaApiFetch('GET');
+    sheetCache['QC_CAPA'] = result?.data?.rows || [];
+    return sheetCache['QC_CAPA'];
+  } catch(e) {
+    return await loadSheetData('QC_CAPA');
+  }
+}
+
 async function saveCAPAForm() {
   const editId = document.getElementById('sub-qc-qc02_editId').value;
   const fields = ['date','dept','test','problem','contain','root','corrective','preventive','verify','status','approval'];
@@ -1563,34 +1590,18 @@ async function saveCAPAForm() {
     const el = document.getElementById('sub-qc-qc02_'+f);
     data[sheetKeys[i]] = el ? el.value : '';
   });
-  const preventiveValue = data['الإجراء الوقائي'] || '';
 
   showLoading('جاري الحفظ...');
   try {
-    let savedId = editId;
     if (editId) {
-      await updateSheetRow('QC_CAPA', editId, data);
+      await capaApiFetch('PUT', {rowId: editId, data});
       showToast('تم تحديث CAPA بنجاح', 'success');
     } else {
-      const result = await addSheetRow('QC_CAPA', data);
-      savedId = result?.id || '';
+      await capaApiFetch('POST', {data});
       showToast('تم إضافة CAPA بنجاح', 'success');
     }
-    if (preventiveValue && savedId) {
-      try {
-        const urls = [
-          'https://makkahclinic-m2020m.replit.app/api/lab/update-capa-preventive',
-          'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/lab/update-capa-preventive'
-        ];
-        for (const url of urls) {
-          try {
-            const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rowId:savedId, value:preventiveValue})});
-            if (r.ok) break;
-          } catch(e) {}
-        }
-      } catch(e) { console.warn('Preventive save fallback:', e); }
-    }
     cancelCAPAEdit();
+    sheetCache['QC_CAPA'] = null;
     await renderCAPACards();
   } catch(e) {
     showToast('خطأ: ' + e.message, 'error');
@@ -1624,12 +1635,16 @@ async function closeCAPARecord(id) {
 
 async function deleteAndRefreshCAPA(id) {
   if (!confirm('حذف سجل CAPA؟')) return;
+  showLoading('جاري الحذف...');
   try {
-    await deleteSheetRow('QC_CAPA', id);
+    await capaApiFetch('DELETE', {rowId: id});
+    showToast('تم الحذف بنجاح', 'success');
+    sheetCache['QC_CAPA'] = null;
     await renderCAPACards();
   } catch(e) {
     showToast('خطأ: ' + e.message, 'error');
   }
+  hideLoading();
 }
 
 const CAPA_AI_URLS = [
