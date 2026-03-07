@@ -771,7 +771,7 @@ const popNames = {both:'ذكور وإناث',male:'ذكور',female:'إناث'};
 
 function showLoading(msg) {
   let o = document.getElementById('loadingOverlay');
-  if (!o) { o = document.createElement('div'); o.id='loadingOverlay'; o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;'; o.innerHTML='<div style="width:40px;height:40px;border:4px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite"></div><div style="color:white;font-size:1rem;font-weight:700" id="loadingText"></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>'; document.body.appendChild(o); }
+  if (!o) { o = document.createElement('div'); o.id='loadingOverlay'; o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;'; o.innerHTML='<div style="width:40px;height:40px;border:4px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite"></div><div style="color:white;font-size:1rem;font-weight:700" id="loadingText"></div><style>@keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}</style>'; document.body.appendChild(o); }
   document.getElementById('loadingText').textContent = msg || 'جاري التحميل...';
   o.style.display = 'flex';
 }
@@ -1011,6 +1011,18 @@ function searchRefRanges(q) {
     if (!e.target.closest('.autofill-box')) dropdown.classList.remove('show');
   });
 })();
+function openCAPAFromRow(r) {
+  autoOpenCAPAForm({
+    date: r['التاريخ'] || '',
+    dept: r['القسم'] || '',
+    device: r['الجهاز'] || '',
+    test: r['الفحص'] || '',
+    result: r['النتيجة'] || '',
+    range: r['المجال المقبول'] || '',
+    level: r['مستوى QC'] || ''
+  });
+}
+
 function autoOpenCAPAForm(qcData) {
   setTimeout(() => {
     document.querySelectorAll('#qc-section-daily .sub-pill').forEach(p=>p.classList.remove('active'));
@@ -1356,11 +1368,11 @@ function renderQCTab() {
       {key:'action',label:'الإجراء',sheetKey:'الإجراء',placeholder:'لا يوجد'},
       {key:'attachment',label:'إرفاق ملف (PDF/صورة) *',sheetKey:'المرفق',type:'file',required:true},
     ],
-    tableHeaders:['التاريخ','القسم','الجهاز','الفحص','المستوى','المجال','النتيجة','الحالة','الإجراء','مرفق','شهادة'],
-    renderRow: r => { const att=r['المرفق']||r['رابط الملف']||''; const hasAtt=att&&att!=='N/A'&&!att.endsWith('.pdf')&&!att.endsWith('.png')&&!att.endsWith('.jpg')?false:att&&att!=='N/A'; return `<td>${r['التاريخ']}</td><td>${r['القسم']}</td><td>${r['الجهاز']}</td><td>${r['الفحص']}</td><td>${r['مستوى QC']}</td><td>${r['المجال المقبول']}</td><td style="font-weight:700">${r['النتيجة']}</td><td class="${r['الحالة']==='Pass'?'pass':'fail'}">${r['الحالة']}</td><td>${r['الإجراء']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?`<a href="${r['رابط الملف']}" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>`:(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "qc")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`; },
+    tableHeaders:['التاريخ','القسم','الجهاز','الفحص','المستوى','المجال','النتيجة','الحالة','الإجراء','مرفق','شهادة','CAPA'],
+    renderRow: r => { return `<td>${r['التاريخ']}</td><td>${r['القسم']}</td><td>${r['الجهاز']}</td><td>${r['الفحص']}</td><td>${r['مستوى QC']}</td><td>${r['المجال المقبول']}</td><td style="font-weight:700">${r['النتيجة']}</td><td class="${r['الحالة']==='Pass'?'pass':'fail'}">${r['الحالة']}</td><td>${r['الإجراء']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?`<a href="${r['رابط الملف']}" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>`:(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "qc")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td><td>${r['الحالة']==='Fail'?`<button onclick='openCAPAFromRow(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="btn btn-sm" style="font-size:0.7rem;padding:4px 8px;background:#dc3545;color:white;border:none;border-radius:6px;animation:pulse 2s infinite"><i class="fas fa-exclamation-triangle"></i> CAPA</button>`:'<span style="color:#28a745;font-size:0.8rem">-</span>'}</td>`; },
     containerId:'sub-qc-qc01'
   });
-  registerCRUD('sub-qc-qc01',{tableHeaders:['التاريخ','القسم','الجهاز','الفحص','المستوى','المجال','النتيجة','الحالة','الإجراء','مرفق','شهادة'],renderRow:r=>{ return `<td>${r['التاريخ']}</td><td>${r['القسم']}</td><td>${r['الجهاز']}</td><td>${r['الفحص']}</td><td>${r['مستوى QC']}</td><td>${r['المجال المقبول']}</td><td style="font-weight:700">${r['النتيجة']}</td><td class="${r['الحالة']==='Pass'?'pass':'fail'}">${r['الحالة']}</td><td>${r['الإجراء']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?`<a href="${r['رابط الملف']}" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>`:(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "qc")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`; }});
+  registerCRUD('sub-qc-qc01',{tableHeaders:['التاريخ','القسم','الجهاز','الفحص','المستوى','المجال','النتيجة','الحالة','الإجراء','مرفق','شهادة','CAPA'],renderRow:r=>{ return `<td>${r['التاريخ']}</td><td>${r['القسم']}</td><td>${r['الجهاز']}</td><td>${r['الفحص']}</td><td>${r['مستوى QC']}</td><td>${r['المجال المقبول']}</td><td style="font-weight:700">${r['النتيجة']}</td><td class="${r['الحالة']==='Pass'?'pass':'fail'}">${r['الحالة']}</td><td>${r['الإجراء']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?`<a href="${r['رابط الملف']}" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>`:(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "qc")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td><td>${r['الحالة']==='Fail'?`<button onclick='openCAPAFromRow(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="btn btn-sm" style="font-size:0.7rem;padding:4px 8px;background:#dc3545;color:white;border:none;border-radius:6px;animation:pulse 2s infinite"><i class="fas fa-exclamation-triangle"></i> CAPA</button>`:'<span style="color:#28a745;font-size:0.8rem">-</span>'}</td>`; }});
 
   buildCRUDSection({
     sheetName:'QC_CAPA', title:'QC-02 إخفاقات IQC وCAPA', icon:'exclamation-triangle', policyKey:'qc',
