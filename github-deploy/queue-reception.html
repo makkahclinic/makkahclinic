@@ -570,27 +570,57 @@ function showAuthOverlay() {
   });
 }
 
+const QUEUE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzEIyoCBc8LNuPfNWxyxhc8yRi5AIfzaZ6Rk0zm6LMOOrp9xXb7NweNzdvTVOOwFCPP9g/exec';
 const DOCTORS_KEY = 'queue_doctors_config';
 const DOCTORS_DOC_ID = 'doctors_list';
 
-const defaultDoctors = [
-  { name: 'د. معاذ البيوش', clinic: 'عيادة 1', active: true },
-  { name: 'د. خالد الخطيب', clinic: 'عيادة 2', active: true },
-  { name: 'د. محمد نور الدين', clinic: 'عيادة 3', active: true },
-  { name: 'د. مجدي عسكر', clinic: 'عيادة 4', active: true }
-];
+const defaultDoctors = [];
 
 let doctors = [];
 
+async function loadDoctorsFromSheet() {
+  try {
+    const resp = await fetch(QUEUE_SHEET_URL + '?action=getClinics');
+    const result = await resp.json();
+    if (result.status === 'success' && result.data && result.data.length > 0) {
+      return result.data.map(d => ({
+        name: d.name,
+        clinic: d.clinic || 'عيادة ' + (d.code || ''),
+        active: true
+      }));
+    }
+  } catch (e) {
+    console.log('Sheet clinics load error:', e);
+  }
+  return null;
+}
+
 async function loadDoctorsFromFirestore() {
+  const sheetDoctors = await loadDoctorsFromSheet();
+
+  if (sheetDoctors && sheetDoctors.length > 0) {
+    doctors = sheetDoctors;
+    localStorage.setItem(DOCTORS_KEY, JSON.stringify(doctors));
+    try {
+      await setDoc(doc(db, 'queue_config', DOCTORS_DOC_ID), { doctors });
+    } catch (e) {
+      console.log('Sync to Firestore error:', e);
+    }
+    renderDoctorSelect();
+    renderDoctorsSetup();
+    return;
+  }
+
   try {
     const docRef = doc(db, 'queue_config', DOCTORS_DOC_ID);
     const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      doctors = docSnap.data().doctors || defaultDoctors;
+    if (docSnap.exists() && docSnap.data().doctors && docSnap.data().doctors.length > 0) {
+      doctors = docSnap.data().doctors;
     } else {
       doctors = defaultDoctors;
-      await setDoc(docRef, { doctors: defaultDoctors });
+      if (doctors.length > 0) {
+        await setDoc(docRef, { doctors: defaultDoctors });
+      }
     }
   } catch (e) {
     console.error('Load doctors error:', e);
@@ -890,8 +920,6 @@ function showToast(msg, type = 'success') {
 document.getElementById('patientName').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') window.addToQueue();
 });
-
-const QUEUE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzEIyoCBc8LNuPfNWxyxhc8yRi5AIfzaZ6Rk0zm6LMOOrp9xXb7NweNzdvTVOOwFCPP9g/exec';
 
 function setArchiveStatus(msg, isError) {
   const el = document.getElementById('archiveStatus');
