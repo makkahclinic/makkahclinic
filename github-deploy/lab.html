@@ -1770,25 +1770,335 @@ function renderQCTab() {
   });
   registerCRUD('sub-qc-pt01',{tableHeaders:['المزود','الدورة','القسم','الفحص','الاستلام','الإرسال','النتيجة','مقبول','مرفق','شهادة'],renderRow:r=>`<td>${r['المزود']}</td><td>${r['الدورة']}</td><td>${r['القسم']}</td><td>${r['الفحص']}</td><td>${r['تاريخ الاستلام']}</td><td>${r['تاريخ الإرسال']}</td><td>${r['النتيجة']}</td><td class="${r['مقبول']==='نعم'?'pass':'fail'}">${r['مقبول']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?'<a href="'+r['رابط الملف']+'" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>':(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "pt")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`});
 
-  buildCRUDSection({
-    sheetName:'Correlation', title:'CO-01 دراسة الارتباط بين الأجهزة', icon:'exchange-alt', policyKey:'correlation',
-    fields:[
-      {key:'test',label:'الفحص',sheetKey:'الفحص',placeholder:'Glucose'},
-      {key:'dev1',label:'الجهاز 1',sheetKey:'الجهاز1',placeholder:'Cobas c311'},
-      {key:'method1',label:'الطريقة 1',sheetKey:'الطريقة1',placeholder:'Enzymatic'},
-      {key:'dev2',label:'الجهاز 2',sheetKey:'الجهاز2',placeholder:'Architect'},
-      {key:'method2',label:'الطريقة 2',sheetKey:'الطريقة2',placeholder:'Enzymatic'},
-      {key:'samples',label:'عدد العينات',sheetKey:'عدد العينات',type:'number',placeholder:'40'},
-      {key:'criteria',label:'معيار القبول',sheetKey:'معيار القبول',placeholder:'r > 0.95'},
-      {key:'result',label:'النتيجة',sheetKey:'النتيجة',placeholder:'r = 0.98'},
-      {key:'decision',label:'القرار',sheetKey:'القرار',type:'select',options:[{value:'مقبول',label:'مقبول'},{value:'غير مقبول',label:'غير مقبول'}]},
-    ],
-    tableHeaders:['الفحص','الجهاز1','الجهاز2','العينات','المعيار','النتيجة','القرار'],
-    renderRow: r => `<td>${r['الفحص']}</td><td>${r['الجهاز1']}</td><td>${r['الجهاز2']}</td><td>${r['عدد العينات']}</td><td>${r['معيار القبول']}</td><td>${r['النتيجة']}</td><td class="${r['القرار']==='مقبول'?'pass':'fail'}">${r['القرار']}</td>`,
-    containerId:'sub-qc-co01'
-  });
-  registerCRUD('sub-qc-co01',{tableHeaders:['الفحص','الجهاز1','الجهاز2','العينات','المعيار','النتيجة','القرار'],renderRow:r=>`<td>${r['الفحص']}</td><td>${r['الجهاز1']}</td><td>${r['الجهاز2']}</td><td>${r['عدد العينات']}</td><td>${r['معيار القبول']}</td><td>${r['النتيجة']}</td><td class="${r['القرار']==='مقبول'?'pass':'fail'}">${r['القرار']}</td>`});
+  renderCorrelationWizard();
   waitAndInitPicker('sub-qc-qc01');
+}
+
+const CORR_PAIRS = [
+  {id:'chem', label:'Chemistry Analyzers', dev1:'Cormay Chemistry Analyzer', dev2:'Biosystem Chemistry Analyzer', icon:'flask', color:'#2563eb',
+   analytes:['Glucose','Creatinine','Urea / BUN','ALT (SGPT)','AST (SGOT)','ALP','Total Bilirubin','Direct Bilirubin','Albumin','Total Protein','Cholesterol','Triglycerides','HDL','LDL','Uric Acid','Calcium','Phosphorus','Sodium','Potassium','Chloride','Iron']},
+  {id:'immuno', label:'Immunoassay Analyzers', dev1:'ECL8000 Hormone Analyzer', dev2:'Mini Vidas', icon:'microscope', color:'#7c3aed',
+   analytes:['TSH','Free T3','Free T4','Vitamin D (25-OH)','Ferritin','PSA','HCG','Prolactin','Cortisol','Testosterone','FSH','LH','Estradiol','Progesterone','Insulin','CEA','CA 125','CA 19-9','AFP']}
+];
+
+let corrStudyChart = null;
+let corrSamples = [];
+
+function renderCorrelationWizard() {
+  const container = document.getElementById('sub-qc-co01');
+  container.innerHTML = `
+    <div class="card" style="border:none;box-shadow:0 2px 16px rgba(0,0,0,0.06)">
+      <div class="card-header" style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);color:white;border-radius:12px 12px 0 0;padding:18px 20px">
+        <span><i class="fas fa-exchange-alt"></i> CO-01 دراسة الارتباط بين الأجهزة — Correlation Study Wizard</span>
+        <div class="card-actions">
+          <a href="${POLICY_LINKS['correlation']}" target="_blank" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3)"><i class="fas fa-file-alt"></i> السياسة</a>
+          <button class="btn btn-sm" style="background:#c9a962;color:#1e3a5f;font-weight:700" onclick="window['corrWizardToggle']()"><i class="fas fa-plus"></i> دراسة جديدة</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div id="corr-wizard-panel" style="display:none"></div>
+        <div id="corr-info-banner" style="padding:16px 20px;background:linear-gradient(135deg,#f0f9ff,#ede9fe);border-bottom:1px solid #e0e7ff">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+            <span style="background:#dbeafe;color:#1e40af;padding:6px 14px;border-radius:20px;font-size:0.78rem;font-weight:700"><i class="fas fa-info-circle"></i> معيار LB.11 — كل 6 أشهر أو عند إدخال جهاز جديد</span>
+            <span style="background:#f3e8ff;color:#6b21a8;padding:6px 14px;border-radius:20px;font-size:0.78rem;font-weight:700"><i class="fas fa-check-circle"></i> معيار القبول: R ≥ 0.95 — Bias ≤ ±10%</span>
+          </div>
+          <div style="display:flex;gap:14px;margin-top:14px;flex-wrap:wrap">
+            ${CORR_PAIRS.map(p => `<div style="flex:1;min-width:240px;background:white;border-radius:12px;border:2px solid ${p.color}22;padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:default">
+              <div style="width:44px;height:44px;border-radius:50%;background:${p.color}15;display:flex;align-items:center;justify-content:center"><i class="fas fa-${p.icon}" style="color:${p.color};font-size:1.1rem"></i></div>
+              <div><div style="font-weight:700;color:#1e3a5f;font-size:0.88rem">${p.label}</div><div style="font-size:0.72rem;color:#6b7280;margin-top:2px">${p.dev1} <i class="fas fa-arrows-alt-h" style="color:${p.color};margin:0 4px"></i> ${p.dev2}</div></div>
+            </div>`).join('')}
+          </div>
+        </div>
+        <div id="corr-history-table" style="padding:12px 16px;overflow-x:auto"></div>
+      </div>
+    </div>`;
+
+  window['corrWizardToggle'] = () => {
+    const panel = document.getElementById('corr-wizard-panel');
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    corrSamples = [];
+    panel.style.display = 'block';
+    panel.innerHTML = `
+      <div style="padding:20px;background:#fafbfc;border-bottom:1px solid #e5e7eb">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+          <div style="width:32px;height:32px;border-radius:50%;background:#1e3a5f;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem">1</div>
+          <h3 style="margin:0;color:#1e3a5f;font-size:1rem">اختر زوج الأجهزة والفحص</h3>
+        </div>
+        <div class="form-row" style="gap:12px">
+          <div class="form-group" style="flex:2">
+            <label>زوج الأجهزة</label>
+            <select id="corr-pair" onchange="window['corrPairChanged']()" style="font-size:0.9rem;padding:10px 14px;border-radius:10px;border:1.5px solid #d1d5db;width:100%">
+              <option value="">-- اختر --</option>
+              ${CORR_PAIRS.map(p => `<option value="${p.id}">${p.label}: ${p.dev1} ↔ ${p.dev2}</option>`).join('')}
+              <option value="custom">أجهزة أخرى (إدخال يدوي)</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1">
+            <label>الفحص / Analyte</label>
+            <select id="corr-analyte" style="font-size:0.9rem;padding:10px 14px;border-radius:10px;border:1.5px solid #d1d5db;width:100%">
+              <option value="">اختر زوج الأجهزة أولاً</option>
+            </select>
+          </div>
+          <div class="form-group" id="corr-custom-wrap" style="flex:2;display:none">
+            <label>أسماء الأجهزة (يدوي)</label>
+            <div style="display:flex;gap:8px">
+              <input type="text" id="corr-custom-dev1" placeholder="الجهاز 1" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid #d1d5db">
+              <input type="text" id="corr-custom-dev2" placeholder="الجهاز 2" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid #d1d5db">
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;margin:22px 0 14px">
+          <div style="width:32px;height:32px;border-radius:50%;background:#1e3a5f;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem">2</div>
+          <h3 style="margin:0;color:#1e3a5f;font-size:1rem">إدخال نتائج العينات</h3>
+          <span style="font-size:0.75rem;color:#6b7280;background:#f3f4f6;padding:4px 10px;border-radius:12px">20-40 عينة</span>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn btn-green btn-sm" onclick="window['corrAddRows'](5)"><i class="fas fa-plus"></i> +5 عينات</button>
+          <button class="btn btn-green btn-sm" onclick="window['corrAddRows'](10)"><i class="fas fa-plus"></i> +10 عينات</button>
+          <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d" onclick="window['corrAddRows'](20)"><i class="fas fa-plus"></i> +20 عينة</button>
+          <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5" onclick="window['corrClearSamples']()"><i class="fas fa-trash"></i> مسح الكل</button>
+        </div>
+        <div id="corr-samples-grid" style="max-height:400px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:10px;background:white"></div>
+
+        <div style="display:flex;align-items:center;gap:10px;margin:22px 0 14px">
+          <div style="width:32px;height:32px;border-radius:50%;background:#1e3a5f;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem">3</div>
+          <h3 style="margin:0;color:#1e3a5f;font-size:1rem">النتائج والتحليل</h3>
+        </div>
+        <div id="corr-results-area" style="display:none">
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+            <div id="corr-stat-r" class="corr-stat-card"></div>
+            <div id="corr-stat-bias" class="corr-stat-card"></div>
+            <div id="corr-stat-n" class="corr-stat-card"></div>
+            <div id="corr-stat-decision" class="corr-stat-card"></div>
+          </div>
+          <div style="background:white;border-radius:12px;border:1px solid #e5e7eb;padding:16px;max-width:500px;margin:0 auto">
+            <canvas id="corr-scatter-chart" height="300"></canvas>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:18px;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#2563eb,#1e40af);color:white;padding:10px 24px;font-size:0.9rem;border-radius:10px" onclick="window['corrCalculate']()"><i class="fas fa-calculator"></i> حساب الارتباط</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#059669,#047857);color:white;padding:10px 24px;font-size:0.9rem;border-radius:10px" onclick="window['corrSaveStudy']()"><i class="fas fa-save"></i> حفظ الدراسة</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:white;padding:10px 24px;font-size:0.9rem;border-radius:10px" onclick="window['corrPrintReport']()"><i class="fas fa-print"></i> طباعة التقرير</button>
+          <button class="btn btn-sm" style="background:#e5e7eb;color:#374151;padding:10px 24px;font-size:0.9rem;border-radius:10px" onclick="document.getElementById('corr-wizard-panel').style.display='none'"><i class="fas fa-times"></i> إلغاء</button>
+        </div>
+      </div>`;
+    window['corrAddRows'](5);
+  };
+
+  window['corrPairChanged'] = () => {
+    const sel = document.getElementById('corr-pair').value;
+    const analyteEl = document.getElementById('corr-analyte');
+    const customWrap = document.getElementById('corr-custom-wrap');
+    if (sel === 'custom') {
+      customWrap.style.display = 'block';
+      analyteEl.innerHTML = '<option value="">أدخل يدوياً</option>';
+      analyteEl.insertAdjacentHTML('beforeend','<option value="__custom__">-- إدخال يدوي --</option>');
+      return;
+    }
+    customWrap.style.display = 'none';
+    const pair = CORR_PAIRS.find(p => p.id === sel);
+    if (!pair) { analyteEl.innerHTML = '<option value="">اختر زوج الأجهزة أولاً</option>'; return; }
+    analyteEl.innerHTML = pair.analytes.map(a => `<option value="${a}">${a}</option>`).join('');
+  };
+
+  window['corrAddRows'] = (n) => {
+    const start = corrSamples.length;
+    for (let i = 0; i < n; i++) corrSamples.push({v1:'', v2:''});
+    renderCorrGrid();
+  };
+
+  window['corrClearSamples'] = () => { corrSamples = []; renderCorrGrid(); document.getElementById('corr-results-area').style.display = 'none'; };
+
+  window['corrRemoveRow'] = (idx) => { corrSamples.splice(idx, 1); renderCorrGrid(); };
+
+  function renderCorrGrid() {
+    const pair = CORR_PAIRS.find(p => p.id === document.getElementById('corr-pair')?.value);
+    const d1 = pair ? pair.dev1.split(' ')[0] : 'الجهاز 1';
+    const d2 = pair ? pair.dev2.split(' ')[0] : 'الجهاز 2';
+    const grid = document.getElementById('corr-samples-grid');
+    if (!corrSamples.length) { grid.innerHTML = '<div style="padding:30px;text-align:center;color:#9ca3af"><i class="fas fa-table" style="font-size:2rem;margin-bottom:8px;display:block"></i>اضغط على أحد أزرار إضافة العينات أعلاه</div>'; return; }
+    grid.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+      <thead><tr style="background:#f8fafc;position:sticky;top:0"><th style="padding:10px;border-bottom:2px solid #e5e7eb;width:50px;color:#6b7280">#</th><th style="padding:10px;border-bottom:2px solid #e5e7eb;color:#2563eb"><i class="fas fa-flask"></i> ${d1}</th><th style="padding:10px;border-bottom:2px solid #e5e7eb;color:#7c3aed"><i class="fas fa-flask"></i> ${d2}</th><th style="padding:10px;border-bottom:2px solid #e5e7eb;width:60px;color:#6b7280">Bias%</th><th style="padding:10px;border-bottom:2px solid #e5e7eb;width:40px"></th></tr></thead>
+      <tbody>${corrSamples.map((s, i) => {
+        const bias = (s.v1 && s.v2 && parseFloat(s.v1)) ? (((parseFloat(s.v2) - parseFloat(s.v1)) / parseFloat(s.v1)) * 100).toFixed(1) : '';
+        const biasOk = bias !== '' ? Math.abs(parseFloat(bias)) <= 10 : true;
+        return `<tr style="border-bottom:1px solid #f3f4f6${!biasOk?';background:#fef2f2':''}">
+          <td style="padding:6px 10px;color:#9ca3af;font-weight:600;text-align:center">${i+1}</td>
+          <td style="padding:4px 6px"><input type="number" step="any" value="${s.v1}" onchange="corrSamples[${i}].v1=this.value" style="width:100%;padding:8px 10px;border:1.5px solid #dbeafe;border-radius:8px;text-align:center;font-size:0.88rem;background:#f0f7ff" placeholder="—"></td>
+          <td style="padding:4px 6px"><input type="number" step="any" value="${s.v2}" onchange="corrSamples[${i}].v2=this.value" style="width:100%;padding:8px 10px;border:1.5px solid #ede9fe;border-radius:8px;text-align:center;font-size:0.88rem;background:#faf5ff" placeholder="—"></td>
+          <td style="padding:6px;text-align:center;font-size:0.78rem;font-weight:600;color:${biasOk?'#059669':'#dc2626'}">${bias?bias+'%':''}</td>
+          <td style="padding:4px"><button onclick="window['corrRemoveRow'](${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:0.85rem"><i class="fas fa-trash-alt"></i></button></td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+  }
+
+  window['corrCalculate'] = () => {
+    const valid = corrSamples.filter(s => s.v1 !== '' && s.v2 !== '' && !isNaN(s.v1) && !isNaN(s.v2));
+    if (valid.length < 5) { showToast('يجب إدخال 5 عينات على الأقل لحساب الارتباط', 'error'); return; }
+    const x = valid.map(s => parseFloat(s.v1));
+    const y = valid.map(s => parseFloat(s.v2));
+    const n = x.length;
+    const mx = x.reduce((a,b) => a+b, 0) / n;
+    const my = y.reduce((a,b) => a+b, 0) / n;
+    let sxx = 0, syy = 0, sxy = 0;
+    for (let i = 0; i < n; i++) { sxx += (x[i]-mx)**2; syy += (y[i]-my)**2; sxy += (x[i]-mx)*(y[i]-my); }
+    const r = sxy / Math.sqrt(sxx * syy);
+    const biasArr = valid.map(s => ((parseFloat(s.v2) - parseFloat(s.v1)) / parseFloat(s.v1)) * 100);
+    const meanBias = biasArr.reduce((a,b) => a+b, 0) / biasArr.length;
+    const rOk = r >= 0.95;
+    const biasOk = Math.abs(meanBias) <= 10;
+    const pass = rOk && biasOk;
+
+    document.getElementById('corr-stat-r').innerHTML = `<div style="text-align:center;padding:16px 20px;background:${rOk?'#f0fdf4':'#fef2f2'};border:2px solid ${rOk?'#86efac':'#fca5a5'};border-radius:12px;min-width:120px"><div style="font-size:0.72rem;color:#6b7280;margin-bottom:4px">معامل الارتباط R</div><div style="font-size:1.6rem;font-weight:800;color:${rOk?'#059669':'#dc2626'}">${r.toFixed(4)}</div><div style="font-size:0.7rem;color:${rOk?'#059669':'#dc2626'};margin-top:2px">${rOk?'مقبول ≥ 0.95':'غير مقبول < 0.95'}</div></div>`;
+    document.getElementById('corr-stat-bias').innerHTML = `<div style="text-align:center;padding:16px 20px;background:${biasOk?'#f0fdf4':'#fef2f2'};border:2px solid ${biasOk?'#86efac':'#fca5a5'};border-radius:12px;min-width:120px"><div style="font-size:0.72rem;color:#6b7280;margin-bottom:4px">متوسط الانحياز Bias</div><div style="font-size:1.6rem;font-weight:800;color:${biasOk?'#059669':'#dc2626'}">${meanBias.toFixed(2)}%</div><div style="font-size:0.7rem;color:${biasOk?'#059669':'#dc2626'};margin-top:2px">${biasOk?'مقبول ≤ ±10%':'تجاوز الحد'}</div></div>`;
+    document.getElementById('corr-stat-n').innerHTML = `<div style="text-align:center;padding:16px 20px;background:#f0f9ff;border:2px solid #93c5fd;border-radius:12px;min-width:120px"><div style="font-size:0.72rem;color:#6b7280;margin-bottom:4px">عدد العينات</div><div style="font-size:1.6rem;font-weight:800;color:#2563eb">${n}</div><div style="font-size:0.7rem;color:#6b7280;margin-top:2px">من ${corrSamples.length} مدخل</div></div>`;
+    document.getElementById('corr-stat-decision').innerHTML = `<div style="text-align:center;padding:16px 20px;background:${pass?'linear-gradient(135deg,#f0fdf4,#dcfce7)':'linear-gradient(135deg,#fef2f2,#fee2e2)'};border:2px solid ${pass?'#22c55e':'#ef4444'};border-radius:12px;min-width:120px"><div style="font-size:0.72rem;color:#6b7280;margin-bottom:4px">القرار النهائي</div><div style="font-size:1.4rem;font-weight:800;color:${pass?'#059669':'#dc2626'}">${pass?'مقبول':'غير مقبول'}</div><div style="font-size:0.7rem;color:${pass?'#059669':'#dc2626'};margin-top:2px">${pass?'PASS':'FAIL'}</div></div>`;
+
+    document.getElementById('corr-results-area').style.display = 'block';
+    if (corrStudyChart) corrStudyChart.destroy();
+    const ctx = document.getElementById('corr-scatter-chart').getContext('2d');
+    const minV = Math.min(...x, ...y) * 0.9;
+    const maxV = Math.max(...x, ...y) * 1.1;
+    corrStudyChart = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: 'العينات',
+          data: x.map((xi, i) => ({x: xi, y: y[i]})),
+          backgroundColor: valid.map((s,i) => { const b = Math.abs(((y[i]-x[i])/x[i])*100); return b <= 10 ? '#22c55e88' : '#ef444488'; }),
+          borderColor: valid.map((s,i) => { const b = Math.abs(((y[i]-x[i])/x[i])*100); return b <= 10 ? '#16a34a' : '#dc2626'; }),
+          borderWidth: 1.5, pointRadius: 6, pointHoverRadius: 8
+        }, {
+          label: 'خط التطابق',
+          data: [{x: minV, y: minV}, {x: maxV, y: maxV}],
+          type: 'line', borderColor: '#94a3b8', borderDash: [6,4], borderWidth: 1.5, pointRadius: 0, fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: 'Scatter Plot — Correlation Study', font: { size: 14 } }
+        },
+        scales: {
+          x: { title: { display: true, text: document.getElementById('corr-pair')?.value === 'custom' ? (document.getElementById('corr-custom-dev1')?.value||'Device 1') : (CORR_PAIRS.find(p=>p.id===document.getElementById('corr-pair')?.value)?.dev1?.split(' ')[0]||'Device 1') }, min: minV, max: maxV },
+          y: { title: { display: true, text: document.getElementById('corr-pair')?.value === 'custom' ? (document.getElementById('corr-custom-dev2')?.value||'Device 2') : (CORR_PAIRS.find(p=>p.id===document.getElementById('corr-pair')?.value)?.dev2?.split(' ')[0]||'Device 2') }, min: minV, max: maxV }
+        }
+      }
+    });
+    window._lastCorrStats = {r, meanBias, n, pass};
+  };
+
+  window['corrSaveStudy'] = async () => {
+    if (!window._lastCorrStats) { showToast('اضغط "حساب الارتباط" أولاً', 'error'); return; }
+    const pairSel = document.getElementById('corr-pair').value;
+    const pair = CORR_PAIRS.find(p => p.id === pairSel);
+    const dev1 = pairSel === 'custom' ? document.getElementById('corr-custom-dev1').value : (pair?.dev1 || '');
+    const dev2 = pairSel === 'custom' ? document.getElementById('corr-custom-dev2').value : (pair?.dev2 || '');
+    const analyte = document.getElementById('corr-analyte').value;
+    const st = window._lastCorrStats;
+    const data = {
+      'الفحص': analyte, 'الجهاز1': dev1, 'الطريقة1': '', 'الجهاز2': dev2, 'الطريقة2': '',
+      'عدد العينات': String(st.n), 'معيار القبول': 'R≥0.95, Bias≤±10%',
+      'النتيجة': 'R=' + st.r.toFixed(4) + ', Bias=' + st.meanBias.toFixed(2) + '%',
+      'القرار': st.pass ? 'مقبول' : 'غير مقبول'
+    };
+    showLoading('جاري حفظ الدراسة...');
+    try {
+      await addSheetRow('Correlation', data);
+      showToast('تم حفظ دراسة الارتباط بنجاح', 'success');
+      sheetCache['Correlation'] = null;
+      loadCorrelationHistory();
+    } catch(e) { showToast('خطأ: ' + e.message, 'error'); }
+    hideLoading();
+  };
+
+  window['corrPrintReport'] = () => {
+    if (!window._lastCorrStats) { showToast('اضغط "حساب الارتباط" أولاً', 'error'); return; }
+    const st = window._lastCorrStats;
+    const pairSel = document.getElementById('corr-pair').value;
+    const pair = CORR_PAIRS.find(p => p.id === pairSel);
+    const dev1 = pairSel === 'custom' ? document.getElementById('corr-custom-dev1').value : (pair?.dev1 || '');
+    const dev2 = pairSel === 'custom' ? document.getElementById('corr-custom-dev2').value : (pair?.dev2 || '');
+    const analyte = document.getElementById('corr-analyte').value;
+    const chartImg = document.getElementById('corr-scatter-chart')?.toDataURL('image/png') || '';
+    const valid = corrSamples.filter(s => s.v1!==''&&s.v2!==''&&!isNaN(s.v1)&&!isNaN(s.v2));
+    const samplesHtml = valid.map((s,i) => { const b=((parseFloat(s.v2)-parseFloat(s.v1))/parseFloat(s.v1)*100).toFixed(1); return `<tr><td>${i+1}</td><td>${s.v1}</td><td>${s.v2}</td><td style="color:${Math.abs(b)<=10?'#059669':'#dc2626'}">${b}%</td></tr>`; }).join('');
+    const qrData = encodeURIComponent('Correlation Study|'+analyte+'|'+dev1+' vs '+dev2+'|R='+st.r.toFixed(4)+'|Bias='+st.meanBias.toFixed(2)+'%|'+(st.pass?'PASS':'FAIL'));
+    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=120x120&data='+qrData;
+    const w = window.open('','_blank','width=900,height=800');
+    if (!w) { showToast('الرجاء السماح بالنوافذ المنبثقة','error'); return; }
+    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقرير دراسة الارتباط</title>
+      <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+      <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Tajawal',sans-serif;background:#f5f5f5;padding:20px}
+      .report{max-width:780px;margin:0 auto;background:white;border:2px solid #1e3a5f;border-radius:8px;padding:30px}
+      .header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #c9a962;padding-bottom:18px;margin-bottom:20px}
+      .logo{height:80px}.title-sec{text-align:center;flex-grow:1}
+      h1{font-size:20px;color:#1e3a5f;margin-bottom:4px}h2{font-size:14px;color:#666}
+      .badge{display:inline-block;padding:8px 24px;border-radius:25px;font-size:16px;font-weight:800}
+      .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}
+      .stat{text-align:center;padding:14px;border-radius:10px;border:1px solid #e5e7eb}.stat-val{font-size:1.4rem;font-weight:800}.stat-lbl{font-size:0.75rem;color:#666;margin-top:4px}
+      table{width:100%;border-collapse:collapse;margin:16px 0;font-size:0.85rem}th,td{padding:8px 10px;border:1px solid #e5e7eb;text-align:center}th{background:#f8fafc;color:#1e3a5f;font-weight:700}
+      .chart-area{text-align:center;margin:18px 0}
+      .footer{margin-top:20px;display:flex;justify-content:space-between;padding-top:15px;border-top:1px solid #ddd}
+      .sig{text-align:center}.sig-line{border-bottom:1px solid #999;width:120px;margin:25px auto 4px}.sig-label{font-size:0.7rem;color:#999}
+      .print-btn{display:block;width:200px;margin:20px auto;padding:12px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;font-family:inherit}
+      @media print{body{background:white;padding:0}.print-btn{display:none}.report{border:none;box-shadow:none}}</style></head>
+      <body><div class="report">
+        <div class="header">
+          <img src="https://www.m2020m.org/logo2026.jpg" class="logo" alt="Logo">
+          <div class="title-sec"><h1>تقرير دراسة الارتباط بين الأجهزة</h1><h2>Correlation Study Report — CO-01</h2><p style="font-size:11px;color:#999;margin-top:4px">التاريخ: ${new Date().toLocaleDateString('ar-SA')} | المعيار: LB.11</p></div>
+          <div class="badge" style="background:${st.pass?'#d4edda':'#f8d7da'};color:${st.pass?'#155724':'#721c24'};border:2px solid ${st.pass?'#28a745':'#dc3545'}">${st.pass?'مقبول — PASS':'غير مقبول — FAIL'}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div style="background:#f0f9ff;padding:12px;border-radius:8px;border-right:4px solid #2563eb"><strong style="color:#1e40af">الفحص:</strong> ${analyte}</div>
+          <div style="background:#f0f9ff;padding:12px;border-radius:8px;border-right:4px solid #2563eb"><strong style="color:#1e40af">عدد العينات:</strong> ${st.n}</div>
+          <div style="background:#faf5ff;padding:12px;border-radius:8px;border-right:4px solid #7c3aed"><strong style="color:#6b21a8">الجهاز 1:</strong> ${dev1}</div>
+          <div style="background:#faf5ff;padding:12px;border-radius:8px;border-right:4px solid #7c3aed"><strong style="color:#6b21a8">الجهاز 2:</strong> ${dev2}</div>
+        </div>
+        <div class="stats">
+          <div class="stat" style="background:${st.r>=0.95?'#f0fdf4':'#fef2f2'}"><div class="stat-val" style="color:${st.r>=0.95?'#059669':'#dc2626'}">${st.r.toFixed(4)}</div><div class="stat-lbl">Correlation R</div></div>
+          <div class="stat" style="background:${Math.abs(st.meanBias)<=10?'#f0fdf4':'#fef2f2'}"><div class="stat-val" style="color:${Math.abs(st.meanBias)<=10?'#059669':'#dc2626'}">${st.meanBias.toFixed(2)}%</div><div class="stat-lbl">Mean Bias</div></div>
+          <div class="stat"><div class="stat-val" style="color:#2563eb">${st.n}</div><div class="stat-lbl">Samples</div></div>
+          <div class="stat" style="background:${st.pass?'#d4edda':'#f8d7da'}"><div class="stat-val" style="color:${st.pass?'#059669':'#dc2626'}">${st.pass?'PASS':'FAIL'}</div><div class="stat-lbl">Decision</div></div>
+        </div>
+        <div class="chart-area">${chartImg?`<img src="${chartImg}" style="max-width:100%;border-radius:8px;border:1px solid #eee">`:''}</div>
+        <details style="margin:12px 0"><summary style="cursor:pointer;font-weight:700;color:#1e3a5f;padding:8px 0">عرض بيانات العينات التفصيلية</summary>
+        <table><thead><tr><th>#</th><th>${dev1.split(' ')[0]}</th><th>${dev2.split(' ')[0]}</th><th>Bias%</th></tr></thead><tbody>${samplesHtml}</tbody></table></details>
+        <div style="text-align:center;margin:18px 0"><img src="${qrUrl}" style="width:120px;height:120px;border:1px solid #eee;border-radius:8px;padding:4px;background:white"><p style="font-size:0.7rem;color:#999;margin-top:6px">QR — بيانات الدراسة</p></div>
+        <div class="footer"><div class="sig"><div class="sig-line"></div><div class="sig-label">الفني المنفذ</div></div><div class="sig"><div class="sig-line"></div><div class="sig-label">مسؤول الجودة</div></div><div class="sig"><div class="sig-line"></div><div class="sig-label">مدير المختبر</div></div></div>
+        <div style="text-align:center;margin-top:15px;font-size:10px;color:#999;border-top:1px solid #eee;padding-top:10px">تم إصدار هذا التقرير إلكترونياً من بوابة المختبر الإلكترونية — مجمع مكة الطبي بالزاهر</div>
+      </div><button class="print-btn" onclick="window.print()"><i class="fas fa-print"></i> طباعة التقرير</button></body></html>`);
+    w.document.close();
+  };
+
+  loadCorrelationHistory();
+}
+
+async function loadCorrelationHistory() {
+  const rows = await loadSheetData('Correlation');
+  const body = document.getElementById('corr-history-table');
+  if (!rows.length) {
+    body.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af"><i class="fas fa-exchange-alt" style="font-size:2.5rem;margin-bottom:10px;display:block;opacity:0.3"></i><p style="font-weight:600">لا توجد دراسات ارتباط سابقة</p><p style="font-size:0.8rem;margin-top:4px">اضغط "دراسة جديدة" لبدء أول دراسة</p></div>';
+    return;
+  }
+  body.innerHTML = `<table class="data-table"><thead><tr><th>الفحص</th><th>الجهاز 1</th><th>الجهاز 2</th><th>العينات</th><th>النتيجة</th><th>القرار</th><th>التاريخ</th><th>حذف</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const isPass = r['القرار'] === 'مقبول';
+      return `<tr><td style="font-weight:700">${r['الفحص']}</td><td>${r['الجهاز1']}</td><td>${r['الجهاز2']}</td><td>${r['عدد العينات']}</td>
+      <td style="font-family:monospace;font-size:0.8rem">${r['النتيجة']}</td>
+      <td><span style="padding:4px 12px;border-radius:15px;font-size:0.78rem;font-weight:700;background:${isPass?'#d1fae5':'#fee2e2'};color:${isPass?'#065f46':'#991b1b'}">${r['القرار']}</span></td>
+      <td style="font-size:0.78rem;color:#6b7280">${r['createdAt']||r['التاريخ']||'-'}</td>
+      <td><button onclick="window['corrDeleteRow']('${r.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer"><i class="fas fa-trash-alt"></i></button></td></tr>`;
+    }).join('')}</tbody></table>`;
+
+  window['corrDeleteRow'] = async (id) => {
+    if (!confirm('حذف هذه الدراسة؟')) return;
+    showLoading('جاري الحذف...');
+    try { await deleteSheetRow('Correlation', id); showToast('تم الحذف','success'); sheetCache['Correlation']=null; loadCorrelationHistory(); } catch(e) { showToast('خطأ: '+e.message,'error'); }
+    hideLoading();
+  };
 }
 
 function renderEquipmentTab() {
