@@ -1259,7 +1259,7 @@ function filterRefSection(btn, section) {
 }
 
 function buildCRUDSection(opts) {
-  const {sheetName, title, icon, policyKey, fields, tableHeaders, renderRow, containerId} = opts;
+  const {sheetName, title, icon, policyKey, fields, tableHeaders, renderRow, containerId, fileFolderId} = opts;
   const container = document.getElementById(containerId);
 
   const formFields = fields.map(f => {
@@ -1326,6 +1326,7 @@ function buildCRUDSection(opts) {
           if (file.size > 10*1024*1024) { showToast('حجم الملف يتجاوز 10 ميجابايت','error'); return; }
           const b64 = await new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(file); });
           filePayload = {fileName:file.name, mimeType:file.type, base64:b64};
+          if (fileFolderId) filePayload.folderId = fileFolderId;
           data[f.sheetKey||f.label] = file.name;
         }
         el.value='';
@@ -1760,12 +1761,14 @@ function renderQCTab() {
       {key:'send',label:'تاريخ الإرسال',sheetKey:'تاريخ الإرسال',type:'date'},
       {key:'result',label:'النتيجة',sheetKey:'النتيجة',placeholder:'Acceptable'},
       {key:'accepted',label:'مقبول',sheetKey:'مقبول',type:'select',options:[{value:'نعم',label:'نعم'},{value:'لا',label:'لا'}]},
+      {key:'attachment',label:'مرفق (PDF / صورة)',sheetKey:'المرفق',type:'file'},
     ],
-    tableHeaders:['المزود','الدورة','القسم','الفحص','الاستلام','الإرسال','النتيجة','مقبول','شهادة'],
-    renderRow: r => `<td>${r['المزود']}</td><td>${r['الدورة']}</td><td>${r['القسم']}</td><td>${r['الفحص']}</td><td>${r['تاريخ الاستلام']}</td><td>${r['تاريخ الإرسال']}</td><td>${r['النتيجة']}</td><td class="${r['مقبول']==='نعم'?'pass':'fail'}">${r['مقبول']}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "pt")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`,
+    fileFolderId:'11Cq-AKeS9q2_jgEIqG-ckBNTpZZtkVNl',
+    tableHeaders:['المزود','الدورة','القسم','الفحص','الاستلام','الإرسال','النتيجة','مقبول','مرفق','شهادة'],
+    renderRow: r => `<td>${r['المزود']}</td><td>${r['الدورة']}</td><td>${r['القسم']}</td><td>${r['الفحص']}</td><td>${r['تاريخ الاستلام']}</td><td>${r['تاريخ الإرسال']}</td><td>${r['النتيجة']}</td><td class="${r['مقبول']==='نعم'?'pass':'fail'}">${r['مقبول']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?'<a href="'+r['رابط الملف']+'" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>':(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "pt")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`,
     containerId:'sub-qc-pt01'
   });
-  registerCRUD('sub-qc-pt01',{tableHeaders:['المزود','الدورة','القسم','الفحص','الاستلام','الإرسال','النتيجة','مقبول','شهادة'],renderRow:r=>`<td>${r['المزود']}</td><td>${r['الدورة']}</td><td>${r['القسم']}</td><td>${r['الفحص']}</td><td>${r['تاريخ الاستلام']}</td><td>${r['تاريخ الإرسال']}</td><td>${r['النتيجة']}</td><td class="${r['مقبول']==='نعم'?'pass':'fail'}">${r['مقبول']}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "pt")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`});
+  registerCRUD('sub-qc-pt01',{tableHeaders:['المزود','الدورة','القسم','الفحص','الاستلام','الإرسال','النتيجة','مقبول','مرفق','شهادة'],renderRow:r=>`<td>${r['المزود']}</td><td>${r['الدورة']}</td><td>${r['القسم']}</td><td>${r['الفحص']}</td><td>${r['تاريخ الاستلام']}</td><td>${r['تاريخ الإرسال']}</td><td>${r['النتيجة']}</td><td class="${r['مقبول']==='نعم'?'pass':'fail'}">${r['مقبول']}</td><td>${(r['رابط الملف']&&r['رابط الملف']!=='N/A')?'<a href="'+r['رابط الملف']+'" target="_blank" class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-paperclip"></i></a>':(r['المرفق']||'-')}</td><td><button onclick='printQCCertificate(${JSON.stringify(r).replace(/'/g,"&#39;")}, "pt")' class="btn btn-sm btn-outline" style="font-size:0.7rem;padding:4px 8px"><i class="fas fa-print"></i></button></td>`});
 
   buildCRUDSection({
     sheetName:'Correlation', title:'CO-01 دراسة الارتباط بين الأجهزة', icon:'exchange-alt', policyKey:'correlation',
