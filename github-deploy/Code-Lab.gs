@@ -20,7 +20,7 @@ const SHEET_DEFS = {
   EvidenceTracker:   ['المعيار','المتطلب','الوثيقة الداعمة','المسؤول','الحالة','ملاحظات','updatedAt'],
   QCLog:             ['id','التاريخ','القسم','الجهاز','الفحص','مستوى QC','المجال المقبول','النتيجة','الحالة','الإجراء','المرفق','رابط الملف','المراجع','createdAt'],
   QC_CAPA:           ['id','التاريخ','القسم/الجهاز','الفحص','المشكلة','الاحتواء الفوري','السبب الجذري','الإجراء التصحيحي','الإجراء الوقائي','التحقق من الفعالية','الحالة','اعتماد','createdAt'],
-  PT_EQA:            ['id','المزود','الدورة','القسم','الفحص','تاريخ الاستلام','تاريخ الإرسال','النتيجة','مقبول','CAPA','مراجعة','createdAt'],
+  PT_EQA:            ['id','المزود','الدورة','القسم','الفحص','تاريخ الاستلام','تاريخ الإرسال','النتيجة','مقبول','المرفق','رابط الملف','CAPA','مراجعة','createdAt'],
   SpecimenRejection: ['id','التاريخ','MRN','اسم المريض','القسم','نوع العينة','سبب الرفض','القرار','أُبلغت الجهة','الموظف','ملاحظات','createdAt'],
   CriticalValues:    ['id','التاريخ','MRN','اسم المريض','القسم','الفحص','النتيجة الحرجة','تأكيد','أُبلغ إلى','وسيلة الإبلاغ','Read-back','المبلّغ','ملاحظات','createdAt'],
   CorrectedReports:  ['id','التاريخ','MRN','اسم المريض','الفحص','النتيجة السابقة','النتيجة المصححة','سبب التصحيح','أُبلغ الطبيب','الموظف','ملاحظات','createdAt'],
@@ -122,7 +122,7 @@ function addRow_(ss, sheetName, data, fileData) {
   if (fileData && fileData.base64) {
     try {
       var blob = Utilities.newBlob(Utilities.base64Decode(fileData.base64), fileData.mimeType || 'application/octet-stream', fileData.fileName || 'attachment');
-      var folderId = LAB_CONFIG.DRIVE_FOLDER_ID || '';
+      var folderId = fileData.folderId || LAB_CONFIG.DRIVE_FOLDER_ID || '';
       var folder;
       if (folderId) {
         folder = DriveApp.getFolderById(folderId);
