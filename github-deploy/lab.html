@@ -1817,6 +1817,7 @@ function renderCorrelationWizard() {
     const panel = document.getElementById('corr-wizard-panel');
     if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
     corrSamples = [];
+    window._lastCorrStats = null;
     panel.style.display = 'block';
     panel.innerHTML = `
       <div style="padding:20px;background:#fafbfc;border-bottom:1px solid #e5e7eb">
@@ -1845,6 +1846,7 @@ function renderCorrelationWizard() {
               <input type="text" id="corr-custom-dev1" placeholder="الجهاز 1" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid #d1d5db">
               <input type="text" id="corr-custom-dev2" placeholder="الجهاز 2" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid #d1d5db">
             </div>
+            <input type="text" id="corr-custom-analyte" placeholder="اسم الفحص / Analyte" style="margin-top:8px;width:100%;padding:10px;border-radius:10px;border:1.5px solid #d1d5db">
           </div>
         </div>
 
@@ -1908,7 +1910,7 @@ function renderCorrelationWizard() {
     renderCorrGrid();
   };
 
-  window['corrClearSamples'] = () => { corrSamples = []; renderCorrGrid(); document.getElementById('corr-results-area').style.display = 'none'; };
+  window['corrClearSamples'] = () => { corrSamples = []; window._lastCorrStats = null; renderCorrGrid(); document.getElementById('corr-results-area').style.display = 'none'; };
 
   window['corrRemoveRow'] = (idx) => { corrSamples.splice(idx, 1); renderCorrGrid(); };
 
@@ -1933,9 +1935,21 @@ function renderCorrelationWizard() {
       }).join('')}</tbody></table>`;
   }
 
+  function getCorrMeta() {
+    const pairSel = document.getElementById('corr-pair')?.value;
+    const pair = CORR_PAIRS.find(p => p.id === pairSel);
+    const dev1 = pairSel === 'custom' ? (document.getElementById('corr-custom-dev1')?.value||'') : (pair?.dev1||'');
+    const dev2 = pairSel === 'custom' ? (document.getElementById('corr-custom-dev2')?.value||'') : (pair?.dev2||'');
+    const analyte = pairSel === 'custom' ? (document.getElementById('corr-custom-analyte')?.value||'') : (document.getElementById('corr-analyte')?.value||'');
+    return {pairSel, pair, dev1, dev2, analyte};
+  }
+
   window['corrCalculate'] = () => {
-    const valid = corrSamples.filter(s => s.v1 !== '' && s.v2 !== '' && !isNaN(s.v1) && !isNaN(s.v2));
-    if (valid.length < 5) { showToast('يجب إدخال 5 عينات على الأقل لحساب الارتباط', 'error'); return; }
+    const meta = getCorrMeta();
+    if (!meta.dev1 || !meta.dev2) { showToast('يجب اختيار زوج الأجهزة أولاً', 'error'); return; }
+    if (!meta.analyte) { showToast('يجب اختيار أو إدخال اسم الفحص', 'error'); return; }
+    const valid = corrSamples.filter(s => s.v1 !== '' && s.v2 !== '' && !isNaN(s.v1) && !isNaN(s.v2) && parseFloat(s.v1) !== 0);
+    if (valid.length < 5) { showToast('يجب إدخال 5 عينات صالحة على الأقل (قيمة الجهاز 1 لا تساوي صفر)', 'error'); return; }
     const x = valid.map(s => parseFloat(s.v1));
     const y = valid.map(s => parseFloat(s.v2));
     const n = x.length;
@@ -1943,7 +1957,8 @@ function renderCorrelationWizard() {
     const my = y.reduce((a,b) => a+b, 0) / n;
     let sxx = 0, syy = 0, sxy = 0;
     for (let i = 0; i < n; i++) { sxx += (x[i]-mx)**2; syy += (y[i]-my)**2; sxy += (x[i]-mx)*(y[i]-my); }
-    const r = sxy / Math.sqrt(sxx * syy);
+    const denom = Math.sqrt(sxx * syy);
+    const r = denom > 0 ? sxy / denom : 0;
     const biasArr = valid.map(s => ((parseFloat(s.v2) - parseFloat(s.v1)) / parseFloat(s.v1)) * 100);
     const meanBias = biasArr.reduce((a,b) => a+b, 0) / biasArr.length;
     const rOk = r >= 0.95;
@@ -1992,11 +2007,9 @@ function renderCorrelationWizard() {
 
   window['corrSaveStudy'] = async () => {
     if (!window._lastCorrStats) { showToast('اضغط "حساب الارتباط" أولاً', 'error'); return; }
-    const pairSel = document.getElementById('corr-pair').value;
-    const pair = CORR_PAIRS.find(p => p.id === pairSel);
-    const dev1 = pairSel === 'custom' ? document.getElementById('corr-custom-dev1').value : (pair?.dev1 || '');
-    const dev2 = pairSel === 'custom' ? document.getElementById('corr-custom-dev2').value : (pair?.dev2 || '');
-    const analyte = document.getElementById('corr-analyte').value;
+    const meta = getCorrMeta();
+    const dev1 = meta.dev1; const dev2 = meta.dev2; const analyte = meta.analyte;
+    if (!dev1 || !dev2 || !analyte) { showToast('يجب تحديد الأجهزة والفحص قبل الحفظ', 'error'); return; }
     const st = window._lastCorrStats;
     const data = {
       'الفحص': analyte, 'الجهاز1': dev1, 'الطريقة1': '', 'الجهاز2': dev2, 'الطريقة2': '',
@@ -2017,11 +2030,9 @@ function renderCorrelationWizard() {
   window['corrPrintReport'] = () => {
     if (!window._lastCorrStats) { showToast('اضغط "حساب الارتباط" أولاً', 'error'); return; }
     const st = window._lastCorrStats;
-    const pairSel = document.getElementById('corr-pair').value;
-    const pair = CORR_PAIRS.find(p => p.id === pairSel);
-    const dev1 = pairSel === 'custom' ? document.getElementById('corr-custom-dev1').value : (pair?.dev1 || '');
-    const dev2 = pairSel === 'custom' ? document.getElementById('corr-custom-dev2').value : (pair?.dev2 || '');
-    const analyte = document.getElementById('corr-analyte').value;
+    const meta = getCorrMeta();
+    const dev1 = meta.dev1; const dev2 = meta.dev2; const analyte = meta.analyte;
+    if (!dev1 || !dev2 || !analyte) { showToast('يجب تحديد الأجهزة والفحص قبل الطباعة', 'error'); return; }
     const chartImg = document.getElementById('corr-scatter-chart')?.toDataURL('image/png') || '';
     const valid = corrSamples.filter(s => s.v1!==''&&s.v2!==''&&!isNaN(s.v1)&&!isNaN(s.v2));
     const samplesHtml = valid.map((s,i) => { const b=((parseFloat(s.v2)-parseFloat(s.v1))/parseFloat(s.v1)*100).toFixed(1); return `<tr><td>${i+1}</td><td>${s.v1}</td><td>${s.v2}</td><td style="color:${Math.abs(b)<=10?'#059669':'#dc2626'}">${b}%</td></tr>`; }).join('');
