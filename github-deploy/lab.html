@@ -1087,6 +1087,7 @@ function switchSub(tab, sub) {
   document.querySelectorAll(`#tab-${tab} .sub-content`).forEach(c=>c.classList.remove('active'));
   document.getElementById(`sub-${tab}-${sub}`).classList.add('active');
   event.target.closest('.sub-pill').classList.add('active');
+  if (tab === 'chemsafety') renderChemSub(sub);
 }
 
 function openAddTestModal() {
@@ -3011,10 +3012,11 @@ const CHEM_SHEETS = {
       {key:'تاريخ الإصدار',type:'date'},
       {key:'متاح ورقياً',type:'select',options:['نعم','لا']},
       {key:'متاح إلكترونياً',type:'select',options:['نعم','لا']},
+      {key:'رابط الملف',type:'text',placeholder:'رابط ملف SDS الإلكتروني'},
       {key:'آخر مراجعة',type:'date'},
       {key:'ملاحظات',type:'text'}
     ],
-    cols:['المادة','القسم','مصدر SDS / الشركة','تاريخ الإصدار','متاح ورقياً','متاح إلكترونياً','آخر مراجعة']
+    cols:['المادة','القسم','مصدر SDS / الشركة','تاريخ الإصدار','متاح ورقياً','متاح إلكترونياً','رابط الملف','آخر مراجعة']
   },
   ch03: { sheet:'SpillKitCheck', title:'قائمة فحص Spill Kit وEyewash/Shower', code:'CH-03', icon:'fa-kit-medical',
     fields:[
@@ -3161,7 +3163,7 @@ function renderChemSub(subId) {
   if (rows.length === 0) {
     html += `<div style="text-align:center; padding:40px; color:var(--gray-400);"><i class="fas ${cfg.icon}" style="font-size:2.5rem; margin-bottom:10px; display:block; opacity:0.3;"></i><div style="font-size:0.85rem;">لا توجد سجلات بعد</div></div>`;
   } else {
-    html += `<div style="overflow-x:auto;"><table class="ev-table" id="chemTable_${subId}"><thead><tr><th>#</th>`;
+    html += `<div style="overflow-x:auto;"><table class="data-table" id="chemTable_${subId}"><thead><tr><th>#</th>`;
     cfg.cols.forEach(c => { html += `<th>${c}</th>`; });
     html += `<th>إجراءات</th></tr></thead><tbody>`;
     rows.forEach((r, i) => {
@@ -3179,6 +3181,9 @@ function renderChemSub(subId) {
         if ((c === 'Eyewash' || c === 'Shower') && val) {
           const cls3 = val === 'يعمل' ? 'color:var(--success)' : 'color:var(--danger)';
           val = `<span style="font-weight:700; ${cls3}">${val}</span>`;
+        }
+        if (c === 'رابط الملف' && val && val.startsWith('http')) {
+          val = `<a href="${val}" target="_blank" style="color:var(--info); font-size:0.75rem;"><i class="fas fa-external-link-alt"></i> عرض</a>`;
         }
         html += `<td>${val}</td>`;
       });
@@ -3216,7 +3221,7 @@ function renderChemSub(subId) {
 
     try {
       showToast('جاري الحفظ...', 'info');
-      const resp = await fetch(GAS_URL, {method:'POST', body:JSON.stringify(body)});
+      const resp = await fetch(API_URL, {method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body)});
       const result = await resp.json();
       if (result.status === 'ok') {
         showToast(editId ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح', 'success');
@@ -3249,7 +3254,7 @@ function renderChemSub(subId) {
     if (!confirm('هل أنت متأكد من حذف هذا السجل؟')) return;
     try {
       showToast('جاري الحذف...', 'info');
-      const resp = await fetch(GAS_URL, {method:'POST', body:JSON.stringify({action:'deleteRow', sheet:cfg.sheet, rowId:id})});
+      const resp = await fetch(API_URL, {method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({action:'deleteRow', sheet:cfg.sheet, rowId:id})});
       const result = await resp.json();
       if (result.status === 'ok') {
         showToast('تم الحذف بنجاح', 'success');
