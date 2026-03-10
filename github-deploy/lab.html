@@ -435,6 +435,7 @@
     <button class="sub-pill active" onclick="switchSub('docs','doclist')"><i class="fas fa-list"></i> قائمة الوثائق DC-01</button>
     <button class="sub-pill" onclick="switchSub('docs','evidence')"><i class="fas fa-tasks"></i> متعقب الجاهزية EV-01</button>
     <button class="sub-pill" onclick="switchSub('docs','sop')"><i class="fas fa-file-alt"></i> سياسة النطاقات المرجعية</button>
+    <button class="sub-pill" onclick="switchSub('docs','floorplan')"><i class="fas fa-map"></i> المخطط التوضيحي</button>
   </div>
 
   <div id="sub-docs-doclist" class="sub-content active">
@@ -492,6 +493,169 @@
       <ul class="sop-list">
         <li>معايير سباهي CBAHI + إرشادات CLSI EP28-A3c</li>
       </ul>
+    </div>
+  </div>
+
+  <div id="sub-docs-floorplan" class="sub-content">
+    <div style="background:linear-gradient(135deg,#1a365d 0%,#2c5282 100%); color:white; padding:18px 22px; border-radius:var(--radius-md); margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="width:44px; height:44px; background:rgba(255,255,255,0.15); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; font-size:1.3rem;"><i class="fas fa-map"></i></div>
+        <div>
+          <div style="font-size:1.05rem; font-weight:800;">مخطط توزيع مناطق العمل داخل مختبر مجمع الزاهر</div>
+          <div style="font-size:0.72rem; opacity:0.85; margin-top:2px;">Laboratory Floor Plan | CBAHI FMS.4 - مخطط تفاعلي — انقر على أي منطقة لعرض التفاصيل</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button class="topbar-btn" onclick="printFloorPlan()"><i class="fas fa-print"></i> طباعة</button>
+        <a href="https://docs.google.com/document/d/1Wfr23rt3bURdXg3lRrml9X4po4EvDDV1c51TDoMo9jI/edit" target="_blank" class="topbar-btn"><i class="fas fa-file-alt"></i> الوثيقة</a>
+      </div>
+    </div>
+
+    <div id="floorPlanZoneInfo" style="display:none; background:var(--gray-50); border:1px solid var(--gray-200); border-radius:var(--radius-md); padding:14px 18px; margin-bottom:14px; animation:fadeIn 0.3s;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h4 id="fpZoneTitle" style="font-size:0.95rem; font-weight:700; color:var(--primary);"></h4>
+        <button onclick="document.getElementById('floorPlanZoneInfo').style.display='none'" style="background:none; border:none; font-size:1.1rem; cursor:pointer; color:var(--gray-400);">&times;</button>
+      </div>
+      <div id="fpZoneDetails" style="font-size:0.82rem; color:var(--gray-600); margin-top:8px; line-height:1.8;"></div>
+    </div>
+
+    <div style="background:white; border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); padding:20px; overflow-x:auto;">
+      <svg id="labFloorPlan" viewBox="0 0 900 620" style="width:100%; max-width:900px; margin:0 auto; display:block; font-family:'Tajawal',sans-serif;" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0d9668"/></marker>
+          <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2563eb"/></marker>
+          <marker id="arrowRed" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#dc2626"/></marker>
+          <linearGradient id="wallGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#334155"/><stop offset="100%" stop-color="#475569"/></linearGradient>
+          <filter id="zoneShadow"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.1"/></filter>
+          <pattern id="gridPattern" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" stroke-width="0.5"/></pattern>
+        </defs>
+
+        <rect x="0" y="0" width="900" height="620" fill="url(#gridPattern)" rx="12"/>
+        <rect x="10" y="10" width="880" height="600" fill="none" stroke="url(#wallGrad)" stroke-width="4" rx="8"/>
+
+        <text x="450" y="38" text-anchor="middle" font-size="15" font-weight="800" fill="#1a365d">مخطط مختبر مجمع مكة الطبي بالزاهر — Laboratory Floor Plan</text>
+        <text x="450" y="56" text-anchor="middle" font-size="10" fill="#94a3b8">المساحة الإجمالية التقريبية: 12م × 8م | إعداد: قسم الجودة</text>
+
+        <rect x="30" y="70" width="260" height="230" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2" filter="url(#zoneShadow)" style="cursor:pointer" onclick="showZoneInfo('phlebotomy')"/>
+        <rect x="30" y="72" width="260" height="6" rx="3" fill="#2563eb"/>
+        <text x="160" y="105" text-anchor="middle" font-size="14" font-weight="800" fill="#1e40af">🩸 منطقة سحب الدم</text>
+        <text x="160" y="122" text-anchor="middle" font-size="9" fill="#3b82f6">Phlebotomy Area | 4م × 3م</text>
+        <text x="60" y="155" font-size="10" fill="#475569">🪑 كرسي مريض (1)</text>
+        <text x="60" y="175" font-size="10" fill="#475569">🪑 كرسي مريض (2)</text>
+        <text x="60" y="195" font-size="10" fill="#475569">🧤 PPE Station</text>
+        <text x="60" y="215" font-size="10" fill="#475569">🗑️ حاوية أدوات حادة</text>
+        <text x="60" y="235" font-size="10" fill="#475569">💻 كمبيوتر + طابعة ملصقات</text>
+        <text x="60" y="255" font-size="10" fill="#475569">🧴 معقم يدين</text>
+        <rect x="50" y="262" width="80" height="25" rx="4" fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>
+        <text x="90" y="279" text-anchor="middle" font-size="8" fill="#1e40af">طاولة سحب</text>
+        <rect x="160" y="262" width="80" height="25" rx="4" fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>
+        <text x="200" y="279" text-anchor="middle" font-size="8" fill="#1e40af">طاولة سحب</text>
+
+        <rect x="310" y="70" width="270" height="230" rx="10" fill="#ecfdf5" stroke="#0d9668" stroke-width="2" filter="url(#zoneShadow)" style="cursor:pointer" onclick="showZoneInfo('reception')"/>
+        <rect x="310" y="72" width="270" height="6" rx="3" fill="#0d9668"/>
+        <text x="445" y="105" text-anchor="middle" font-size="14" font-weight="800" fill="#065f46">📋 استقبال وتجهيز العينات</text>
+        <text x="445" y="122" text-anchor="middle" font-size="9" fill="#10b981">Sample Reception | 4م × 3م</text>
+        <text x="330" y="155" font-size="10" fill="#475569">💻 كمبيوتر LIS + طابعة</text>
+        <text x="330" y="175" font-size="10" fill="#475569">📇 باركود سكانر</text>
+        <text x="330" y="195" font-size="10" fill="#475569">🧊 ثلاجة عينات مؤقتة</text>
+        <text x="330" y="215" font-size="10" fill="#475569">📦 صناديق نقل عينات</text>
+        <text x="330" y="235" font-size="10" fill="#475569">🗂️ نماذج طلبات</text>
+        <text x="330" y="255" font-size="10" fill="#475569">🧴 معقم يدين</text>
+        <rect x="330" y="262" width="110" height="25" rx="4" fill="#d1fae5" stroke="#34d399" stroke-width="1"/>
+        <text x="385" y="279" text-anchor="middle" font-size="8" fill="#065f46">منطقة الفرز</text>
+        <rect x="450" y="262" width="110" height="25" rx="4" fill="#d1fae5" stroke="#34d399" stroke-width="1"/>
+        <text x="505" y="279" text-anchor="middle" font-size="8" fill="#065f46">Centrifuge</text>
+
+        <rect x="600" y="70" width="270" height="230" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#zoneShadow)" style="cursor:pointer" onclick="showZoneInfo('chemistry')"/>
+        <rect x="600" y="72" width="270" height="6" rx="3" fill="#d97706"/>
+        <text x="735" y="105" text-anchor="middle" font-size="14" font-weight="800" fill="#92400e">🧪 منطقة التحليل الكيميائي</text>
+        <text x="735" y="122" text-anchor="middle" font-size="9" fill="#d97706">Chemistry &amp; Biochemistry | 4م × 3م</text>
+        <text x="620" y="155" font-size="10" fill="#475569">⚙️ جهاز الكيمياء الحيوية</text>
+        <text x="620" y="175" font-size="10" fill="#475569">⚙️ جهاز الشوارد (ISE)</text>
+        <text x="620" y="195" font-size="10" fill="#475569">⚙️ جهاز السكر التراكمي</text>
+        <text x="620" y="215" font-size="10" fill="#475569">⚙️ جهاز غازات الدم (ABG)</text>
+        <text x="620" y="235" font-size="10" fill="#475569">🚿 مغسلة + Eyewash</text>
+        <text x="620" y="255" font-size="10" fill="#475569">💻 كمبيوتر LIS</text>
+        <rect x="620" y="262" width="230" height="25" rx="4" fill="#fde68a" stroke="#fbbf24" stroke-width="1"/>
+        <text x="735" y="279" text-anchor="middle" font-size="8" fill="#92400e">طاولة أجهزة التحليل الرئيسية</text>
+
+        <rect x="30" y="320" width="260" height="270" rx="10" fill="#fce7f3" stroke="#db2777" stroke-width="2" filter="url(#zoneShadow)" style="cursor:pointer" onclick="showZoneInfo('hematology')"/>
+        <rect x="30" y="322" width="260" height="6" rx="3" fill="#db2777"/>
+        <text x="160" y="355" text-anchor="middle" font-size="14" font-weight="800" fill="#9d174d">🔬 منطقة أمراض الدم</text>
+        <text x="160" y="372" text-anchor="middle" font-size="9" fill="#db2777">Hematology &amp; Coagulation | 4م × 3.5م</text>
+        <text x="50" y="405" font-size="10" fill="#475569">⚙️ جهاز CBC (عداد الدم)</text>
+        <text x="50" y="425" font-size="10" fill="#475569">⚙️ جهاز ESR</text>
+        <text x="50" y="445" font-size="10" fill="#475569">⚙️ جهاز التخثر (Coag)</text>
+        <text x="50" y="465" font-size="10" fill="#475569">🔬 مجهر + شرائح</text>
+        <text x="50" y="485" font-size="10" fill="#475569">🧫 صبغات (Wright/Giemsa)</text>
+        <text x="50" y="505" font-size="10" fill="#475569">💻 كمبيوتر LIS</text>
+        <rect x="50" y="520" width="100" height="50" rx="6" fill="#fbcfe8" stroke="#f472b6" stroke-width="1"/>
+        <text x="100" y="541" text-anchor="middle" font-size="8" font-weight="600" fill="#9d174d">جهاز CBC</text>
+        <text x="100" y="555" text-anchor="middle" font-size="7" fill="#be185d">Mindray</text>
+        <rect x="170" y="520" width="100" height="50" rx="6" fill="#fbcfe8" stroke="#f472b6" stroke-width="1"/>
+        <text x="220" y="541" text-anchor="middle" font-size="8" font-weight="600" fill="#9d174d">جهاز التخثر</text>
+        <text x="220" y="555" text-anchor="middle" font-size="7" fill="#be185d">Coagulation</text>
+
+        <rect x="310" y="320" width="270" height="130" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2" filter="url(#zoneShadow)" style="cursor:pointer" onclick="showZoneInfo('micro')"/>
+        <rect x="310" y="322" width="270" height="6" rx="3" fill="#7c3aed"/>
+        <text x="445" y="355" text-anchor="middle" font-size="14" font-weight="800" fill="#5b21b6">🧫 منطقة الأحياء الدقيقة</text>
+        <text x="445" y="372" text-anchor="middle" font-size="9" fill="#7c3aed">Microbiology | 4م × 1.5م</text>
+        <text x="330" y="400" font-size="10" fill="#475569">🧫 حاضنات (Incubators)</text>
+        <text x="330" y="420" font-size="10" fill="#475569">🔬 مجهر + صبغات غرام/ZN</text>
+        <text x="500" y="400" font-size="10" fill="#475569">🧪 أوساط زراعية</text>
+        <text x="500" y="420" font-size="10" fill="#475569">💊 أقراص حساسية</text>
+
+        <rect x="310" y="470" width="270" height="120" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="2" filter="url(#zoneShadow)" style="cursor:pointer" onclick="showZoneInfo('storage')"/>
+        <rect x="310" y="472" width="270" height="6" rx="3" fill="#e11d48"/>
+        <text x="445" y="505" text-anchor="middle" font-size="14" font-weight="800" fill="#881337">🧊 التخزين والنفايات</text>
+        <text x="445" y="522" text-anchor="middle" font-size="9" fill="#e11d48">Storage &amp; Waste | 4م × 1.5م</text>
+        <text x="330" y="550" font-size="10" fill="#475569">🧊 ثلاجة كواشف (2-8°C)</text>
+        <text x="330" y="570" font-size="10" fill="#475569">🧊 فريزر (-20°C)</text>
+        <text x="500" y="550" font-size="10" fill="#475569">🗑️ نفايات طبية خطرة</text>
+        <text x="500" y="570" font-size="10" fill="#475569">♻️ نفايات كيميائية</text>
+
+        <rect x="600" y="320" width="270" height="130" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#zoneShadow)" style="cursor:pointer" onclick="showZoneInfo('hormones')"/>
+        <rect x="600" y="322" width="270" height="6" rx="3" fill="#16a34a"/>
+        <text x="735" y="355" text-anchor="middle" font-size="14" font-weight="800" fill="#166534">🧬 منطقة المناعة والهرمونات</text>
+        <text x="735" y="372" text-anchor="middle" font-size="9" fill="#16a34a">Immunoassay &amp; Hormones | 4م × 1.5م</text>
+        <text x="620" y="400" font-size="10" fill="#475569">⚙️ جهاز الهرمونات (Immunoassay)</text>
+        <text x="620" y="420" font-size="10" fill="#475569">⚙️ جهاز الفحوصات السريعة</text>
+        <text x="620" y="440" font-size="10" fill="#475569">💻 كمبيوتر LIS</text>
+
+        <rect x="600" y="470" width="270" height="120" rx="10" fill="#eff6ff" stroke="#1d4ed8" stroke-width="2" filter="url(#zoneShadow)" style="cursor:pointer" onclick="showZoneInfo('safety')"/>
+        <rect x="600" y="472" width="270" height="6" rx="3" fill="#1d4ed8"/>
+        <text x="735" y="505" text-anchor="middle" font-size="14" font-weight="800" fill="#1e3a8a">🛡️ السلامة والطوارئ</text>
+        <text x="735" y="522" text-anchor="middle" font-size="9" fill="#1d4ed8">Safety &amp; Emergency | 4م × 1.5م</text>
+        <text x="620" y="550" font-size="10" fill="#475569">🧰 Spill Kit</text>
+        <text x="620" y="570" font-size="10" fill="#475569">🚿 Eyewash/Shower</text>
+        <text x="730" y="550" font-size="10" fill="#475569">🧯 طفاية حريق</text>
+        <text x="730" y="570" font-size="10" fill="#475569">🚪 مخرج طوارئ</text>
+
+        <rect x="395" y="595" width="110" height="20" rx="4" fill="#334155"/>
+        <text x="450" y="609" text-anchor="middle" font-size="9" font-weight="700" fill="white">🚪 المدخل الرئيسي</text>
+
+        <line x1="450" y1="593" x2="450" y2="530" stroke="#0d9668" stroke-width="2.5" stroke-dasharray="6 3" marker-end="url(#arrowGreen)"/>
+        <line x1="450" y1="520" x2="160" y2="300" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 3" marker-end="url(#arrowBlue)"/>
+        <line x1="450" y1="520" x2="445" y2="300" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 3" marker-end="url(#arrowBlue)"/>
+        <line x1="445" y1="290" x2="735" y2="300" stroke="#d97706" stroke-width="2" stroke-dasharray="6 3" marker-end="url(#arrowRed)"/>
+
+        <text x="420" y="565" font-size="8" fill="#0d9668" font-weight="600">دخول المريض</text>
+        <text x="280" y="420" font-size="8" fill="#2563eb" font-weight="600" transform="rotate(-30,280,420)">مسار العينات</text>
+        <text x="600" y="305" font-size="8" fill="#d97706" font-weight="600">→ إلى التحليل</text>
+      </svg>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:8px; margin-top:14px;">
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--gray-600);"><div style="width:14px; height:14px; background:#dbeafe; border:2px solid #2563eb; border-radius:3px;"></div> سحب الدم</div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--gray-600);"><div style="width:14px; height:14px; background:#ecfdf5; border:2px solid #0d9668; border-radius:3px;"></div> استقبال العينات</div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--gray-600);"><div style="width:14px; height:14px; background:#fef3c7; border:2px solid #d97706; border-radius:3px;"></div> التحليل الكيميائي</div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--gray-600);"><div style="width:14px; height:14px; background:#fce7f3; border:2px solid #db2777; border-radius:3px;"></div> أمراض الدم</div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--gray-600);"><div style="width:14px; height:14px; background:#f5f3ff; border:2px solid #7c3aed; border-radius:3px;"></div> الأحياء الدقيقة</div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--gray-600);"><div style="width:14px; height:14px; background:#f0fdf4; border:2px solid #16a34a; border-radius:3px;"></div> المناعة والهرمونات</div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--gray-600);"><div style="width:14px; height:14px; background:#fff1f2; border:2px solid #e11d48; border-radius:3px;"></div> التخزين والنفايات</div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--gray-600);"><div style="width:14px; height:14px; background:#eff6ff; border:2px solid #1d4ed8; border-radius:3px;"></div> السلامة والطوارئ</div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--gray-600);"><span style="color:#0d9668;">- - →</span> حركة المرضى</div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--gray-600);"><span style="color:#2563eb;">- - →</span> مسار العينات</div>
     </div>
   </div>
 </div>
@@ -1332,6 +1496,127 @@ function showToast(msg,type='') { const t=document.getElementById('toast'); t.te
 function printCurrentSection() {
   const active = document.querySelector('.tab-content.active');
   if (active) { active.classList.add('print-active'); window.print(); setTimeout(()=>active.classList.remove('print-active'),500); }
+}
+
+const FLOOR_ZONES = {
+  phlebotomy: {
+    title: '🩸 منطقة سحب الدم — Phlebotomy Area',
+    details: `<b>المساحة:</b> 4م × 3م تقريباً<br>
+    <b>الموقع:</b> الجهة اليمنى من المدخل<br>
+    <b>المحتويات:</b> كرسيان لسحب الدم، طاولة سحب مجهزة، حاوية أدوات حادة (Sharps Container)، محطة PPE، معقم يدين، كمبيوتر مرتبط بـ LIS وطابعة ملصقات باركود<br>
+    <b>معايير السلامة:</b> فصل كامل عن منطقة التحليل، خصوصية المريض، إضاءة كافية، تهوية جيدة<br>
+    <b>المعايير:</b> CBAHI FMS.4, PC.3, IPC.6`
+  },
+  reception: {
+    title: '📋 منطقة استقبال وتجهيز العينات — Sample Reception',
+    details: `<b>المساحة:</b> 4م × 3م تقريباً<br>
+    <b>الموقع:</b> الجهة اليسرى من المدخل / وسط المختبر<br>
+    <b>المحتويات:</b> كمبيوتر نظام LIS، طابعة، قارئ باركود، ثلاجة عينات مؤقتة، صناديق نقل عينات، نماذج طلبات، جهاز طرد مركزي (Centrifuge)<br>
+    <b>الوظيفة:</b> استلام العينات، التحقق من البيانات، الفرز، الطرد المركزي، التوزيع على الأقسام<br>
+    <b>المعايير:</b> CBAHI LB.3, LB.4, LB.5`
+  },
+  chemistry: {
+    title: '🧪 منطقة التحليل الكيميائي — Chemistry & Biochemistry',
+    details: `<b>المساحة:</b> 4م × 3م تقريباً<br>
+    <b>الموقع:</b> الجهة الخلفية من المختبر<br>
+    <b>المحتويات:</b> جهاز الكيمياء الحيوية الآلي، جهاز الشوارد (ISE)، جهاز السكر التراكمي (HbA1c)، جهاز غازات الدم (ABG)، مغسلة مع محطة غسل العيون (Eyewash)، كمبيوتر LIS<br>
+    <b>السلامة:</b> وجود Spill Kit قريب، تهوية كافية للكواشف المتطايرة، SDS متاح لجميع الكواشف<br>
+    <b>المعايير:</b> CBAHI LB.7, LB.14, FMS.14, FMS.15`
+  },
+  hematology: {
+    title: '🔬 منطقة أمراض الدم — Hematology & Coagulation',
+    details: `<b>المساحة:</b> 4م × 3.5م تقريباً<br>
+    <b>الموقع:</b> الجانب الأيمن السفلي<br>
+    <b>المحتويات:</b> جهاز عداد الدم (CBC/Hematology Analyzer)، جهاز ESR، جهاز التخثر (Coagulation Analyzer)، مجهر مع زيت غمر، شرائح وصبغات (Wright/Giemsa/Leishman)، كمبيوتر LIS<br>
+    <b>الوظيفة:</b> صورة الدم الكاملة، سرعة الترسيب، اختبارات التخثر (PT/APTT/INR)، الفيلم الدموي<br>
+    <b>المعايير:</b> CBAHI LB.7, LB.8, LB.11`
+  },
+  micro: {
+    title: '🧫 منطقة الأحياء الدقيقة — Microbiology',
+    details: `<b>المساحة:</b> 4م × 1.5م تقريباً<br>
+    <b>الموقع:</b> الوسط<br>
+    <b>المحتويات:</b> حاضنات بكتيرية (Incubators) بدرجات حرارة مختلفة، مجهر مع صبغات غرام وZiehl-Neelsen، أوساط زراعية جاهزة ومسحوقية، أقراص حساسية للمضادات الحيوية<br>
+    <b>السلامة:</b> مستوى BSL-2، كابينة أمان بيولوجي (إن وجدت)، تعقيم أوتوكلاف<br>
+    <b>المعايير:</b> CBAHI LB.7, IPC.6, FMS.14`
+  },
+  hormones: {
+    title: '🧬 منطقة المناعة والهرمونات — Immunoassay & Hormones',
+    details: `<b>المساحة:</b> 4م × 1.5م تقريباً<br>
+    <b>الموقع:</b> الجانب الأيمن الخلفي<br>
+    <b>المحتويات:</b> جهاز الهرمونات (Immunoassay Analyzer)، جهاز الفحوصات السريعة، كمبيوتر LIS<br>
+    <b>الفحوصات:</b> TSH, T3, T4, FT4, PSA, AFP, CEA, Ferritin, Vitamin D, Vitamin B12, وغيرها<br>
+    <b>المعايير:</b> CBAHI LB.7, LB.8`
+  },
+  storage: {
+    title: '🧊 منطقة التخزين والنفايات — Storage & Waste',
+    details: `<b>المساحة:</b> 4م × 1.5م تقريباً<br>
+    <b>الموقع:</b> الوسط السفلي<br>
+    <b>المحتويات:</b> ثلاجة كواشف (2-8°C) مع مراقبة حرارة يومية، فريزر (-20°C) لحفظ العينات والمواد الحساسة، حاوية نفايات طبية خطرة مغلقة ومُعلّمة، حاوية نفايات كيميائية منفصلة<br>
+    <b>السلامة:</b> فصل النفايات حسب النوع، توثيق درجات الحرارة، تسليم منتظم لشركة النفايات<br>
+    <b>المعايير:</b> CBAHI FMS.14, FMS.15, IPC.7, LB.14`
+  },
+  safety: {
+    title: '🛡️ منطقة السلامة والطوارئ — Safety & Emergency',
+    details: `<b>المساحة:</b> 4م × 1.5م تقريباً<br>
+    <b>الموقع:</b> الجانب الأيسر السفلي قرب المخرج<br>
+    <b>المحتويات:</b> Spill Kit كامل (مواد امتصاص + معادلة + PPE)، محطة غسل العيون والاستحمام (Eyewash/Shower)، طفاية حريق، مخرج طوارئ مُعلّم<br>
+    <b>الفحص:</b> يتم فحص جاهزية Spill Kit شهرياً عبر نموذج CH-03، وفحص Eyewash/Shower أسبوعياً<br>
+    <b>المعايير:</b> CBAHI FMS.14, FMS.15, FMS.24.2, LB.14.2, LB.14.3`
+  }
+};
+
+function showZoneInfo(zoneId) {
+  const zone = FLOOR_ZONES[zoneId];
+  if (!zone) return;
+  document.getElementById('fpZoneTitle').innerHTML = zone.title;
+  document.getElementById('fpZoneDetails').innerHTML = zone.details;
+  const infoBox = document.getElementById('floorPlanZoneInfo');
+  infoBox.style.display = 'block';
+  infoBox.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function printFloorPlan() {
+  const svg = document.getElementById('labFloorPlan');
+  if (!svg) return;
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>مخطط المختبر - Floor Plan</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Tajawal',sans-serif;padding:15px;direction:rtl}
+  .print-h{display:flex;align-items:center;justify-content:space-between;border-bottom:3px double #1e3a5f;padding-bottom:10px;margin-bottom:12px}
+  .print-h img{width:55px;height:55px;border-radius:8px}.print-h .center{text-align:center}
+  .print-h .center h2{color:#1e3a5f;font-size:1rem}.print-h .center p{font-size:0.7rem;color:#666}
+  svg{width:100%;max-width:800px;margin:10px auto;display:block}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:12px;font-size:0.7rem}
+  .legend span{display:flex;align-items:center;gap:4px}.legend .dot{width:10px;height:10px;border-radius:2px;border:1.5px solid}
+  .footer{text-align:center;margin-top:20px;font-size:0.7rem;color:#888;border-top:1px solid #ddd;padding-top:8px}
+  @media print{@page{size:landscape;margin:8mm}}</style></head><body>
+  <div class="print-h"><img src="https://www.m2020m.org/logo2026.jpg" alt="Logo">
+  <div class="center"><h2>مجمع مكة الطبي بالزاهر</h2><p>Makkah Medical Complex - Al Zaher</p>
+  <h3 style="color:#1a365d;margin-top:4px;font-size:0.95rem">مخطط توزيع مناطق العمل داخل المختبر</h3>
+  <p style="font-size:0.7rem;color:#888">Laboratory Floor Plan | CBAHI FMS.4</p></div>
+  <img src="https://www.m2020m.org/logo2026.jpg" alt="Logo"></div>
+  ${svg.outerHTML}
+  <div class="legend">
+    <span><span class="dot" style="background:#dbeafe;border-color:#2563eb"></span> سحب الدم</span>
+    <span><span class="dot" style="background:#ecfdf5;border-color:#0d9668"></span> استقبال العينات</span>
+    <span><span class="dot" style="background:#fef3c7;border-color:#d97706"></span> التحليل الكيميائي</span>
+    <span><span class="dot" style="background:#fce7f3;border-color:#db2777"></span> أمراض الدم</span>
+    <span><span class="dot" style="background:#f5f3ff;border-color:#7c3aed"></span> الأحياء الدقيقة</span>
+    <span><span class="dot" style="background:#f0fdf4;border-color:#16a34a"></span> المناعة والهرمونات</span>
+    <span><span class="dot" style="background:#fff1f2;border-color:#e11d48"></span> التخزين والنفايات</span>
+    <span><span class="dot" style="background:#eff6ff;border-color:#1d4ed8"></span> السلامة والطوارئ</span>
+  </div>
+  <div class="footer">
+    <div>إعداد: قسم الجودة والسلامة — مجمع مكة الطبي بالزاهر | تاريخ: ${new Date().toLocaleDateString('ar-SA')}</div>
+    <div style="display:flex;justify-content:space-around;margin-top:15px;font-size:0.75rem">
+      <div style="text-align:center"><div style="border-top:1px solid #333;width:140px;margin:0 auto;padding-top:4px">مدير المختبر</div></div>
+      <div style="text-align:center"><div style="border-top:1px solid #333;width:140px;margin:0 auto;padding-top:4px">مسؤول الجودة</div></div>
+      <div style="text-align:center"><div style="border-top:1px solid #333;width:140px;margin:0 auto;padding-top:4px">المدير الطبي</div></div>
+    </div>
+  </div>
+  </body></html>`);
+  w.document.close();
+  setTimeout(()=>w.print(), 400);
 }
 
 function renderDocs() {
