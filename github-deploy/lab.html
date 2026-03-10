@@ -2128,9 +2128,15 @@ const SDS_SECTIONS = [
   {key:'labSafetyTips', icon:'fa-lightbulb', title:'15. نصائح السلامة للمختبر'}
 ];
 
+function escSDS(str) {
+  if (!str || typeof str !== 'string') return 'غير متوفر';
+  const d = document.createElement('div'); d.textContent = str; return d.innerHTML;
+}
+
 async function generateSDSInfo() {
   const chemName = document.getElementById('chemF_ch02_المادة')?.value;
   if (!chemName || chemName.trim().length < 2) { showToast('يرجى اختيار أو كتابة اسم المادة أولاً', 'warning'); return; }
+  if (chemName.length > 200) { showToast('اسم المادة طويل جداً', 'error'); return; }
 
   const dept = document.getElementById('chemF_ch02_القسم')?.value || '';
   const resultDiv = document.getElementById('sdsAiResult');
@@ -2154,9 +2160,10 @@ async function generateSDSInfo() {
     return;
   }
 
+  const safeChemName = escSDS(chemName);
   let html = `<div style="border:2px solid #7c3aed; border-radius:var(--radius-lg); overflow:hidden;">
     <div style="background:linear-gradient(135deg,#7c3aed,#5b21b6); color:white; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-      <div><div style="font-size:1rem; font-weight:800;"><i class="fas fa-file-shield"></i> بطاقة بيانات السلامة (SDS) — ${chemName}</div>
+      <div><div style="font-size:1rem; font-weight:800;"><i class="fas fa-file-shield"></i> بطاقة بيانات السلامة (SDS) — ${safeChemName}</div>
       <div style="font-size:0.7rem; opacity:0.85; margin-top:3px;">تم التوليد بالذكاء الاصطناعي | ${new Date().toLocaleDateString('ar-SA')} | هذا ملخص إرشادي — راجع SDS الأصلي من الشركة المصنّعة</div></div>
       <div style="display:flex; gap:6px;">
         <button onclick="printSDS()" class="topbar-btn" style="color:white; border-color:rgba(255,255,255,0.3);"><i class="fas fa-print"></i> طباعة</button>
@@ -2166,7 +2173,8 @@ async function generateSDSInfo() {
     <div id="sdsContentBody" style="padding:0;">`;
 
   SDS_SECTIONS.forEach(s => {
-    const val = data[s.key] || 'غير متوفر';
+    const rawVal = data[s.key];
+    const val = escSDS(typeof rawVal === 'object' ? JSON.stringify(rawVal) : (rawVal || 'غير متوفر'));
     html += `<div style="padding:10px 16px; border-bottom:1px solid var(--gray-100); transition:background 0.2s;" onmouseover="this.style.background='#faf5ff'" onmouseout="this.style.background='white'">
       <div style="font-size:0.8rem; font-weight:700; color:#5b21b6; margin-bottom:4px;"><i class="fas ${s.icon}" style="width:18px; text-align:center;"></i> ${s.title}</div>
       <div style="font-size:0.78rem; color:var(--gray-600); line-height:1.8; padding-right:26px;">${val}</div>
@@ -2184,7 +2192,7 @@ async function generateSDSInfo() {
 function printSDS() {
   const body = document.getElementById('sdsContentBody');
   if (!body) return;
-  const chemName = document.getElementById('chemF_ch02_المادة')?.value || 'مادة كيميائية';
+  const chemName = escSDS(document.getElementById('chemF_ch02_المادة')?.value || 'مادة كيميائية');
   const w = window.open('','_blank');
   if (!w) { showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning'); return; }
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>SDS - ${chemName}</title>
