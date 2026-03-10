@@ -1180,7 +1180,13 @@ async function addSheetRow(sheetName, rowData, filePayload) {
     const payload = {action:'addRow',sheet:sheetName,data:rowData};
     if (filePayload) payload.fileData = filePayload;
     const result = await apiPost(payload);
-    showToast(filePayload ? '✅ تم الحفظ ورفع الملف بنجاح' : '✅ تم الحفظ بنجاح', 'success');
+    if (filePayload && result && result.fileLink) {
+      showToast('✅ تم الحفظ ورفع الملف بنجاح', 'success');
+    } else if (filePayload && result && !result.fileLink) {
+      showToast('⚠️ تم الحفظ لكن رفع الملف فشل', 'warning');
+    } else {
+      showToast('✅ تم الحفظ بنجاح', 'success');
+    }
     sheetCache[sheetName] = null;
     await loadSheetData(sheetName);
     hideLoading();
@@ -1779,7 +1785,11 @@ function buildCRUDSection(opts) {
     }
     let saveOk = false;
     try {
-      await addSheetRow(sheetName, data, filePayload);
+      const saveResult = await addSheetRow(sheetName, data, filePayload);
+      if (filePayload && saveResult && !saveResult.fileLink) {
+        const errDetail = saveResult.fileError ? (' (' + saveResult.fileError + ')') : '';
+        showToast('⚠️ تم حفظ السجل لكن رفع الملف فشل' + errDetail + ' — تأكد من صلاحيات Google Drive', 'warning');
+      }
       saveOk = true;
     } catch(saveErr) { console.warn('Save error (CAPA will still open):', saveErr); }
     document.getElementById(containerId+'_form').style.display = 'none';
@@ -2111,26 +2121,53 @@ const SDS_AI_URLS = [
 ];
 
 const SDS_SECTIONS = [
-  {key:'identification', icon:'fa-tag', title:'1. تعريف المادة'},
-  {key:'hazards', icon:'fa-triangle-exclamation', title:'2. المخاطر'},
-  {key:'composition', icon:'fa-flask', title:'3. التركيب/المكونات'},
-  {key:'firstAid', icon:'fa-hand-holding-heart', title:'4. الإسعافات الأولية'},
-  {key:'fireFighting', icon:'fa-fire-extinguisher', title:'5. مكافحة الحريق'},
-  {key:'spillHandling', icon:'fa-droplet', title:'6. إجراءات الانسكاب'},
-  {key:'handlingStorage', icon:'fa-box', title:'7. التداول والتخزين'},
-  {key:'exposureControl', icon:'fa-shield-halved', title:'8. التحكم بالتعرض / PPE'},
-  {key:'physicalProperties', icon:'fa-atom', title:'9. الخواص الفيزيائية والكيميائية'},
-  {key:'stability', icon:'fa-scale-balanced', title:'10. الثبات والتفاعلية'},
-  {key:'toxicology', icon:'fa-skull-crossbones', title:'11. معلومات السمية'},
-  {key:'disposal', icon:'fa-trash-can', title:'12. التخلص'},
-  {key:'transport', icon:'fa-truck', title:'13. معلومات النقل'},
-  {key:'regulatory', icon:'fa-gavel', title:'14. المعلومات التنظيمية'},
-  {key:'labSafetyTips', icon:'fa-lightbulb', title:'15. نصائح السلامة للمختبر'}
+  {key:'identification', icon:'fa-tag', title:'1. تعريف المادة', en:'Identification'},
+  {key:'hazards', icon:'fa-triangle-exclamation', title:'2. المخاطر', en:'Hazards'},
+  {key:'composition', icon:'fa-flask', title:'3. التركيب/المكونات', en:'Composition'},
+  {key:'firstAid', icon:'fa-hand-holding-heart', title:'4. الإسعافات الأولية', en:'First Aid'},
+  {key:'fireFighting', icon:'fa-fire-extinguisher', title:'5. مكافحة الحريق', en:'Fire Fighting'},
+  {key:'spillHandling', icon:'fa-droplet', title:'6. إجراءات الانسكاب', en:'Spill Handling'},
+  {key:'handlingStorage', icon:'fa-box', title:'7. التداول والتخزين', en:'Handling & Storage'},
+  {key:'exposureControl', icon:'fa-shield-halved', title:'8. التحكم بالتعرض / PPE', en:'Exposure Control / PPE'},
+  {key:'physicalProperties', icon:'fa-atom', title:'9. الخواص الفيزيائية والكيميائية', en:'Physical & Chemical Properties'},
+  {key:'stability', icon:'fa-scale-balanced', title:'10. الثبات والتفاعلية', en:'Stability & Reactivity'},
+  {key:'toxicology', icon:'fa-skull-crossbones', title:'11. معلومات السمية', en:'Toxicology'},
+  {key:'disposal', icon:'fa-trash-can', title:'12. التخلص', en:'Disposal'},
+  {key:'transport', icon:'fa-truck', title:'13. معلومات النقل', en:'Transport'},
+  {key:'regulatory', icon:'fa-gavel', title:'14. المعلومات التنظيمية', en:'Regulatory'},
+  {key:'labSafetyTips', icon:'fa-lightbulb', title:'15. نصائح السلامة للمختبر', en:'Lab Safety Tips'}
 ];
 
 function escSDS(str) {
   if (!str || typeof str !== 'string') return 'غير متوفر';
   const d = document.createElement('div'); d.textContent = str; return d.innerHTML;
+}
+
+function formatSDSValue(rawVal) {
+  if (!rawVal) return '<span style="color:var(--gray-400);">غير متوفر</span>';
+  let text = '';
+  if (typeof rawVal === 'object') {
+    if (Array.isArray(rawVal)) {
+      text = rawVal.map(v => typeof v === 'object' ? JSON.stringify(v) : String(v)).join(' | ');
+    } else {
+      const entries = Object.entries(rawVal);
+      text = entries.map(([k, v]) => {
+        if (Array.isArray(v)) return k + ': ' + v.join('، ');
+        if (typeof v === 'object' && v !== null) return k + ': ' + Object.values(v).join('، ');
+        return k + ': ' + String(v);
+      }).join(' | ');
+    }
+  } else {
+    text = String(rawVal);
+  }
+  const parts = text.split('---');
+  const arText = escSDS((parts[0] || '').trim());
+  const enText = parts[1] ? escSDS(parts[1].trim()) : '';
+  let html = '<div style="color:var(--gray-700);">' + arText.replace(/\|/g, '<span style="color:#7c3aed; margin:0 4px;">|</span>') + '</div>';
+  if (enText) {
+    html += '<div style="color:var(--gray-400); font-size:0.72rem; margin-top:4px; direction:ltr; text-align:left;">' + enText.replace(/\|/g, '<span style="color:#a78bfa; margin:0 4px;">|</span>') + '</div>';
+  }
+  return html;
 }
 
 async function generateSDSInfo() {
@@ -2141,8 +2178,8 @@ async function generateSDSInfo() {
   const dept = document.getElementById('chemF_ch02_القسم')?.value || '';
   const resultDiv = document.getElementById('sdsAiResult');
   const btn = document.getElementById('sdsAiBtn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري توليد بيانات SDS بالذكاء الاصطناعي...'; }
-  if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center; padding:20px; color:var(--primary);"><i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i><div style="margin-top:8px; font-size:0.8rem;">جاري تحليل المادة وتوليد بطاقة SDS...</div></div>';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري تحميل معلومات المركب...'; }
+  if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center; padding:20px; color:var(--primary);"><i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i><div style="margin-top:8px; font-size:0.8rem;">جاري تحميل بيانات السلامة للمركب...</div></div>';
   if (resultDiv) resultDiv.style.display = 'block';
 
   let data = null;
@@ -2153,10 +2190,10 @@ async function generateSDSInfo() {
     } catch(e) { continue; }
   }
 
-  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot"></i> توليد بيانات SDS بالذكاء الاصطناعي'; }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-info-circle"></i> معلومات مساعدة عن المركب'; }
 
   if (!data) {
-    if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center; padding:15px; color:#dc2626;"><i class="fas fa-times-circle"></i> تعذر توليد بيانات SDS. تأكد من الاتصال بالإنترنت وأعد المحاولة.</div>';
+    if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center; padding:15px; color:#dc2626;"><i class="fas fa-times-circle"></i> تعذر تحميل بيانات المركب. تأكد من الاتصال بالإنترنت وأعد المحاولة.</div>';
     return;
   }
 
@@ -2164,7 +2201,7 @@ async function generateSDSInfo() {
   let html = `<div style="border:2px solid #7c3aed; border-radius:var(--radius-lg); overflow:hidden;">
     <div style="background:linear-gradient(135deg,#7c3aed,#5b21b6); color:white; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
       <div><div style="font-size:1rem; font-weight:800;"><i class="fas fa-file-shield"></i> بطاقة بيانات السلامة (SDS) — ${safeChemName}</div>
-      <div style="font-size:0.7rem; opacity:0.85; margin-top:3px;">تم التوليد بالذكاء الاصطناعي | ${new Date().toLocaleDateString('ar-SA')} | هذا ملخص إرشادي — راجع SDS الأصلي من الشركة المصنّعة</div></div>
+      <div style="font-size:0.68rem; opacity:0.85; margin-top:3px;">Safety Data Sheet | ${new Date().toLocaleDateString('ar-SA')} | يجب المراجعة والاعتماد من مدير المختبر قبل الاستخدام</div></div>
       <div style="display:flex; gap:6px;">
         <button onclick="printSDS()" class="topbar-btn" style="color:white; border-color:rgba(255,255,255,0.3);"><i class="fas fa-print"></i> طباعة</button>
         <button onclick="copySDS()" class="topbar-btn" style="color:white; border-color:rgba(255,255,255,0.3);"><i class="fas fa-copy"></i> نسخ</button>
@@ -2174,19 +2211,26 @@ async function generateSDSInfo() {
 
   SDS_SECTIONS.forEach(s => {
     const rawVal = data[s.key];
-    const val = escSDS(typeof rawVal === 'object' ? JSON.stringify(rawVal) : (rawVal || 'غير متوفر'));
+    const formattedVal = formatSDSValue(rawVal);
     html += `<div style="padding:10px 16px; border-bottom:1px solid var(--gray-100); transition:background 0.2s;" onmouseover="this.style.background='#faf5ff'" onmouseout="this.style.background='white'">
-      <div style="font-size:0.8rem; font-weight:700; color:#5b21b6; margin-bottom:4px;"><i class="fas ${s.icon}" style="width:18px; text-align:center;"></i> ${s.title}</div>
-      <div style="font-size:0.78rem; color:var(--gray-600); line-height:1.8; padding-right:26px;">${val}</div>
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">
+        <div style="font-size:0.8rem; font-weight:700; color:#5b21b6;"><i class="fas ${s.icon}" style="width:18px; text-align:center;"></i> ${s.title}</div>
+        <div style="font-size:0.65rem; color:var(--gray-400); font-style:italic;">${s.en}</div>
+      </div>
+      <div style="font-size:0.78rem; line-height:1.8; padding-right:26px;">${formattedVal}</div>
     </div>`;
   });
 
-  html += `</div><div style="background:#faf5ff; padding:10px 16px; font-size:0.7rem; color:#7c3aed; text-align:center;">
-    <i class="fas fa-info-circle"></i> هذا ملخص SDS تم إنشاؤه بالذكاء الاصطناعي لأغراض إرشادية. يجب دائماً الرجوع إلى بطاقة SDS الأصلية من الشركة المصنّعة أو المورّد.
+  html += `</div><div style="background:#faf5ff; padding:12px 16px;">
+    <div style="display:flex; justify-content:space-around; flex-wrap:wrap; gap:10px; font-size:0.72rem; color:var(--gray-500);">
+      <div style="text-align:center; min-width:120px;"><div style="border-bottom:1px dashed var(--gray-300); padding-bottom:20px; margin-bottom:4px;">&nbsp;</div>مراجعة مسؤول السلامة</div>
+      <div style="text-align:center; min-width:120px;"><div style="border-bottom:1px dashed var(--gray-300); padding-bottom:20px; margin-bottom:4px;">&nbsp;</div>اعتماد مدير المختبر</div>
+      <div style="text-align:center; min-width:120px;"><div style="border-bottom:1px dashed var(--gray-300); padding-bottom:20px; margin-bottom:4px;">&nbsp;</div>التاريخ</div>
+    </div>
   </div></div>`;
 
   if (resultDiv) resultDiv.innerHTML = html;
-  showToast('تم توليد بطاقة SDS بنجاح — ' + chemName, 'success');
+  showToast('تم تحميل بيانات SDS — ' + chemName, 'success');
 }
 
 function printSDS() {
@@ -2213,11 +2257,10 @@ function printSDS() {
   ${body.innerHTML}
   <div class="ft">
     <div>إعداد: قسم السلامة الكيميائية — مجمع مكة الطبي بالزاهر | تاريخ: ${new Date().toLocaleDateString('ar-SA')}</div>
-    <div style="color:#dc2626; margin-top:4px;">⚠️ هذا ملخص إرشادي تم إنشاؤه بالذكاء الاصطناعي — يجب الرجوع إلى SDS الأصلي من المصنّع</div>
-    <div style="display:flex;justify-content:space-around;margin-top:12px;font-size:0.7rem">
-      <div style="text-align:center"><div style="border-top:1px solid #333;width:120px;margin:0 auto;padding-top:3px">مدير المختبر</div></div>
-      <div style="text-align:center"><div style="border-top:1px solid #333;width:120px;margin:0 auto;padding-top:3px">مسؤول السلامة</div></div>
-      <div style="text-align:center"><div style="border-top:1px solid #333;width:120px;margin:0 auto;padding-top:3px">المدير الطبي</div></div>
+    <div style="display:flex;justify-content:space-around;margin-top:15px;font-size:0.7rem">
+      <div style="text-align:center"><div style="border-top:1px solid #333;width:130px;margin:0 auto;padding-top:3px">مراجعة مسؤول السلامة</div></div>
+      <div style="text-align:center"><div style="border-top:1px solid #333;width:130px;margin:0 auto;padding-top:3px">اعتماد مدير المختبر</div></div>
+      <div style="text-align:center"><div style="border-top:1px solid #333;width:130px;margin:0 auto;padding-top:3px">المدير الطبي</div></div>
     </div>
   </div></body></html>`);
   w.document.close();
@@ -2326,7 +2369,7 @@ function renderQCTab() {
       {key:'send',label:'تاريخ الإرسال',sheetKey:'تاريخ الإرسال',type:'date'},
       {key:'result',label:'النتيجة',sheetKey:'النتيجة',placeholder:'Acceptable'},
       {key:'accepted',label:'مقبول',sheetKey:'مقبول',type:'select',options:[{value:'نعم',label:'نعم'},{value:'لا',label:'لا'}]},
-      {key:'attachment',label:'مرفق (PDF / صورة)',sheetKey:'المرفق',type:'file'},
+      {key:'attachment',label:'مرفق (PDF / صورة) *',sheetKey:'المرفق',type:'file',required:true},
     ],
     fileFolderId:'11Cq-AKeS9q2_jgEIqG-ckBNTpZZtkVNl',
     tableHeaders:['المزود','الدورة','القسم','الفحص','الاستلام','الإرسال','النتيجة','مقبول','مرفق','شهادة'],
@@ -3627,9 +3670,9 @@ function renderChemSub(subId) {
   if (subId === 'ch02') {
     html += `<div style="margin-top:12px; padding-top:12px; border-top:2px dashed #7c3aed;">
       <button id="sdsAiBtn" onclick="generateSDSInfo()" class="topbar-btn" style="background:linear-gradient(135deg,#7c3aed,#5b21b6); border:none; color:white; padding:10px 20px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-sm); width:100%; cursor:pointer;">
-        <i class="fas fa-robot"></i> توليد بيانات SDS بالذكاء الاصطناعي
+        <i class="fas fa-info-circle"></i> معلومات مساعدة عن المركب
       </button>
-      <div style="font-size:0.68rem; color:var(--gray-400); text-align:center; margin-top:4px;">اختر المادة أولاً ثم اضغط لتوليد بطاقة SDS كاملة من 15 قسم — يمكن طباعتها وحفظها</div>
+      <div style="font-size:0.68rem; color:var(--gray-400); text-align:center; margin-top:4px;">اختر المادة أولاً ثم اضغط لعرض بطاقة بيانات السلامة (SDS) كاملة من 15 قسم — بالعربي والإنجليزي — للمراجعة والاعتماد</div>
       <div id="sdsAiResult" style="display:none; margin-top:12px;"></div>
     </div>`;
   }
