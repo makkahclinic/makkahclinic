@@ -3588,6 +3588,221 @@ const CHEM_SHEETS = {
   }
 };
 
+/* ========== CH-03 Spill Kit: سيناريو تلقائي + بطاقة توضيح (لا يمس باقي الوحدات) ========== */
+function normCh03(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim();
+}
+
+function resolveCh03Scenario(v) {
+  var need = ['Spill Kit مكتمل', 'PPE متوفر', 'مواد امتصاص', 'Eyewash', 'Shower', 'Signage'];
+  for (var i = 0; i < need.length; i++) {
+    if (!normCh03(v[need[i]])) {
+      return { id: 'incomplete', title: '', severity: 'none', severityLabel: '', suggestedAction: '', reasonLines: [], followUp: false, showCard: false };
+    }
+  }
+  if (v['Eyewash'] === 'لا يعمل') {
+    return { id: 'eyewash_broken', title: 'عطل محطة غسيل العيون', severity: 'high', severityLabel: 'عالية',
+      suggestedAction: 'إبلاغ الصيانة فوراً؛ وضع لافتة تحذيرية؛ تقييد استخدام المحطة حتى الإصلاح؛ متابعة التصحيح.',
+      reasonLines: [{ field: 'Eyewash', label: 'Eyewash', value: 'لا يعمل' }], followUp: true, showCard: true };
+  }
+  if (v['Eyewash'] === 'غير موجود') {
+    return { id: 'eyewash_missing', title: 'غياب محطة غسيل العيون', severity: 'high', severityLabel: 'عالية',
+      suggestedAction: 'إبلاغ الإدارة والصيانة؛ عدم استخدام المنطقة لغسل العيون حتى توفير محطة معتمدة؛ وضع لافتة وتنبيه؛ متابعة لوجستية.',
+      reasonLines: [{ field: 'Eyewash', label: 'Eyewash', value: 'غير موجود' }], followUp: true, showCard: true };
+  }
+  if (v['Shower'] === 'لا يعمل') {
+    return { id: 'shower_broken', title: 'عطل محطة الاستحمام الطارئ', severity: 'high', severityLabel: 'عالية',
+      suggestedAction: 'إبلاغ الصيانة؛ وضع لافتة؛ تقييد الاستخدام حتى الإصلاح؛ متابعة التصحيح.',
+      reasonLines: [{ field: 'Shower', label: 'Shower', value: 'لا يعمل' }], followUp: true, showCard: true };
+  }
+  if (v['Shower'] === 'غير موجود') {
+    return { id: 'shower_missing', title: 'غياب محطة الاستحمام الطارئ', severity: 'high', severityLabel: 'عالية',
+      suggestedAction: 'إبلاغ الإدارة؛ تخطيط توفير محطة معتمدة؛ وضع تنبيهات؛ متابعة.',
+      reasonLines: [{ field: 'Shower', label: 'Shower', value: 'غير موجود' }], followUp: true, showCard: true };
+  }
+  if (v['Spill Kit مكتمل'] === 'لا') {
+    return { id: 'kit_no', title: 'عدة الانسكابات غير مكتملة', severity: 'high', severityLabel: 'عالية',
+      suggestedAction: 'تأمين مواد الاستجابة والامتصاص ومعدات الحماية؛ عدم الاعتماد على العدة حتى اكتمالها؛ متابعة التزويد.',
+      reasonLines: [{ field: 'Spill Kit مكتمل', label: 'Spill Kit مكتمل', value: 'لا' }], followUp: true, showCard: true };
+  }
+  if (v['Spill Kit مكتمل'] === 'جزئي') {
+    return { id: 'kit_partial', title: 'عدة الانسكابات مكتملة جزئياً', severity: 'medium', severityLabel: 'متوسطة',
+      suggestedAction: 'إكمال النواقص فوراً؛ جرد سريع؛ متابعة حتى اكتمال العدة.',
+      reasonLines: [{ field: 'Spill Kit مكتمل', label: 'Spill Kit مكتمل', value: 'جزئي' }], followUp: true, showCard: true };
+  }
+  if (v['PPE متوفر'] === 'لا') {
+    return { id: 'ppe_no', title: 'نقص معدات الحماية في العدة', severity: 'high', severityLabel: 'عالية',
+      suggestedAction: 'تأمين معدات الحماية كاملة؛ عدم التعامل مع الانسكابات بدون تجهيز؛ متابعة التزويد.',
+      reasonLines: [{ field: 'PPE متوفر', label: 'PPE متوفر', value: 'لا' }], followUp: true, showCard: true };
+  }
+  if (v['PPE متوفر'] === 'جزئي') {
+    return { id: 'ppe_partial', title: 'معدات الحماية متوفرة جزئياً', severity: 'medium', severityLabel: 'متوسطة',
+      suggestedAction: 'إكمال نقص معدات الحماية؛ توثيق النواقص؛ متابعة حتى التوفر الكامل.',
+      reasonLines: [{ field: 'PPE متوفر', label: 'PPE متوفر', value: 'جزئي' }], followUp: true, showCard: true };
+  }
+  if (v['مواد امتصاص'] === 'لا') {
+    return { id: 'absorbent_no', title: 'مواد امتصاص غير متوفرة', severity: 'high', severityLabel: 'عالية',
+      suggestedAction: 'تأمين مواد الامتصاص؛ تقييد الاستخدام حتى التوريد؛ متابعة.',
+      reasonLines: [{ field: 'مواد امتصاص', label: 'مواد امتصاص', value: 'لا' }], followUp: true, showCard: true };
+  }
+  if (v['Signage'] === 'لا') {
+    return { id: 'signage_no', title: 'لافتات إرشادية ناقصة', severity: 'medium', severityLabel: 'متوسطة',
+      suggestedAction: 'تركيب أو تحديث اللافتات؛ توثيق المواقع؛ متابعة حتى اكتمال الوسم.',
+      reasonLines: [{ field: 'Signage', label: 'Signage', value: 'لا' }], followUp: true, showCard: true };
+  }
+  return { id: 'routine_ok', title: 'فحص روتيني — لا خلل إلزامي', severity: 'low', severityLabel: 'منخفضة',
+    suggestedAction: 'لا يوجد إجراء تصحيحي مطلوب بناءً على القيم المدخلة.',
+    reasonLines: [], followUp: false, showCard: true };
+}
+
+function applyCh03ScenarioHighlights(reasonLines) {
+  document.querySelectorAll('#chemForm_ch03 [data-ch03-field]').forEach(function(el) {
+    el.style.boxShadow = '';
+    el.style.borderRadius = '';
+  });
+  if (!reasonLines || !reasonLines.length) return;
+  var set = {};
+  reasonLines.forEach(function(r) { set[r.field] = true; });
+  document.querySelectorAll('#chemForm_ch03 [data-ch03-field]').forEach(function(el) {
+    var k = el.getAttribute('data-ch03-field');
+    if (k && set[k]) {
+      el.style.borderRadius = '8px';
+      el.style.boxShadow = '0 0 0 2px rgba(124, 58, 237, 0.45)';
+    }
+  });
+}
+
+function getCh03FieldValues() {
+  var keys = ['التاريخ', 'الموقع', 'Spill Kit مكتمل', 'PPE متوفر', 'مواد امتصاص', 'Eyewash', 'Shower', 'Signage', 'الإجراء المطلوب', 'المسؤول'];
+  var o = {};
+  for (var i = 0; i < keys.length; i++) {
+    var el = document.getElementById('chemF_ch03_' + keys[i]);
+    o[keys[i]] = el ? el.value : '';
+  }
+  return o;
+}
+
+function updateCh03ScenarioUI() {
+  var state = window.__ch03ScenarioState;
+  if (!state) return;
+  var prevId = state.lastScenarioId;
+  var v = getCh03FieldValues();
+  var res = resolveCh03Scenario(v);
+  window.__ch03LastResolved = res;
+
+  var card = document.getElementById('ch03ScenarioCard');
+  var hintEl = document.getElementById('ch03AutoFillHint');
+  var sugBlock = document.getElementById('ch03SuggestionBlock');
+  var misHint = document.getElementById('ch03MismatchHint');
+  var misHintMsg = document.getElementById('ch03MismatchHintMsg');
+  var actEl = document.getElementById('chemF_ch03_الإجراء المطلوب');
+  var nt = document.getElementById('ch03NewSuggestionText');
+  var act = normCh03(actEl ? actEl.value : '');
+  var sug = res.suggestedAction || '';
+  var scenarioChanged = prevId !== null && prevId !== res.id;
+
+  if (hintEl) hintEl.style.display = 'none';
+
+  if (!card) {
+    applyCh03ScenarioHighlights([]);
+    return;
+  }
+
+  if (res.id === 'incomplete') {
+    card.style.display = 'none';
+    if (sugBlock) sugBlock.style.display = 'none';
+    if (misHint) misHint.style.display = 'none';
+    state.lastScenarioId = res.id;
+    applyCh03ScenarioHighlights([]);
+    return;
+  }
+
+  card.style.display = 'block';
+  var head = document.getElementById('ch03CardHeadline');
+  var titleEl = document.getElementById('ch03ScenarioTitle');
+  var reasonEl = document.getElementById('ch03ScenarioReason');
+  var sev = document.getElementById('ch03SeverityBadge');
+  var fu = document.getElementById('ch03FollowUpHint');
+  if (head) head.textContent = 'تم تطبيق سيناريو تلقائي';
+  if (titleEl) titleEl.textContent = res.title || '';
+  if (reasonEl) {
+    if (res.reasonLines && res.reasonLines.length) {
+      var parts = res.reasonLines.map(function(r) { return r.label + ' = ' + r.value; });
+      reasonEl.textContent = 'تم اختيار هذا السيناريو بسبب: ' + parts.join('؛ ');
+    } else {
+      reasonEl.textContent = 'جميع عناصر الفحص ضمن الحالة المقبولة.';
+    }
+  }
+  if (sev) {
+    var bg = res.severity === 'high' ? '#fee2e2' : res.severity === 'medium' ? '#fef3c7' : '#d1fae5';
+    var fg = res.severity === 'high' ? '#991b1b' : res.severity === 'medium' ? '#92400e' : '#065f46';
+    sev.innerHTML = '<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:0.72rem;font-weight:700;background:' + bg + ';color:' + fg + ';">' + (res.severityLabel || '') + '</span>';
+  }
+  if (fu) fu.textContent = res.followUp ? 'متابعة تصحيحية مقترحة: نعم' : 'متابعة تصحيحية مقترحة: لا';
+
+  if (!act) {
+    if (actEl && sug) actEl.value = sug;
+    if (hintEl) {
+      hintEl.style.display = 'flex';
+    }
+    if (sugBlock) sugBlock.style.display = 'none';
+    if (misHint) misHint.style.display = 'none';
+  } else {
+    if (normCh03(act) === normCh03(sug)) {
+      if (sugBlock) sugBlock.style.display = 'none';
+      if (misHint) misHint.style.display = 'none';
+    } else if (scenarioChanged && sug && normCh03(act) !== normCh03(sug)) {
+      window.__ch03PendingSuggestion = sug;
+      if (nt) nt.textContent = sug;
+      if (sugBlock) {
+        sugBlock.style.display = 'flex';
+      }
+      if (misHint) {
+        if (misHintMsg) misHintMsg.textContent = 'قد تحتاج لتحديث الإجراء بناءً على التغيير';
+        misHint.style.display = 'flex';
+      }
+    } else {
+      if (sugBlock) sugBlock.style.display = 'none';
+      if (misHint) misHint.style.display = 'none';
+    }
+  }
+
+  applyCh03ScenarioHighlights(res.reasonLines || []);
+  state.lastScenarioId = res.id;
+}
+
+function initCh03ScenarioUI() {
+  window.__ch03ScenarioState = { lastScenarioId: null };
+  var actEl = document.getElementById('chemF_ch03_الإجراء المطلوب');
+  var hintEl = document.getElementById('ch03AutoFillHint');
+  var misHint = document.getElementById('ch03MismatchHint');
+  var sugBlock = document.getElementById('ch03SuggestionBlock');
+  var watch = ['التاريخ', 'الموقع', 'Spill Kit مكتمل', 'PPE متوفر', 'مواد امتصاص', 'Eyewash', 'Shower', 'Signage', 'المسؤول'];
+  watch.forEach(function(k) {
+    var el = document.getElementById('chemF_ch03_' + k);
+    if (!el) return;
+    el.addEventListener('change', updateCh03ScenarioUI);
+    if (k === 'الموقع') el.addEventListener('input', updateCh03ScenarioUI);
+  });
+  if (actEl) {
+    actEl.addEventListener('input', function() {
+      if (hintEl) hintEl.style.display = 'none';
+    });
+  }
+  var btn = document.getElementById('ch03ApplySuggestionBtn');
+  if (btn) {
+    btn.onclick = function() {
+      var sug = window.__ch03PendingSuggestion || '';
+      if (actEl) actEl.value = sug;
+      if (sugBlock) sugBlock.style.display = 'none';
+      if (misHint) misHint.style.display = 'none';
+      if (window.__ch03LastResolved) window.__ch03ScenarioState.lastScenarioId = window.__ch03LastResolved.id;
+      updateCh03ScenarioUI();
+    };
+  }
+  updateCh03ScenarioUI();
+}
+
 function showSpillKitInfo() {
   const existingModal = document.getElementById('spillKitInfoModal');
   if (existingModal) existingModal.remove();
@@ -3753,8 +3968,22 @@ function renderChemSub(subId) {
 
   html += `<div id="chemForm_${subId}" style="display:none; background:var(--gray-50); border:1px solid var(--gray-200); border-radius:var(--radius-md); padding:16px; margin-bottom:14px;">
     <h4 style="font-size:0.85rem; font-weight:700; margin-bottom:12px; color:#7c3aed;"><i class="fas fa-edit" style="margin-left:5px;"></i> <span id="chemFormTitle_${subId}">إضافة سجل جديد</span></h4>
-    <input type="hidden" id="chemEditId_${subId}">
-    <div class="form-row" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px;">`;
+    <input type="hidden" id="chemEditId_${subId}">`;
+  if (subId === 'ch03') {
+    html += `<div id="ch03ScenarioCard" style="display:none;margin-bottom:14px;padding:12px 14px;border-radius:var(--radius-md);border:1px solid #c4b5fd;background:linear-gradient(135deg,#faf5ff,#f3e8ff);font-size:0.8rem;">
+      <div style="font-weight:800;color:#5b21b6;margin-bottom:8px;"><i class="fas fa-wand-magic-sparkles" style="margin-left:6px;"></i><span id="ch03CardHeadline">تم تطبيق سيناريو تلقائي</span></div>
+      <div id="ch03ScenarioTitle" style="font-weight:700;color:#1e1b4b;margin-bottom:6px;"></div>
+      <div id="ch03ScenarioReason" style="color:#4c1d95;margin-bottom:8px;line-height:1.6;"></div>
+      <div id="ch03ScenarioSeverityRow" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><span style="font-size:0.7rem;color:#64748b;">الخطورة:</span><span id="ch03SeverityBadge"></span><span id="ch03FollowUpHint" style="font-size:0.72rem;color:#64748b;"></span></div>
+      <div id="ch03AutoFillHint" style="display:none;font-size:0.72rem;color:#059669;margin-top:6px;align-items:center;gap:6px;"><span aria-hidden="true">✔️</span><span id="ch03AutoFillHintMsg">تم اقتراح إجراء تلقائي — يمكنك التعديل</span></div>
+      <div id="ch03MismatchHint" style="display:none;font-size:0.72rem;color:#92400e;margin-bottom:8px;margin-top:6px;padding:8px 10px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;line-height:1.5;align-items:flex-start;gap:6px;"><span aria-hidden="true">⚠️</span><span id="ch03MismatchHintMsg"></span></div>
+      <div id="ch03SuggestionBlock" style="display:none;margin-top:10px;padding:10px;border-radius:8px;border:1px dashed #a78bfa;background:#fff;flex-direction:column;gap:8px;">
+        <div style="font-size:0.78rem;color:#374151;line-height:1.5;"><span style="color:#6b7280;">اقتراح جديد بناءً على التغيير:</span> <span id="ch03NewSuggestionText" style="font-weight:600;color:#7c3aed;"></span></div>
+        <button type="button" id="ch03ApplySuggestionBtn" class="topbar-btn" style="margin-top:8px;padding:6px 12px;font-size:0.75rem;background:#7c3aed;border:none;color:white;border-radius:6px;cursor:pointer;">استخدم هذا الاقتراح</button>
+      </div>
+    </div>`;
+  }
+  html += `<div class="form-row" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px;">`;
 
   if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') {
     const placeholder = subId === 'ch04' ? 'اكتب اسم المادة المنسكبة...' : `اكتب اسم المادة بالعربي أو الإنجليزي... (${LAB_CHEMICALS.length} مادة)`;
@@ -3767,12 +3996,13 @@ function renderChemSub(subId) {
 
   cfg.fields.forEach(f => {
     const req = f.required ? ' required' : '';
+    const fgAttr = subId === 'ch03' ? ' data-ch03-field="' + String(f.key).replace(/"/g, '&quot;') + '"' : '';
     if (f.type === 'select') {
-      html += `<div class="form-group"><label style="font-size:0.75rem; font-weight:600; margin-bottom:4px; display:block;">${f.key}</label><select id="chemF_${subId}_${f.key}" style="width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:var(--radius-sm); font-family:inherit; font-size:0.8rem;"${req}><option value="">-- اختر --</option>${f.options.map(o=>'<option value="'+o+'">'+o+'</option>').join('')}</select></div>`;
+      html += `<div class="form-group"${fgAttr}><label style="font-size:0.75rem; font-weight:600; margin-bottom:4px; display:block;">${f.key}</label><select id="chemF_${subId}_${f.key}" style="width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:var(--radius-sm); font-family:inherit; font-size:0.8rem;"${req}><option value="">-- اختر --</option>${f.options.map(o=>'<option value="'+o+'">'+o+'</option>').join('')}</select></div>`;
     } else if (f.type === 'textarea') {
-      html += `<div class="form-group" style="grid-column:span 2;"><label style="font-size:0.75rem; font-weight:600; margin-bottom:4px; display:block;">${f.key}</label><textarea id="chemF_${subId}_${f.key}" rows="2" style="width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:var(--radius-sm); font-family:inherit; font-size:0.8rem; resize:vertical;"${req}></textarea></div>`;
+      html += `<div class="form-group" style="grid-column:span 2;"${fgAttr}><label style="font-size:0.75rem; font-weight:600; margin-bottom:4px; display:block;">${f.key}</label><textarea id="chemF_${subId}_${f.key}" rows="2" style="width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:var(--radius-sm); font-family:inherit; font-size:0.8rem; resize:vertical;"${req}></textarea></div>`;
     } else {
-      html += `<div class="form-group"><label style="font-size:0.75rem; font-weight:600; margin-bottom:4px; display:block;">${f.key}</label><input type="${f.type}" id="chemF_${subId}_${f.key}" style="width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:var(--radius-sm); font-family:inherit; font-size:0.8rem;"${req}></div>`;
+      html += `<div class="form-group"${fgAttr}><label style="font-size:0.75rem; font-weight:600; margin-bottom:4px; display:block;">${f.key}</label><input type="${f.type}" id="chemF_${subId}_${f.key}" style="width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:var(--radius-sm); font-family:inherit; font-size:0.8rem;"${req}></div>`;
     }
   });
 
@@ -3828,6 +4058,8 @@ function renderChemSub(subId) {
 
   container.innerHTML = html;
 
+  if (subId === 'ch03') initCh03ScenarioUI();
+
   window['chemShowForm_' + subId] = function() {
     document.getElementById('chemEditId_' + subId).value = '';
     document.getElementById('chemFormTitle_' + subId).textContent = 'إضافة سجل جديد';
@@ -3838,6 +4070,10 @@ function renderChemSub(subId) {
     document.getElementById('chemForm_' + subId).style.display = 'block';
     document.getElementById('chemForm_' + subId).scrollIntoView({behavior:'smooth', block:'nearest'});
     if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') initChemAutocomplete(subId);
+    if (subId === 'ch03') {
+      window.__ch03ScenarioState = { lastScenarioId: null };
+      setTimeout(function() { updateCh03ScenarioUI(); }, 0);
+    }
   };
 
   if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') {
@@ -3922,6 +4158,10 @@ function renderChemSub(subId) {
     });
     document.getElementById('chemForm_' + subId).style.display = 'block';
     document.getElementById('chemForm_' + subId).scrollIntoView({behavior:'smooth', block:'nearest'});
+    if (subId === 'ch03') {
+      window.__ch03ScenarioState = { lastScenarioId: null };
+      setTimeout(function() { updateCh03ScenarioUI(); }, 0);
+    }
   };
 
   window['chemDel_' + subId] = async function(id) {
