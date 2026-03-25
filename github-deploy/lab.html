@@ -827,31 +827,67 @@
   <div id="sub-chemsafety-ch06" class="sub-content"></div>
 </div>
 
-<!-- CH-03 Follow-up (مستقل عن جدول الفحص) -->
+<!-- CH-03 Follow-up: سجل أساسي + سجل تحديثات (timeline) -->
 <div class="modal-overlay" id="ch03FuModal">
-  <div class="modal" style="max-width:520px;">
+  <div class="modal" style="max-width:640px;">
     <div class="modal-header">
       <h3 id="ch03FuModalTitle"><i class="fas fa-clipboard-check" style="color:#7c3aed"></i> متابعة CH-03</h3>
       <button class="modal-close" onclick="closeCh03FuModal()">&times;</button>
     </div>
-    <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
+    <div class="modal-body" style="max-height:75vh;overflow-y:auto;">
       <input type="hidden" id="ch03FuMode" value="">
       <input type="hidden" id="ch03FuRowId" value="">
-      <div id="ch03FuEditBlock" style="display:none;">
-        <p style="font-size:0.72rem;color:var(--gray-500);margin-bottom:10px;">مرتبط بفحص Spill Kit: <strong id="ch03Fu_e_inspectionDisplay"></strong></p>
-        <div class="form-group"><label style="font-size:0.75rem;">عنوان السيناريو</label><input type="text" id="ch03Fu_e_title" readonly style="background:var(--gray-50);"></div>
-        <div class="form-group"><label style="font-size:0.75rem;">مستوى الخطورة</label><input type="text" id="ch03Fu_e_sev" readonly style="background:var(--gray-50);"></div>
-        <div class="form-group"><label style="font-size:0.75rem;">السبب المختصر</label><textarea id="ch03Fu_e_reason" rows="2" readonly style="background:var(--gray-50);width:100%;"></textarea></div>
-        <div class="form-group"><label style="font-size:0.75rem;">المسؤول</label><input type="text" id="ch03Fu_e_responsible"></div>
-        <div class="form-group"><label style="font-size:0.75rem;">الإجراء المطلوب</label><textarea id="ch03Fu_e_action" rows="2" style="width:100%;"></textarea></div>
-        <div class="form-group"><label style="font-size:0.75rem;">الحالة</label>
-          <select id="ch03Fu_e_status" style="width:100%;padding:8px;font-family:inherit;">
-            <option value="Open">Open</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Closed">Closed</option>
-          </select>
+      <div id="ch03FuViewBlock" style="display:none;">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px;font-size:0.78rem;line-height:1.65;">
+          <div style="font-weight:800;color:#5b21b6;margin-bottom:8px;">بيانات المتابعة الأساسية (ثابتة)</div>
+          <div><strong>Follow-up ID:</strong> <code id="ch03Fu_d_id" style="font-size:0.7rem;"></code></div>
+          <div><strong>مرجع الفحص:</strong> <code id="ch03Fu_d_inspection" style="font-size:0.7rem;"></code></div>
+          <div><strong>تاريخ الإنشاء:</strong> <span id="ch03Fu_d_created"></span></div>
+          <div><strong>الحالة الحالية:</strong> <span id="ch03Fu_d_status"></span></div>
+          <div><strong>المسؤول الحالي:</strong> <span id="ch03Fu_d_responsible"></span></div>
+          <div><strong>عنوان السيناريو:</strong> <span id="ch03Fu_d_scenario"></span></div>
+          <div><strong>الخطورة:</strong> <span id="ch03Fu_d_sev"></span></div>
+          <div><strong>الموقع:</strong> <span id="ch03Fu_d_loc"></span></div>
+          <div><strong>السبب الأصلي:</strong></div>
+          <div id="ch03Fu_d_reason" style="white-space:pre-wrap;color:#334155;margin-top:4px;"></div>
+          <div style="margin-top:8px;"><strong>الإجراء المطلوب (لقطة عند الفتح):</strong></div>
+          <div id="ch03Fu_d_action" style="white-space:pre-wrap;color:#475569;font-size:0.72rem;"></div>
+          <div id="ch03Fu_d_closedRow" style="display:none;margin-top:8px;color:#64748b;"><strong>تاريخ الإغلاق:</strong> <span id="ch03Fu_d_closed"></span></div>
         </div>
-        <div class="form-group"><label style="font-size:0.75rem;">ملاحظات</label><textarea id="ch03Fu_e_notes" rows="2" style="width:100%;"></textarea><div style="font-size:0.65rem;color:var(--gray-500);margin-top:4px;">تُحدَّث مع «حفظ»؛ ويُنصح بتسجيل ملاحظات الإغلاق قبل «إغلاق السجل».</div></div>
+        <div style="font-weight:800;color:#1e293b;margin-bottom:8px;font-size:0.82rem;"><i class="fas fa-stream" style="color:#7c3aed;margin-left:6px;"></i> سجل التحديثات</div>
+        <div id="ch03FuTimeline" style="max-height:220px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:10px;background:#fff;margin-bottom:12px;font-size:0.74rem;"></div>
+        <div id="ch03FuUpdatePanel" style="display:none;border:1px dashed #c4b5fd;border-radius:8px;padding:12px;background:#faf5ff;margin-bottom:12px;">
+          <div style="font-weight:700;color:#5b21b6;margin-bottom:8px;font-size:0.8rem;">إضافة تحديث جديد</div>
+          <div class="form-group"><label style="font-size:0.72rem;">الشخص</label><input type="text" id="ch03Fu_up_person" style="width:100%;padding:8px;" placeholder="اسم من نفّذ التحديث"></div>
+          <div class="form-group"><label style="font-size:0.72rem;">نوع التحديث</label>
+            <select id="ch03Fu_up_type" style="width:100%;padding:8px;font-family:inherit;">
+              <option value="تحديث">تحديث</option>
+              <option value="ملاحظة">ملاحظة</option>
+              <option value="شراء/توريد">شراء/توريد</option>
+              <option value="تحقق">تحقق</option>
+              <option value="تغيير مسؤول">تغيير مسؤول</option>
+              <option value="أخرى">أخرى</option>
+            </select>
+          </div>
+          <div class="form-group"><label style="font-size:0.72rem;">ما الذي تم / التفاصيل</label><textarea id="ch03Fu_up_note" rows="3" style="width:100%;" placeholder="مثال: تم شراء المادة الناقصة"></textarea></div>
+          <div class="form-group"><label style="font-size:0.72rem;">تحديث المسؤول الحالي (اختياري)</label><input type="text" id="ch03Fu_up_newResponsible" style="width:100%;padding:8px;" placeholder="اتركه فارغاً إن لم يتغير"></div>
+          <div class="form-group"><label style="font-size:0.72rem;">الحالة بعد التحديث</label>
+            <select id="ch03Fu_up_status_after" style="width:100%;padding:8px;font-family:inherit;">
+              <option value="">— بدون تغيير —</option>
+              <option value="Open">Open</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Closed">Closed</option>
+            </select>
+          </div>
+          <button type="button" class="btn btn-green btn-sm" onclick="submitCh03FuAddUpdate()"><i class="fas fa-plus"></i> حفظ التحديث</button>
+        </div>
+        <button type="button" class="topbar-btn" id="ch03FuBtnShowUpdate" style="background:#7c3aed;border:none;color:white;margin-bottom:12px;" onclick="document.getElementById('ch03FuUpdatePanel').style.display='block';document.getElementById('ch03FuBtnShowUpdate').style.display='none';"><i class="fas fa-plus"></i> إضافة تحديث</button>
+        <div id="ch03FuClosePanel" style="border-top:1px solid #e2e8f0;padding-top:12px;">
+          <div style="font-weight:700;color:#475569;margin-bottom:8px;font-size:0.8rem;">إغلاق المتابعة</div>
+          <div class="form-group"><label style="font-size:0.72rem;">من أغلق / الشخص</label><input type="text" id="ch03Fu_close_person" style="width:100%;padding:8px;"></div>
+          <div class="form-group"><label style="font-size:0.72rem;">ملخص الإغلاق / السبب</label><textarea id="ch03Fu_close_note" rows="2" style="width:100%;" placeholder="سبب الإغلاق وما تم التحقق منه"></textarea></div>
+          <button type="button" class="topbar-btn" id="ch03FuCloseRecordBtn" style="background:#475569;color:white;border:none;" onclick="submitCh03FuCloseRecord()"><i class="fas fa-check-double"></i> إغلاق المتابعة</button>
+        </div>
       </div>
       <div id="ch03FuAddBlock" style="display:none;">
         <p style="font-size:0.72rem;color:#92400e;margin-bottom:10px;">أدخل <strong>مرجع الفحص (inspectionId)</strong> — نفس قيمة عمود <strong>معرّف الفحص</strong> في جدول الفحص أدناه، أو استخدم زر «ربط متابعة» من صف الفحص.</p>
@@ -869,8 +905,7 @@
       </div>
     </div>
     <div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--gray-200);flex-wrap:wrap;justify-content:flex-start;">
-      <button type="button" class="btn btn-green btn-sm" onclick="submitCh03FuModal()"><i class="fas fa-save"></i> حفظ</button>
-      <button type="button" class="topbar-btn" id="ch03FuCloseRecordBtn" style="display:none;background:#475569;color:white;border:none;" onclick="submitCh03FuCloseRecord()"><i class="fas fa-check-double"></i> إغلاق السجل</button>
+      <button type="button" class="btn btn-green btn-sm" id="ch03FuFooterSaveBtn" onclick="submitCh03FuModal()"><i class="fas fa-save"></i> حفظ</button>
       <button type="button" class="topbar-btn" onclick="closeCh03FuModal()">إلغاء</button>
     </div>
   </div>
@@ -3466,6 +3501,7 @@ async function refreshAllData() {
       loadSheetData('SDSIndex'),
       loadSheetData('SpillKitCheck'),
       loadSheetData('CH03_FollowUps'),
+      loadSheetData('CH03_FollowUp_Updates'),
       loadSheetData('SpillIncident'),
       loadSheetData('ChemTraining'),
       loadSheetData('ChemWaste')
@@ -3830,25 +3866,94 @@ function closeCh03FuModal() {
   if (m) m.classList.remove('show');
 }
 
-function openCh03FuEdit(rowId) {
-  var rows = sheetCache['CH03_FollowUps'] || [];
-  var row = rows.find(function(r) { return String(r.id) === String(rowId); });
-  if (!row) { showToast('لم يُعثر على السجل', 'error'); return; }
-  document.getElementById('ch03FuMode').value = 'edit';
-  document.getElementById('ch03FuRowId').value = rowId;
-  document.getElementById('ch03FuModalTitle').innerHTML = '<i class="fas fa-clipboard-check" style="color:#7c3aed"></i> تعديل متابعة CH-03';
-  document.getElementById('ch03Fu_e_inspectionDisplay').textContent = row.inspectionId || '—';
-  document.getElementById('ch03Fu_e_title').value = row['عنوان السيناريو'] || '';
-  document.getElementById('ch03Fu_e_sev').value = row['مستوى الخطورة'] || '';
-  document.getElementById('ch03Fu_e_reason').value = row['السبب المختصر'] || '';
-  document.getElementById('ch03Fu_e_responsible').value = row['المسؤول'] || '';
-  document.getElementById('ch03Fu_e_action').value = row['الإجراء المطلوب'] || '';
-  document.getElementById('ch03Fu_e_status').value = normCh03FuStatus(row.status) === 'In Progress' ? 'In Progress' : normCh03FuStatus(row.status) === 'Closed' ? 'Closed' : 'Open';
-  document.getElementById('ch03Fu_e_notes').value = row['ملاحظات'] || '';
-  document.getElementById('ch03FuEditBlock').style.display = 'block';
-  document.getElementById('ch03FuAddBlock').style.display = 'none';
-  document.getElementById('ch03FuCloseRecordBtn').style.display = 'inline-flex';
-  document.getElementById('ch03FuModal').classList.add('show');
+function ch03NowStr() {
+  var d = new Date();
+  var p = function(n) { return n < 10 ? '0' + n : '' + n; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+
+async function ch03AppendUpdateLog(followUpId, person, type, note, statusAfter) {
+  await apiPost({
+    action: 'addRow',
+    sheet: 'CH03_FollowUp_Updates',
+    data: {
+      followUpId: followUpId,
+      'التاريخ والوقت': ch03NowStr(),
+      'الشخص': person || '',
+      'نوع التحديث': type || 'تحديث',
+      'الملاحظة': note || '',
+      'الحالة بعد التحديث': statusAfter || ''
+    }
+  });
+}
+
+function renderCh03FuTimelineHtml(logs) {
+  if (!logs || !logs.length) {
+    return '<div style="color:var(--gray-400);text-align:center;padding:16px;">لا توجد تحديثات بعد — أضف أول تحديث.</div>';
+  }
+  var sorted = logs.slice().sort(function(a, b) {
+    var ta = String(a['التاريخ والوقت'] || a.createdAt || '');
+    var tb = String(b['التاريخ والوقت'] || b.createdAt || '');
+    return ta.localeCompare(tb);
+  });
+  return sorted.map(function(u) {
+    var t = escapeHtmlCh03(String(u['التاريخ والوقت'] || u.createdAt || ''));
+    var who = escapeHtmlCh03(String(u['الشخص'] || ''));
+    var typ = escapeHtmlCh03(String(u['نوع التحديث'] || ''));
+    var note = escapeHtmlCh03(String(u['الملاحظة'] || ''));
+    var st = escapeHtmlCh03(String(u['الحالة بعد التحديث'] || ''));
+    return '<div style="border-right:3px solid #7c3aed;padding:8px 10px 8px 0;margin-bottom:10px;">' +
+      '<div style="font-size:0.65rem;color:#64748b;">' + t + (who ? ' · ' + who : '') + (typ ? ' · <strong>' + typ + '</strong>' : '') + '</div>' +
+      '<div style="margin-top:4px;color:#1e293b;">' + note + '</div>' +
+      (st ? '<div style="font-size:0.65rem;color:#059669;margin-top:4px;">الحالة بعد: ' + st + '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+async function openCh03FuEdit(rowId) {
+  showLoading('جاري التحميل...');
+  try {
+    await loadSheetData('CH03_FollowUps');
+    await loadSheetData('CH03_FollowUp_Updates');
+    var rows = sheetCache['CH03_FollowUps'] || [];
+    var row = rows.find(function(r) { return String(r.id) === String(rowId); });
+    if (!row) { showToast('لم يُعثر على السجل', 'error'); hideLoading(); return; }
+    var logs = (sheetCache['CH03_FollowUp_Updates'] || []).filter(function(u) { return String(u.followUpId) === String(rowId); });
+    document.getElementById('ch03FuMode').value = 'edit';
+    document.getElementById('ch03FuRowId').value = rowId;
+    document.getElementById('ch03FuModalTitle').innerHTML = '<i class="fas fa-clipboard-check" style="color:#7c3aed"></i> متابعة CH-03 — عرض وسجل';
+    document.getElementById('ch03Fu_d_id').textContent = row.id || '';
+    document.getElementById('ch03Fu_d_inspection').textContent = row.inspectionId || '—';
+    document.getElementById('ch03Fu_d_created').textContent = row.createdAt || '—';
+    document.getElementById('ch03Fu_d_status').textContent = ch03FuStatusAr(normCh03FuStatus(row.status)) + ' (' + (row.status || '') + ')';
+    document.getElementById('ch03Fu_d_responsible').textContent = row['المسؤول'] || '—';
+    document.getElementById('ch03Fu_d_scenario').textContent = row['عنوان السيناريو'] || '—';
+    document.getElementById('ch03Fu_d_sev').textContent = row['مستوى الخطورة'] || '—';
+    document.getElementById('ch03Fu_d_loc').textContent = row['الموقع'] || '—';
+    document.getElementById('ch03Fu_d_reason').textContent = row['السبب المختصر'] || '—';
+    document.getElementById('ch03Fu_d_action').textContent = row['الإجراء المطلوب'] || '—';
+    var closed = row.closedAt || row['closedAt'];
+    var isClosed = normCh03FuStatus(row.status) === 'Closed';
+    document.getElementById('ch03Fu_d_closedRow').style.display = closed || isClosed ? 'block' : 'none';
+    document.getElementById('ch03Fu_d_closed').textContent = closed ? String(closed) : (isClosed ? '—' : '');
+    document.getElementById('ch03FuTimeline').innerHTML = renderCh03FuTimelineHtml(logs);
+    document.getElementById('ch03Fu_up_person').value = '';
+    document.getElementById('ch03Fu_up_type').value = 'تحديث';
+    document.getElementById('ch03Fu_up_note').value = '';
+    document.getElementById('ch03Fu_up_newResponsible').value = '';
+    document.getElementById('ch03Fu_up_status_after').value = '';
+    document.getElementById('ch03Fu_close_person').value = '';
+    document.getElementById('ch03Fu_close_note').value = '';
+    document.getElementById('ch03FuUpdatePanel').style.display = 'none';
+    document.getElementById('ch03FuBtnShowUpdate').style.display = isClosed ? 'none' : 'inline-flex';
+    document.getElementById('ch03FuClosePanel').style.display = isClosed ? 'none' : 'block';
+    document.getElementById('ch03FuViewBlock').style.display = 'block';
+    document.getElementById('ch03FuAddBlock').style.display = 'none';
+    document.getElementById('ch03FuFooterSaveBtn').style.display = 'none';
+    document.getElementById('ch03FuModal').classList.add('show');
+  } finally {
+    hideLoading();
+  }
 }
 
 function openCh03FuAddWithInspection(inspectionId) {
@@ -3870,61 +3975,100 @@ function openCh03FuAdd() {
   document.getElementById('ch03Fu_a_action').value = '';
   document.getElementById('ch03Fu_a_responsible').value = '';
   document.getElementById('ch03Fu_a_notes').value = '';
-  document.getElementById('ch03FuEditBlock').style.display = 'none';
+  document.getElementById('ch03FuViewBlock').style.display = 'none';
   document.getElementById('ch03FuAddBlock').style.display = 'block';
-  document.getElementById('ch03FuCloseRecordBtn').style.display = 'none';
+  document.getElementById('ch03FuFooterSaveBtn').style.display = 'inline-flex';
   document.getElementById('ch03FuModal').classList.add('show');
 }
 
 async function submitCh03FuModal() {
   var mode = document.getElementById('ch03FuMode').value;
+  if (mode !== 'add') return;
   try {
     showLoading('جاري الحفظ...');
-    if (mode === 'edit') {
-      var id = document.getElementById('ch03FuRowId').value;
-      await apiPost({
-        action: 'updateRow',
-        sheet: 'CH03_FollowUps',
-        rowId: id,
-        data: {
-          'المسؤول': document.getElementById('ch03Fu_e_responsible').value,
-          'الإجراء المطلوب': document.getElementById('ch03Fu_e_action').value,
-          status: document.getElementById('ch03Fu_e_status').value,
-          'ملاحظات': document.getElementById('ch03Fu_e_notes').value
-        }
-      });
-      showToast('تم تحديث سجل المتابعة', 'success');
+    var insId = document.getElementById('ch03Fu_a_inspectionId').value.trim();
+    if (!insId) { showToast('أدخل مرجع الفحص (inspectionId)', 'error'); hideLoading(); return; }
+    await loadSheetData('SpillKitCheck');
+    var inspExists = (sheetCache['SpillKitCheck'] || []).some(function(r) { return String(r.id) === String(insId); });
+    if (!inspExists) { showToast('مرجع الفحص غير موجود في جدول CH-03 — تأكد من نسخ «معرّف الفحص» من عمود الجدول', 'error'); hideLoading(); return; }
+    await loadSheetData('CH03_FollowUps');
+    var dup = (sheetCache['CH03_FollowUps'] || []).some(function(f) { return String(f.inspectionId) === String(insId); });
+    if (dup) { showToast('يوجد بالفعل متابعة لهذا الفحص', 'error'); hideLoading(); return; }
+    var addRes = await apiPost({
+      action: 'addRow',
+      sheet: 'CH03_FollowUps',
+      data: {
+        inspectionId: insId,
+        'التاريخ': document.getElementById('ch03Fu_a_date').value,
+        'الموقع': document.getElementById('ch03Fu_a_loc').value,
+        'المسؤول': document.getElementById('ch03Fu_a_responsible').value,
+        'عنوان السيناريو': document.getElementById('ch03Fu_a_title').value || 'متابعة يدوية',
+        'مستوى الخطورة': document.getElementById('ch03Fu_a_sev').value,
+        'السبب المختصر': document.getElementById('ch03Fu_a_reason').value,
+        'الإجراء المطلوب': document.getElementById('ch03Fu_a_action').value,
+        status: 'Open',
+        'ملاحظات': document.getElementById('ch03Fu_a_notes').value,
+        scenarioId: 'manual'
+      }
+    });
+    if (addRes && addRes.id) {
+      await ch03AppendUpdateLog(addRes.id, document.getElementById('ch03Fu_a_responsible').value || '—', 'إنشاء', 'تم إنشاء متابعة يدوية وربطها بالفحص', 'Open');
+    }
+    showToast('تمت إضافة سجل المتابعة — تم إنشاء سجل متابعة مستقل', 'success');
+    await loadSheetData('SpillKitCheck');
+    await loadSheetData('CH03_FollowUps');
+    await loadSheetData('CH03_FollowUp_Updates');
+    closeCh03FuModal();
+    await renderChemSub('ch03');
+    updateChemKPIs();
+    updateDashboard();
+  } catch (e) {
+    showToast('خطأ: ' + e.message, 'error');
+  }
+  hideLoading();
+}
+
+async function submitCh03FuAddUpdate() {
+  var fuId = document.getElementById('ch03FuRowId').value;
+  if (!fuId) return;
+  var note = document.getElementById('ch03Fu_up_note').value.trim();
+  if (!note) { showToast('أدخل تفاصيل التحديث', 'error'); return; }
+  var person = document.getElementById('ch03Fu_up_person').value.trim();
+  var type = document.getElementById('ch03Fu_up_type').value;
+  var statusAfter = document.getElementById('ch03Fu_up_status_after').value;
+  var newResp = document.getElementById('ch03Fu_up_newResponsible').value.trim();
+  try {
+    showLoading('جاري حفظ التحديث...');
+    await loadSheetData('CH03_FollowUps');
+    var row = (sheetCache['CH03_FollowUps'] || []).find(function(r) { return String(r.id) === String(fuId); });
+    if (!row) { showToast('السجل غير موجود', 'error'); hideLoading(); return; }
+    if (normCh03FuStatus(row.status) === 'Closed') { showToast('المتابعة مغلقة — لا يمكن إضافة تحديث', 'error'); hideLoading(); return; }
+    await ch03AppendUpdateLog(fuId, person, type, note, statusAfter);
+    var dataUp = {};
+    if (newResp) dataUp['المسؤول'] = newResp;
+    if (statusAfter) dataUp.status = statusAfter;
+    if (Object.keys(dataUp).length) {
+      await apiPost({ action: 'updateRow', sheet: 'CH03_FollowUps', rowId: fuId, data: dataUp });
     } else {
-      var insId = document.getElementById('ch03Fu_a_inspectionId').value.trim();
-      if (!insId) { showToast('أدخل مرجع الفحص (inspectionId)', 'error'); hideLoading(); return; }
-      await loadSheetData('SpillKitCheck');
-      var inspExists = (sheetCache['SpillKitCheck'] || []).some(function(r) { return String(r.id) === String(insId); });
-      if (!inspExists) { showToast('مرجع الفحص غير موجود في جدول CH-03 — تأكد من نسخ «معرّف الفحص» من عمود الجدول', 'error'); hideLoading(); return; }
-      await loadSheetData('CH03_FollowUps');
-      var dup = (sheetCache['CH03_FollowUps'] || []).some(function(f) { return String(f.inspectionId) === String(insId); });
-      if (dup) { showToast('يوجد بالفعل متابعة لهذا الفحص', 'error'); hideLoading(); return; }
-      await apiPost({
-        action: 'addRow',
-        sheet: 'CH03_FollowUps',
-        data: {
-          inspectionId: insId,
-          'التاريخ': document.getElementById('ch03Fu_a_date').value,
-          'الموقع': document.getElementById('ch03Fu_a_loc').value,
-          'المسؤول': document.getElementById('ch03Fu_a_responsible').value,
-          'عنوان السيناريو': document.getElementById('ch03Fu_a_title').value || 'متابعة يدوية',
-          'مستوى الخطورة': document.getElementById('ch03Fu_a_sev').value,
-          'السبب المختصر': document.getElementById('ch03Fu_a_reason').value,
-          'الإجراء المطلوب': document.getElementById('ch03Fu_a_action').value,
-          status: 'Open',
-          'ملاحظات': document.getElementById('ch03Fu_a_notes').value,
-          scenarioId: 'manual'
-        }
-      });
-      showToast('تمت إضافة سجل المتابعة — تم إنشاء سجل متابعة مستقل', 'success');
+      await apiPost({ action: 'updateRow', sheet: 'CH03_FollowUps', rowId: fuId, data: { 'المسؤول': row['المسؤول'] || '' } });
     }
     await loadSheetData('SpillKitCheck');
     await loadSheetData('CH03_FollowUps');
-    closeCh03FuModal();
+    await loadSheetData('CH03_FollowUp_Updates');
+    showToast('تم تسجيل التحديث', 'success');
+    document.getElementById('ch03Fu_up_person').value = '';
+    document.getElementById('ch03Fu_up_note').value = '';
+    document.getElementById('ch03Fu_up_newResponsible').value = '';
+    document.getElementById('ch03Fu_up_status_after').value = '';
+    document.getElementById('ch03FuUpdatePanel').style.display = 'none';
+    document.getElementById('ch03FuBtnShowUpdate').style.display = 'inline-flex';
+    var row2 = (sheetCache['CH03_FollowUps'] || []).find(function(r) { return String(r.id) === String(fuId); });
+    if (row2) {
+      document.getElementById('ch03Fu_d_status').textContent = ch03FuStatusAr(normCh03FuStatus(row2.status)) + ' (' + (row2.status || '') + ')';
+      document.getElementById('ch03Fu_d_responsible').textContent = row2['المسؤول'] || '—';
+    }
+    var logs2 = (sheetCache['CH03_FollowUp_Updates'] || []).filter(function(u) { return String(u.followUpId) === String(fuId); });
+    document.getElementById('ch03FuTimeline').innerHTML = renderCh03FuTimelineHtml(logs2);
     await renderChemSub('ch03');
     updateChemKPIs();
     updateDashboard();
@@ -3937,22 +4081,30 @@ async function submitCh03FuModal() {
 async function submitCh03FuCloseRecord() {
   var id = document.getElementById('ch03FuRowId').value;
   if (!id || document.getElementById('ch03FuMode').value !== 'edit') return;
-  if (!confirm('تأكيد إغلاق سجل المتابعة؟ (Closed) — سيتم حفظ ملاحظات الإغلاق إن وُجدت.')) return;
+  var closer = document.getElementById('ch03Fu_close_person').value.trim();
+  var closeNote = document.getElementById('ch03Fu_close_note').value.trim();
+  if (!confirm('تأكيد إغلاق المتابعة؟ يُسجَّل إغلاق نهائي في السجل ولا يُحذف التاريخ السابق.')) return;
   try {
     showLoading('جاري الإغلاق...');
+    await loadSheetData('CH03_FollowUps');
+    var cur = (sheetCache['CH03_FollowUps'] || []).find(function(r) { return String(r.id) === String(id); });
+    if (cur && normCh03FuStatus(cur.status) === 'Closed') { showToast('المتابعة مغلقة مسبقاً', 'info'); hideLoading(); return; }
+    var ts = ch03NowStr();
     await apiPost({
       action: 'updateRow',
       sheet: 'CH03_FollowUps',
       rowId: id,
       data: {
         status: 'Closed',
-        'ملاحظات': document.getElementById('ch03Fu_e_notes').value
+        closedAt: ts
       }
     });
+    await ch03AppendUpdateLog(id, closer || '—', 'إغلاق', closeNote || 'تم إغلاق المتابعة', 'Closed');
     await loadSheetData('SpillKitCheck');
     await loadSheetData('CH03_FollowUps');
+    await loadSheetData('CH03_FollowUp_Updates');
+    showToast('تم إغلاق المتابعة وتسجيلها في السجل', 'success');
     closeCh03FuModal();
-    showToast('تم إغلاق سجل المتابعة', 'success');
     await renderChemSub('ch03');
     updateChemKPIs();
     updateDashboard();
@@ -3974,7 +4126,7 @@ async function maybeCreateCh03FollowUpRecord(inspectionId, data, scenarioRes) {
   } else {
     reasonBrief = scenarioRes.title || '';
   }
-  await apiPost({
+  var addRes = await apiPost({
     action: 'addRow',
     sheet: 'CH03_FollowUps',
     data: {
@@ -3991,6 +4143,11 @@ async function maybeCreateCh03FollowUpRecord(inspectionId, data, scenarioRes) {
       scenarioId: scenarioRes.id
     }
   });
+  if (addRes && addRes.id) {
+    try {
+      await ch03AppendUpdateLog(addRes.id, data['المسؤول'] || 'النظام', 'إنشاء', 'تم إنشاء سجل المتابعة تلقائياً من فحص CH-03', 'Open');
+    } catch (logErr) { console.warn(logErr); }
+  }
   return true;
 }
 
@@ -4303,7 +4460,10 @@ async function renderChemSub(subId) {
   const cfg = CHEM_SHEETS[subId];
   if (!cfg) return;
   await loadSheetData(cfg.sheet);
-  if (subId === 'ch03') await loadSheetData('CH03_FollowUps');
+  if (subId === 'ch03') {
+    await loadSheetData('CH03_FollowUps');
+    await loadSheetData('CH03_FollowUp_Updates');
+  }
   const container = document.getElementById('sub-chemsafety-' + subId);
   const rows = sheetCache[cfg.sheet] || [];
 
@@ -4560,6 +4720,7 @@ async function renderChemSub(subId) {
       if (subId === 'ch03') {
         await loadSheetData('SpillKitCheck');
         await loadSheetData('CH03_FollowUps');
+        await loadSheetData('CH03_FollowUp_Updates');
       } else {
         await loadSheetData(cfg.sheet);
       }
@@ -4622,6 +4783,7 @@ async function renderChemSub(subId) {
         if (subId === 'ch03') {
           await loadSheetData('SpillKitCheck');
           await loadSheetData('CH03_FollowUps');
+          await loadSheetData('CH03_FollowUp_Updates');
         } else {
           await loadSheetData(cfg.sheet);
         }
@@ -4670,7 +4832,8 @@ async function initApp() {
     loadSheetData('CAPA_Log'),
     loadSheetData('Maintenance'),
     loadSheetData('Temperature'),
-    loadSheetData('CH03_FollowUps')
+    loadSheetData('CH03_FollowUps'),
+    loadSheetData('CH03_FollowUp_Updates')
   ]);
   updateDashboard();
 }
