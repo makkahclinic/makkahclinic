@@ -2096,31 +2096,9 @@ function editCAPARecord(r) {
   showToast('تم فتح السجل للتعديل', 'info');
 }
 
-const CAPA_API_URLS = [
-  'https://makkahclinic-m2020m.replit.app/api/lab/capa',
-  'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/lab/capa'
-];
-
-async function capaApiFetch(method, body) {
-  for (const url of CAPA_API_URLS) {
-    try {
-      const opts = {method, headers:{'Content-Type':'application/json'}};
-      if (body) opts.body = JSON.stringify(body);
-      const r = await fetch(url, opts);
-      if (r.ok) return await r.json();
-    } catch(e) {}
-  }
-  throw new Error('فشل الاتصال بالخادم');
-}
-
+/** CAPA: Google Apps Script فقط (QC_CAPA عبر getSheet / addRow / updateRow) */
 async function loadCAPAData() {
-  try {
-    const result = await capaApiFetch('GET');
-    sheetCache['QC_CAPA'] = result?.data?.rows || [];
-    return sheetCache['QC_CAPA'];
-  } catch(e) {
-    return await loadSheetData('QC_CAPA');
-  }
+  return await loadSheetData('QC_CAPA');
 }
 
 async function saveCAPAForm() {
@@ -2135,20 +2113,10 @@ async function saveCAPAForm() {
 
   showLoading('جاري الحفظ...');
   try {
-    let usedDirectApi = false;
-    try {
-      if (editId) {
-        await capaApiFetch('PUT', {rowId: editId, data});
-      } else {
-        await capaApiFetch('POST', {data});
-      }
-      usedDirectApi = true;
-    } catch(apiErr) {
-      if (editId) {
-        await updateSheetRow('QC_CAPA', editId, data);
-      } else {
-        await addSheetRow('QC_CAPA', data);
-      }
+    if (editId) {
+      await updateSheetRow('QC_CAPA', editId, data);
+    } else {
+      await addSheetRow('QC_CAPA', data);
     }
     showToast(editId ? 'تم تحديث CAPA بنجاح' : 'تم إضافة CAPA بنجاح', 'success');
     cancelCAPAEdit();
@@ -2188,11 +2156,7 @@ async function deleteAndRefreshCAPA(id) {
   if (!confirm('حذف سجل CAPA؟')) return;
   showLoading('جاري الحذف...');
   try {
-    try {
-      await capaApiFetch('DELETE', {rowId: id});
-    } catch(apiErr) {
-      await deleteSheetRow('QC_CAPA', id);
-    }
+    await deleteSheetRow('QC_CAPA', id);
     showToast('تم الحذف بنجاح', 'success');
     sheetCache['QC_CAPA'] = null;
     await renderCAPACards();
@@ -2201,16 +2165,6 @@ async function deleteAndRefreshCAPA(id) {
   }
   hideLoading();
 }
-
-const CAPA_AI_URLS = [
-  'https://makkahclinic-m2020m.replit.app/api/lab/capa-ai',
-  'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/lab/capa-ai'
-];
-
-const SDS_AI_URLS = [
-  'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/lab/sds-ai',
-  'https://makkahclinic-m2020m.replit.app/api/lab/sds-ai'
-];
 
 const SDS_SECTIONS = [
   {key:'identification', icon:'fa-tag', title:'1. تعريف المادة', en:'Identification'},
@@ -2274,55 +2228,14 @@ async function generateSDSInfo() {
   if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center; padding:20px; color:var(--primary);"><i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i><div style="margin-top:8px; font-size:0.8rem;">جاري تحميل بيانات السلامة للمركب...</div></div>';
   if (resultDiv) resultDiv.style.display = 'block';
 
-  let data = null;
-  for (const url of SDS_AI_URLS) {
-    try {
-      const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({chemicalName:chemName, department:dept})});
-      if (r.ok) { const j = await r.json(); if (j.status==='success') { data = j.data; break; } }
-    } catch(e) { continue; }
-  }
-
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-info-circle"></i> معلومات مساعدة عن المركب'; }
 
-  if (!data) {
-    if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center; padding:15px; color:#dc2626;"><i class="fas fa-times-circle"></i> تعذر تحميل بيانات المركب. تأكد من الاتصال بالإنترنت وأعد المحاولة.</div>';
-    return;
+  /* بطاقة SDS التفصيلية كانت تُحمّل من خادم خارجي — البوابة تعتمد فقط على Google Apps Script */
+  if (resultDiv) {
+    resultDiv.innerHTML = '<div style="text-align:center; padding:16px; color:#475569; line-height:1.7;"><i class="fas fa-circle-info" style="color:#7c3aed;"></i> بطاقة SDS التلقائية غير متاحة عبر البوابة. استخدم <strong>ملف SDS الرسمي</strong> وحقل <strong>رابط الملف</strong> في السجل، أو راجع مسؤول السلامة.</div>';
   }
-
-  const safeChemName = escSDS(chemName);
-  let html = `<div style="border:2px solid #7c3aed; border-radius:var(--radius-lg); overflow:hidden;">
-    <div style="background:linear-gradient(135deg,#7c3aed,#5b21b6); color:white; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-      <div><div style="font-size:1rem; font-weight:800;"><i class="fas fa-file-shield"></i> بطاقة بيانات السلامة (SDS) — ${safeChemName}</div>
-      <div style="font-size:0.68rem; opacity:0.85; margin-top:3px;">Safety Data Sheet | ${new Date().toLocaleDateString('ar-SA')} | يجب المراجعة والاعتماد من مدير المختبر قبل الاستخدام</div></div>
-      <div style="display:flex; gap:6px;">
-        <button onclick="printSDS()" class="topbar-btn" style="color:white; border-color:rgba(255,255,255,0.3);"><i class="fas fa-print"></i> طباعة</button>
-        <button onclick="copySDS()" class="topbar-btn" style="color:white; border-color:rgba(255,255,255,0.3);"><i class="fas fa-copy"></i> نسخ</button>
-      </div>
-    </div>
-    <div id="sdsContentBody" style="padding:0;">`;
-
-  SDS_SECTIONS.forEach(s => {
-    const rawVal = data[s.key];
-    const formattedVal = formatSDSValue(rawVal);
-    html += `<div style="padding:10px 16px; border-bottom:1px solid var(--gray-100); transition:background 0.2s;" onmouseover="this.style.background='#faf5ff'" onmouseout="this.style.background='white'">
-      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">
-        <div style="font-size:0.8rem; font-weight:700; color:#5b21b6;"><i class="fas ${s.icon}" style="width:18px; text-align:center;"></i> ${s.title}</div>
-        <div style="font-size:0.65rem; color:var(--gray-400); font-style:italic;">${s.en}</div>
-      </div>
-      <div style="font-size:0.78rem; line-height:1.8; padding-right:26px;">${formattedVal}</div>
-    </div>`;
-  });
-
-  html += `</div><div style="background:#faf5ff; padding:12px 16px;">
-    <div style="display:flex; justify-content:space-around; flex-wrap:wrap; gap:10px; font-size:0.72rem; color:var(--gray-500);">
-      <div style="text-align:center; min-width:120px;"><div style="border-bottom:1px dashed var(--gray-300); padding-bottom:20px; margin-bottom:4px;">&nbsp;</div>مراجعة مسؤول السلامة</div>
-      <div style="text-align:center; min-width:120px;"><div style="border-bottom:1px dashed var(--gray-300); padding-bottom:20px; margin-bottom:4px;">&nbsp;</div>اعتماد مدير المختبر</div>
-      <div style="text-align:center; min-width:120px;"><div style="border-bottom:1px dashed var(--gray-300); padding-bottom:20px; margin-bottom:4px;">&nbsp;</div>التاريخ</div>
-    </div>
-  </div></div>`;
-
-  if (resultDiv) resultDiv.innerHTML = html;
-  showToast('تم تحميل بيانات SDS — ' + chemName, 'success');
+  showToast('لا يوجد تحليل SDS تلقائي — الاعتماد على الملفات المعتمدة والسجل فقط', 'info');
+  return;
 }
 
 function printSDS() {
@@ -2379,52 +2292,10 @@ async function aiSuggestCAPA() {
 
   const statusEl = document.getElementById('capa-ai-status');
   statusEl.style.display = 'block';
-  statusEl.style.background = 'linear-gradient(135deg,#ede9fe,#e0e7ff)';
-  statusEl.style.border = '1px solid #a78bfa';
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري تحليل البيانات بالذكاء الاصطناعي... يرجى الانتظار';
-
-  let resultParts = problem.match(/النتيجة:\s*([^\|]*)/);
-  let rangeParts = problem.match(/المجال:\s*([^\|]*)/);
-  let levelParts = problem.match(/المستوى:\s*([^\|]*)/);
-
-  try {
-    const body = JSON.stringify({
-      problem: problem,
-      dept: dept,
-      test: test,
-      result: resultParts ? resultParts[1].trim() : '',
-      range: rangeParts ? rangeParts[1].trim() : '',
-      level: levelParts ? levelParts[1].trim() : ''
-    });
-
-    let data = null;
-    for (const url of CAPA_AI_URLS) {
-      try {
-        const resp = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: body });
-        data = await resp.json();
-        if (!data.error) break;
-      } catch(urlErr) { continue; }
-    }
-    if (!data || data.error) throw new Error(data?.error || 'جميع خوادم الذكاء الاصطناعي غير متاحة');
-
-    const ai = data.data;
-    const setVal = (key, val) => { const el = document.getElementById('sub-qc-qc02_'+key); if (el && val) el.value = val; };
-    setVal('contain', ai.containment);
-    setVal('root', ai.rootCause);
-    setVal('corrective', ai.corrective);
-    setVal('preventive', ai.preventive);
-    setVal('verify', ai.verification);
-
-    statusEl.style.background = 'linear-gradient(135deg,#f0fdf4,#dcfce7)';
-    statusEl.style.border = '1px solid #86efac';
-    statusEl.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a"></i> تم ملء النموذج بنجاح — يرجى المراجعة والتعديل حسب الحاجة ثم الحفظ';
-    showToast('تم تعبئة النموذج بالذكاء الاصطناعي - راجع واحفظ', 'success');
-  } catch(e) {
-    statusEl.style.background = '#fef2f2';
-    statusEl.style.border = '1px solid #fca5a5';
-    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#dc2626"></i> فشل التحليل: ' + e.message;
-    showToast('فشل المقترحات المساعدة: ' + e.message, 'error');
-  }
+  statusEl.style.background = '#f8fafc';
+  statusEl.style.border = '1px solid #cbd5e1';
+  statusEl.innerHTML = '<i class="fas fa-circle-info" style="color:#64748b"></i> لا يتوفر تحليل تلقائي عبر البوابة — تعبئة الحقول يدوياً فقط (Google Apps Script).';
+  showToast('اقتراح CAPA التلقائي غير متاح — تعبئة الحقول يدوياً', 'info');
 }
 
 function renderQCTab() {
@@ -4108,39 +3979,76 @@ async function submitCh03FuAddUpdate() {
 }
 
 async function submitCh03FuCloseRecord() {
-  var id = document.getElementById('ch03FuRowId').value;
-  if (!id || document.getElementById('ch03FuMode').value !== 'edit') return;
-  var closer = document.getElementById('ch03Fu_close_person').value.trim();
-  var closeNote = document.getElementById('ch03Fu_close_note').value.trim();
+  var id = (document.getElementById('ch03FuRowId').value || '').trim();
+  var mode = (document.getElementById('ch03FuMode').value || '').trim();
+  if (!id) {
+    showToast('لا يوجد معرّف متابعة — أعد فتح السجل من «المتابعة» أو «تعديل» في جدول المتابعات', 'error');
+    console.warn('[CH03 FU Close] aborted: empty ch03FuRowId, mode=', mode);
+    return;
+  }
+  if (mode && mode !== 'edit') {
+    console.warn('[CH03 FU Close] ch03FuMode is not edit (', mode, ') — المتابعة بالـ id:', id);
+  }
+  var closerEl = document.getElementById('ch03Fu_close_person');
+  var noteEl = document.getElementById('ch03Fu_close_note');
+  var closer = (closerEl && closerEl.value ? closerEl.value : '').trim();
+  var closeNote = (noteEl && noteEl.value ? noteEl.value : '').trim();
   if (!confirm('تأكيد إغلاق المتابعة؟ يُسجَّل إغلاق نهائي في السجل ولا يُحذف التاريخ السابق.')) return;
   try {
     showLoading('جاري الإغلاق...');
+    console.log('[CH03 FU Close] followUpId=', id);
     await loadSheetData('CH03_FollowUps');
     var cur = (sheetCache['CH03_FollowUps'] || []).find(function(r) { return String(r.id) === String(id); });
-    if (cur && normCh03FuStatus(cur.status) === 'Closed') { showToast('المتابعة مغلقة مسبقاً', 'info'); hideLoading(); return; }
+    if (!cur) {
+      showToast('لم يُعثر على سجل المتابعة في الشيت — حدّث الصفحة ثم أعد المحاولة', 'error');
+      console.warn('[CH03 FU Close] row not found for id=', id);
+      return;
+    }
+    if (normCh03FuStatus(cur.status) === 'Closed') {
+      showToast('المتابعة مغلقة مسبقاً', 'info');
+      return;
+    }
     var ts = ch03NowStr();
-    await apiPost({
+    var closureLine = '[إغلاق ' + ts + '] ' + (closer || '—') + (closeNote ? ': ' + closeNote : '');
+    var prevNotes = String(cur['ملاحظات'] || '').trim();
+    var mergedNotes = prevNotes ? (prevNotes + '\n' + closureLine) : closureLine;
+    var upRes = await apiPost({
       action: 'updateRow',
       sheet: 'CH03_FollowUps',
       rowId: id,
       data: {
         status: 'Closed',
-        closedAt: ts
+        closedAt: ts,
+        'ملاحظات': mergedNotes
       }
     });
-    await ch03AppendUpdateLog(id, closer || '—', 'إغلاق', closeNote || 'تم إغلاق المتابعة', 'Closed');
-    await loadSheetData('SpillKitCheck');
+    console.log('[CH03 FU Close] updateRow response:', upRes);
+    try {
+      await ch03AppendUpdateLog(id, closer || '—', 'إغلاق', closeNote || 'تم إغلاق المتابعة', 'Closed');
+    } catch (logErr) {
+      console.error('[CH03 FU Close] append log failed:', logErr);
+      showToast('تم تحديث السجل لكن فشل تسجيل سطر الإغلاق في سجل التحديثات: ' + (logErr && logErr.message ? logErr.message : logErr), 'warning');
+    }
     await loadSheetData('CH03_FollowUps');
     await loadSheetData('CH03_FollowUp_Updates');
+    var verify = (sheetCache['CH03_FollowUps'] || []).find(function(r) { return String(r.id) === String(id); });
+    console.log('[CH03 FU Close] after reload sheetCache row:', verify);
+    if (!verify || normCh03FuStatus(verify.status) !== 'Closed') {
+      showToast('فشل التحقق: الحالة في الشيت لم تصبح «مغلق» — تحقق من الورقة أو أعد المحاولة', 'error');
+      return;
+    }
+    await loadSheetData('SpillKitCheck');
     showToast('تم إغلاق المتابعة وتسجيلها في السجل', 'success');
     closeCh03FuModal();
     await renderChemSub('ch03');
     updateChemKPIs();
     updateDashboard();
   } catch (e) {
-    showToast('خطأ: ' + e.message, 'error');
+    console.error('[CH03 FU Close] error:', e);
+    showToast('فشل إغلاق المتابعة: ' + (e && e.message ? e.message : String(e)), 'error');
+  } finally {
+    hideLoading();
   }
-  hideLoading();
 }
 
 async function maybeCreateCh03FollowUpRecord(inspectionId, data, scenarioRes) {

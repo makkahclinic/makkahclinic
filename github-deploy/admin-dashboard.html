@@ -1061,12 +1061,8 @@
         const loadingOverlay = document.getElementById('loadingOverlay');
         let currentUserRole = null;
 
-        // API URLs
-        // Replit API - use dev URL (deployed not available yet)
-        const REPLIT_API_URL = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev';
-        
+        // API URLs — Google Apps Script فقط (لا Replit)
         const APIs = {
-            replit: REPLIT_API_URL + '/api/owner/stats',
             complaints: "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec",
             incidents: "https://script.google.com/macros/s/AKfycbxHW20iOESJdvDuGBjKBVGZ7ZVlNy-PfRY8tJvmsIvtdcSxhbiBYL0CXLVwCjIJz-y8/exec",
             risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
@@ -1226,16 +1222,6 @@
             console.log('Loading dashboard data...');
 
             try {
-                // Try Replit API first for accurate data
-                let replitData = null;
-                try {
-                    const replitRes = await fetch(APIs.replit);
-                    replitData = await replitRes.json();
-                    console.log('Replit API data:', replitData);
-                } catch (e) {
-                    console.warn('Replit API unavailable:', e.message);
-                }
-                
                 const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
@@ -1246,15 +1232,6 @@
                     apiCall(APIs.maintenance, 'getKPIs', {})
                 ]);
                 
-                // Use Replit data for incidents if Apps Script failed
-                if (replitData && replitData.ok && replitData.incidents) {
-                    const inc = replitData.incidents;
-                    document.getElementById('kpi-incidents-open').textContent = inc.open || 0;
-                    document.getElementById('stat-incidents-new').textContent = inc.open || 0;
-                    document.getElementById('stat-incidents-closed').textContent = inc.total - inc.open || 0;
-                    console.log('Using Replit data for incidents:', inc);
-                }
-
                 console.log('Complaints:', complaintsRes);
                 console.log('Incidents:', incidentsRes);
                 console.log('Risks:', risksRes);
@@ -1283,9 +1260,8 @@
                     console.warn('Complaints API failed:', complaintsRes);
                 }
 
-                // الحوادث - استخدام Replit API أولاً، ثم Apps Script كـ fallback
-                const usedReplitForIncidents = replitData && replitData.ok && replitData.incidents;
-                if (!usedReplitForIncidents && incidentsRes.ok) {
+                // الحوادث — Google Apps Script
+                if (incidentsRes.ok) {
                     const s = incidentsRes;
                     const openIncidents = s.open || ((s.new || 0) + (s.in_progress || 0) + (s.under_review || 0));
                     const escalatedCount = s.byStatus?.escalated?.count || s.escalated || 0;
@@ -1303,7 +1279,7 @@
                     document.getElementById('stat-incidents-progress').textContent = s.in_progress || 0;
                     document.getElementById('stat-incidents-escalated').textContent = escalatedCount;
                     document.getElementById('stat-incidents-closed').textContent = s.closed || 0;
-                } else if (!usedReplitForIncidents) {
+                } else {
                     console.warn('Incidents API failed:', incidentsRes);
                 }
 
@@ -1326,7 +1302,7 @@
                     console.warn('Risks API failed:', risksRes);
                 }
 
-                // الجولات - استخدام Replit API أولاً (يحتوي على today)
+                // الجولات — Google Apps Script
                 // تحقق من يوم الجمعة (يوم إجازة) بتوقيت السعودية
                 const saudiTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Riyadh' });
                 const saudiDate = new Date(saudiTime);
@@ -1338,20 +1314,8 @@
                     document.getElementById('kpi-rounds-delayed').textContent = 'يوم إجازة';
                     document.getElementById('kpi-rounds-delayed').style.color = '#10b981';
                     console.log('Friday detected - showing 0 rounds');
-                } else if (replitData && replitData.ok && replitData.rounds) {
-                    // استخدام Replit API (يحتوي على today)
-                    const rd = replitData.rounds;
-                    document.getElementById('kpi-rounds-today').textContent = rd.today ?? 0;
-                    if (rd.delayed > 0) {
-                        document.getElementById('kpi-rounds-delayed').textContent = `${rd.delayed} متأخرة`;
-                        document.getElementById('kpi-rounds-delayed').style.color = '#DC143C';
-                    } else {
-                        document.getElementById('kpi-rounds-delayed').textContent = '';
-                    }
-                    console.log('Using Replit data for rounds:', rd);
                 } else if (roundsRes.ok) {
                     const rd = roundsRes;
-                    // fallback to Apps Script
                     document.getElementById('kpi-rounds-today').textContent = rd.completed || 0;
                     if (rd.delayed > 0) {
                         document.getElementById('kpi-rounds-delayed').textContent = `${rd.delayed} متأخرة`;
