@@ -3922,6 +3922,7 @@ async function submitCh03FuModal() {
       });
       showToast('تمت إضافة سجل المتابعة — تم إنشاء سجل متابعة مستقل', 'success');
     }
+    await loadSheetData('SpillKitCheck');
     await loadSheetData('CH03_FollowUps');
     closeCh03FuModal();
     await renderChemSub('ch03');
@@ -3948,6 +3949,7 @@ async function submitCh03FuCloseRecord() {
         'ملاحظات': document.getElementById('ch03Fu_e_notes').value
       }
     });
+    await loadSheetData('SpillKitCheck');
     await loadSheetData('CH03_FollowUps');
     closeCh03FuModal();
     showToast('تم إغلاق سجل المتابعة', 'success');
@@ -4300,6 +4302,7 @@ function updateChemKPIs() {
 async function renderChemSub(subId) {
   const cfg = CHEM_SHEETS[subId];
   if (!cfg) return;
+  await loadSheetData(cfg.sheet);
   if (subId === 'ch03') await loadSheetData('CH03_FollowUps');
   const container = document.getElementById('sub-chemsafety-' + subId);
   const rows = sheetCache[cfg.sheet] || [];
@@ -4554,8 +4557,12 @@ async function renderChemSub(subId) {
       document.getElementById('chemForm_' + subId).style.display = 'none';
       document.getElementById('chemEditId_' + subId).value = '';
       cfg.fields.forEach(f => { const el = document.getElementById('chemF_' + subId + '_' + f.key); if (el) el.value = ''; });
-      await loadSheetData(cfg.sheet);
-      if (subId === 'ch03') await loadSheetData('CH03_FollowUps');
+      if (subId === 'ch03') {
+        await loadSheetData('SpillKitCheck');
+        await loadSheetData('CH03_FollowUps');
+      } else {
+        await loadSheetData(cfg.sheet);
+      }
       await renderChemSub(subId);
       updateChemKPIs();
       if (subId === 'ch03') updateDashboard();
@@ -4565,14 +4572,25 @@ async function renderChemSub(subId) {
     hideLoading();
   };
 
-  window['chemEdit_' + subId] = function(id) {
-    const row = rows.find(r => r.id === id);
-    if (!row) return;
+  window['chemEdit_' + subId] = async function(id) {
+    await loadSheetData(cfg.sheet);
+    if (subId === 'ch03') await loadSheetData('CH03_FollowUps');
+    const fresh = sheetCache[cfg.sheet] || [];
+    const row = fresh.find(function(r) { return String(r.id) === String(id); });
+    if (!row) { showToast('تعذر تحميل السجل — حدّث الصفحة أو أعد المحاولة', 'error'); return; }
     document.getElementById('chemEditId_' + subId).value = id;
     document.getElementById('chemFormTitle_' + subId).textContent = 'تعديل السجل';
     cfg.fields.forEach(f => {
       const el = document.getElementById('chemF_' + subId + '_' + f.key);
-      if (el) el.value = row[f.key] || '';
+      if (!el) return;
+      var v = row[f.key];
+      if (v === undefined || v === null) v = '';
+      if (f.type === 'date' && v !== '') {
+        if (v instanceof Date) el.value = v.toISOString().split('T')[0];
+        else el.value = String(v).trim().substring(0, 10);
+      } else {
+        el.value = v === '' ? '' : String(v);
+      }
     });
     document.getElementById('chemForm_' + subId).style.display = 'block';
     document.getElementById('chemForm_' + subId).scrollIntoView({behavior:'smooth', block:'nearest'});
@@ -4601,8 +4619,12 @@ async function renderChemSub(subId) {
       const result = await resp.json();
       if (result.status === 'ok' || result.status === 'success') {
         showToast('تم الحذف بنجاح', 'success');
-        await loadSheetData(cfg.sheet);
-        if (subId === 'ch03') await loadSheetData('CH03_FollowUps');
+        if (subId === 'ch03') {
+          await loadSheetData('SpillKitCheck');
+          await loadSheetData('CH03_FollowUps');
+        } else {
+          await loadSheetData(cfg.sheet);
+        }
         await renderChemSub(subId);
         updateChemKPIs();
         if (subId === 'ch03') updateDashboard();
