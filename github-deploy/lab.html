@@ -838,8 +838,15 @@
       <input type="hidden" id="ch03FuMode" value="">
       <input type="hidden" id="ch03FuRowId" value="">
       <div id="ch03FuViewBlock" style="display:none;">
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px;font-size:0.78rem;line-height:1.65;">
-          <div style="font-weight:800;color:#5b21b6;margin-bottom:8px;">بيانات المتابعة الأساسية (ثابتة)</div>
+        <div id="ch03FuQuickSummary" style="display:none;margin-bottom:12px;padding:12px;border-radius:8px;border:1px solid #ddd6fe;background:linear-gradient(135deg,#faf5ff,#f8fafc);">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px;">
+            <span id="ch03FuBadgeClosedTop" style="display:none;font-size:0.68rem;font-weight:800;padding:4px 10px;border-radius:999px;background:#e2e8f0;color:#475569;">مغلق</span>
+            <span style="font-size:0.78rem;font-weight:700;color:#5b21b6;">ملخص سريع</span>
+          </div>
+          <div id="ch03FuQuickSummaryLines" style="font-size:0.72rem;color:#334155;line-height:1.85;"></div>
+        </div>
+        <div id="ch03FuStaticDetails" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px;font-size:0.78rem;line-height:1.65;">
+          <div id="ch03FuStaticHead" style="font-weight:800;color:#5b21b6;margin-bottom:8px;">بيانات المتابعة الأساسية (ثابتة)</div>
           <div><strong>Follow-up ID:</strong> <code id="ch03Fu_d_id" style="font-size:0.7rem;"></code></div>
           <div><strong>مرجع الفحص:</strong> <code id="ch03Fu_d_inspection" style="font-size:0.7rem;"></code></div>
           <div><strong>تاريخ الإنشاء:</strong> <span id="ch03Fu_d_created"></span></div>
@@ -1263,6 +1270,26 @@ async function loadSheetData(sheetName, retries) {
       return loadSheetData(sheetName, retries + 1);
     }
     return sheetCache[sheetName] || [];
+  }
+}
+
+function setCh03PanelBusy_(on) {
+  var el = document.getElementById('sub-chemsafety-ch03');
+  if (!el) return;
+  el.style.transition = 'opacity 0.12s ease';
+  el.style.opacity = on ? '0.94' : '';
+}
+
+async function loadCh03RelatedSheets_() {
+  setCh03PanelBusy_(true);
+  try {
+    await Promise.all([
+      loadSheetData('SpillKitCheck'),
+      loadSheetData('CH03_FollowUps'),
+      loadSheetData('CH03_FollowUp_Updates')
+    ]);
+  } finally {
+    setCh03PanelBusy_(false);
   }
 }
 
@@ -3701,8 +3728,17 @@ function formatCh03TableFollowUpRecordHtml(fuRow) {
     var stAr = ch03FuStatusAr(st);
     var stBg = st === 'Closed' ? '#e2e8f0' : st === 'In Progress' ? '#fef3c7' : '#ede9fe';
     var stFg = st === 'Closed' ? '#475569' : st === 'In Progress' ? '#92400e' : '#5b21b6';
-    var openFu = '<button type="button" class="topbar-btn" style="margin-top:4px;padding:3px 8px;font-size:0.6rem;background:#7c3aed;border:none;color:white;border-radius:6px;cursor:pointer;" onclick=\'openCh03FuEdit(' + JSON.stringify(fuRow.id) + ')\'>فتح / تعديل المتابعة</button>';
-    return '<span style="display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;max-width:170px;"><span style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;"><span style="font-size:0.56rem;font-weight:800;padding:2px 5px;border-radius:4px;background:#ede9fe;color:#5b21b6;">سجل</span><span style="font-size:0.58rem;font-family:ui-monospace,monospace;color:#312e81;word-break:break-all;">' + escapeHtmlCh03(String(fuRow.id)) + '</span><span style="font-size:0.52rem;padding:1px 4px;border-radius:4px;background:' + stBg + ';color:' + stFg + ';">' + escapeHtmlCh03(stAr) + '</span></span>' + openFu + '</span>';
+    var allUp = sheetCache['CH03_FollowUp_Updates'] || [];
+    var lastL = ch03FuLastUpdateDisplay_(fuRow, allUp);
+    var closedD = fuRow.closedAt || fuRow['closedAt'];
+    var timeLine = '';
+    if (st === 'Closed' && closedD) {
+      timeLine = '<span style="font-size:0.52rem;color:#64748b;display:block;margin-top:2px;line-height:1.3;">إغلاق: ' + escapeHtmlCh03(String(closedD)) + '</span>';
+    } else if (st !== 'Closed') {
+      timeLine = '<span style="font-size:0.52rem;color:#64748b;display:block;margin-top:2px;line-height:1.3;">آخر تحديث: ' + escapeHtmlCh03(lastL) + '</span>';
+    }
+    var openFu = '<button type="button" class="topbar-btn" style="margin-top:4px;padding:3px 8px;font-size:0.6rem;background:#7c3aed;border:none;color:white;border-radius:6px;cursor:pointer;" onclick=\'openCh03FuEdit(' + JSON.stringify(fuRow.id) + ')\'>عرض السجل</button>';
+    return '<span style="display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;max-width:180px;"><span style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;"><span style="font-size:0.56rem;font-weight:800;padding:2px 5px;border-radius:4px;background:#ede9fe;color:#5b21b6;">سجل</span><span style="font-size:0.58rem;font-family:ui-monospace,monospace;color:#312e81;word-break:break-all;">' + escapeHtmlCh03(String(fuRow.id)) + '</span><span style="font-size:0.52rem;padding:1px 4px;border-radius:4px;background:' + stBg + ';color:' + stFg + ';">' + escapeHtmlCh03(stAr) + '</span></span>' + timeLine + openFu + '</span>';
   }
   return '<span style="color:#94a3b8;font-size:0.7rem;">—</span>';
 }
@@ -3721,6 +3757,45 @@ function ch03FuStatusAr(st) {
   if (st === 'In Progress') return 'قيد التنفيذ';
   if (st === 'Open') return 'مفتوح';
   return st || '—';
+}
+
+/** آخر نشاط: updatedAt من السجل أو أحدث سطر في سجل التحديثات */
+function ch03FuLastUpdateDisplay_(row, allLogs) {
+  if (!row) return '—';
+  var logs = (allLogs || []).filter(function(u) { return String(u.followUpId) === String(row.id); });
+  var ts = [];
+  if (row.updatedAt) ts.push(String(row.updatedAt));
+  if (row['updatedAt']) ts.push(String(row['updatedAt']));
+  logs.forEach(function(u) {
+    var t = u['التاريخ والوقت'] || u.createdAt || '';
+    if (t) ts.push(String(t));
+  });
+  if (!ts.length) return '—';
+  ts.sort(function(a, b) { return a.localeCompare(b); });
+  return ts[ts.length - 1];
+}
+
+function ch03FuPopulateSummary_(row, logs) {
+  var el = document.getElementById('ch03FuQuickSummary');
+  var linesEl = document.getElementById('ch03FuQuickSummaryLines');
+  var badge = document.getElementById('ch03FuBadgeClosedTop');
+  if (!el || !linesEl || !row) return;
+  el.style.display = 'block';
+  var closed = row.closedAt || row['closedAt'];
+  var isClosed = normCh03FuStatus(row.status) === 'Closed';
+  if (badge) badge.style.display = isClosed ? 'inline-block' : 'none';
+  var last = ch03FuLastUpdateDisplay_(row, logs || []);
+  var lines = '';
+  lines += '<div><strong>Follow-up ID:</strong> <code style="font-size:0.65rem;">' + escapeHtmlCh03(String(row.id || '')) + '</code></div>';
+  lines += '<div><strong>Inspection ID:</strong> <code style="font-size:0.65rem;">' + escapeHtmlCh03(String(row.inspectionId || '—')) + '</code></div>';
+  lines += '<div><strong>الحالة:</strong> ' + escapeHtmlCh03(ch03FuStatusAr(normCh03FuStatus(row.status))) + (row.status ? ' <span style="color:#94a3b8;font-size:0.65rem;">(' + escapeHtmlCh03(String(row.status)) + ')</span>' : '') + '</div>';
+  lines += '<div><strong>المسؤول:</strong> ' + escapeHtmlCh03(String(row['المسؤول'] || '—')) + '</div>';
+  lines += '<div><strong>تاريخ الإنشاء:</strong> ' + escapeHtmlCh03(String(row.createdAt || '—')) + '</div>';
+  if (isClosed && closed) {
+    lines += '<div><strong>تاريخ الإغلاق:</strong> ' + escapeHtmlCh03(String(closed)) + '</div>';
+  }
+  lines += '<div><strong>آخر تحديث:</strong> ' + escapeHtmlCh03(last) + '</div>';
+  linesEl.innerHTML = lines;
 }
 
 function computeCh03FollowUpStats(fuRows) {
@@ -3744,6 +3819,7 @@ function buildCh03FuSectionHtml(stats, fuRows) {
       '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:1.2rem;" aria-hidden="true">⚠️</span><div><strong style="color:#991b1b;">تنبيه: يوجد ' + open + ' متابعة Spill Kit غير مغلقة</strong><div style="font-size:0.72rem;color:#64748b;margin-top:4px;">حدّث الحالة أو أغلِق السجل من الجدول أدناه حتى لا تُنسى.</div></div></div>' +
       '<span style="font-size:0.72rem;font-weight:700;background:#fff;padding:4px 10px;border-radius:999px;border:1px solid #fca5a5;color:#7f1d1d;">High (مفتوح): ' + (stats.high || 0) + '</span></div>';
   }
+  var allUpdates = sheetCache['CH03_FollowUp_Updates'] || [];
   var sorted = (fuRows || []).slice().sort(function(a, b) {
     return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
   });
@@ -3752,7 +3828,17 @@ function buildCh03FuSectionHtml(stats, fuRows) {
     var stAr = ch03FuStatusAr(st);
     var stStyle = st === 'Closed' ? 'background:#e2e8f0;color:#475569' : st === 'In Progress' ? 'background:#fef3c7;color:#92400e' : 'background:#fee2e2;color:#991b1b';
     var rid = String(r.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return '<tr><td style="font-size:0.62rem;font-family:ui-monospace,monospace;">' + escapeHtmlCh03(String(r.id || '')) + '</td><td><span style="padding:2px 8px;border-radius:999px;font-size:0.62rem;font-weight:700;' + stStyle + '">' + escapeHtmlCh03(stAr) + '</span></td><td>' + escapeHtmlCh03(String(r['مستوى الخطورة'] || '')) + '</td><td>' + escapeHtmlCh03(String(r['الموقع'] || '')) + '</td><td>' + escapeHtmlCh03(String(r['المسؤول'] || '')) + '</td><td style="font-size:0.65rem;">' + escapeHtmlCh03(String(r.createdAt || '')) + '</td><td style="font-size:0.62rem;font-family:ui-monospace;">' + escapeHtmlCh03(String(r.inspectionId || '')) + '</td><td style="white-space:nowrap;"><button type="button" class="topbar-btn" style="padding:4px 8px;font-size:0.7rem;" onclick="openCh03FuEdit(\'' + rid + '\')">تعديل</button></td></tr>';
+    var closedD = r.closedAt || r['closedAt'];
+    var lastAct = ch03FuLastUpdateDisplay_(r, allUpdates);
+    var statusCell = '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:200px;">' +
+      '<span style="padding:2px 8px;border-radius:999px;font-size:0.62rem;font-weight:700;' + stStyle + '">' + escapeHtmlCh03(stAr) + '</span>';
+    if (st === 'Closed' && closedD) {
+      statusCell += '<span style="font-size:0.58rem;color:#64748b;line-height:1.35;">إغلاق: ' + escapeHtmlCh03(String(closedD)) + '</span>';
+    } else if (st !== 'Closed') {
+      statusCell += '<span style="font-size:0.58rem;color:#64748b;line-height:1.35;">آخر تحديث: ' + escapeHtmlCh03(lastAct) + '</span>';
+    }
+    statusCell += '</div>';
+    return '<tr><td style="font-size:0.62rem;font-family:ui-monospace,monospace;">' + escapeHtmlCh03(String(r.id || '')) + '</td><td>' + statusCell + '</td><td>' + escapeHtmlCh03(String(r['مستوى الخطورة'] || '')) + '</td><td>' + escapeHtmlCh03(String(r['الموقع'] || '')) + '</td><td>' + escapeHtmlCh03(String(r['المسؤول'] || '')) + '</td><td style="font-size:0.65rem;">' + escapeHtmlCh03(String(r.createdAt || '')) + '</td><td style="font-size:0.62rem;font-family:ui-monospace;">' + escapeHtmlCh03(String(r.inspectionId || '')) + '</td><td style="white-space:nowrap;"><button type="button" class="topbar-btn" style="padding:4px 8px;font-size:0.7rem;" onclick="openCh03FuEdit(\'' + rid + '\')">عرض السجل</button></td></tr>';
   }).join('');
   if (!tableRows) tableRows = '<tr><td colspan="8" style="text-align:center;color:var(--gray-400);padding:20px;">لا توجد سجلات متابعة بعد — تُنشأ تلقائياً عند حفظ فحص يتطلب متابعة، أو أضف يدوياً.</td></tr>';
   return banner +
@@ -3811,49 +3897,56 @@ function renderCh03FuTimelineHtml(logs) {
 }
 
 async function openCh03FuEdit(rowId) {
-  showLoading('جاري التحميل...');
-  try {
-    await loadSheetData('CH03_FollowUps');
-    await loadSheetData('CH03_FollowUp_Updates');
-    var rows = sheetCache['CH03_FollowUps'] || [];
-    var row = rows.find(function(r) { return String(r.id) === String(rowId); });
-    if (!row) { showToast('لم يُعثر على السجل', 'error'); hideLoading(); return; }
-    var logs = (sheetCache['CH03_FollowUp_Updates'] || []).filter(function(u) { return String(u.followUpId) === String(rowId); });
-    document.getElementById('ch03FuMode').value = 'edit';
-    document.getElementById('ch03FuRowId').value = rowId;
-    document.getElementById('ch03FuModalTitle').innerHTML = '<i class="fas fa-clipboard-check" style="color:#7c3aed"></i> متابعة CH-03 — عرض وسجل';
-    document.getElementById('ch03Fu_d_id').textContent = row.id || '';
-    document.getElementById('ch03Fu_d_inspection').textContent = row.inspectionId || '—';
-    document.getElementById('ch03Fu_d_created').textContent = row.createdAt || '—';
-    document.getElementById('ch03Fu_d_status').textContent = ch03FuStatusAr(normCh03FuStatus(row.status)) + ' (' + (row.status || '') + ')';
-    document.getElementById('ch03Fu_d_responsible').textContent = row['المسؤول'] || '—';
-    document.getElementById('ch03Fu_d_scenario').textContent = row['عنوان السيناريو'] || '—';
-    document.getElementById('ch03Fu_d_sev').textContent = row['مستوى الخطورة'] || '—';
-    document.getElementById('ch03Fu_d_loc').textContent = row['الموقع'] || '—';
-    document.getElementById('ch03Fu_d_reason').textContent = row['السبب المختصر'] || '—';
-    document.getElementById('ch03Fu_d_action').textContent = row['الإجراء المطلوب'] || '—';
-    var closed = row.closedAt || row['closedAt'];
-    var isClosed = normCh03FuStatus(row.status) === 'Closed';
-    document.getElementById('ch03Fu_d_closedRow').style.display = closed || isClosed ? 'block' : 'none';
-    document.getElementById('ch03Fu_d_closed').textContent = closed ? String(closed) : (isClosed ? '—' : '');
-    document.getElementById('ch03FuTimeline').innerHTML = renderCh03FuTimelineHtml(logs);
-    document.getElementById('ch03Fu_up_person').value = '';
-    document.getElementById('ch03Fu_up_type').value = 'تحديث';
-    document.getElementById('ch03Fu_up_note').value = '';
-    document.getElementById('ch03Fu_up_newResponsible').value = '';
-    document.getElementById('ch03Fu_up_status_after').value = '';
-    document.getElementById('ch03Fu_close_person').value = '';
-    document.getElementById('ch03Fu_close_note').value = '';
-    document.getElementById('ch03FuUpdatePanel').style.display = 'none';
-    document.getElementById('ch03FuBtnShowUpdate').style.display = isClosed ? 'none' : 'inline-flex';
-    document.getElementById('ch03FuClosePanel').style.display = isClosed ? 'none' : 'block';
-    document.getElementById('ch03FuViewBlock').style.display = 'block';
-    document.getElementById('ch03FuAddBlock').style.display = 'none';
-    document.getElementById('ch03FuFooterSaveBtn').style.display = 'none';
-    document.getElementById('ch03FuModal').classList.add('show');
-  } finally {
-    hideLoading();
+  var loads = [];
+  if (sheetCache['CH03_FollowUps'] === undefined) loads.push(loadSheetData('CH03_FollowUps'));
+  if (sheetCache['CH03_FollowUp_Updates'] === undefined) loads.push(loadSheetData('CH03_FollowUp_Updates'));
+  if (loads.length) {
+    showLoading('جاري التحميل...');
+    try {
+      await Promise.all(loads);
+    } finally {
+      hideLoading();
+    }
   }
+  var rows = sheetCache['CH03_FollowUps'] || [];
+  var row = rows.find(function(r) { return String(r.id) === String(rowId); });
+  if (!row) { showToast('لم يُعثر على السجل', 'error'); return; }
+  var logs = (sheetCache['CH03_FollowUp_Updates'] || []).filter(function(u) { return String(u.followUpId) === String(rowId); });
+  document.getElementById('ch03FuMode').value = 'edit';
+  document.getElementById('ch03FuRowId').value = rowId;
+  document.getElementById('ch03FuModalTitle').innerHTML = '<i class="fas fa-clipboard-check" style="color:#7c3aed"></i> متابعة CH-03 — عرض السجل';
+  ch03FuPopulateSummary_(row, logs);
+  document.getElementById('ch03Fu_d_id').textContent = row.id || '';
+  document.getElementById('ch03Fu_d_inspection').textContent = row.inspectionId || '—';
+  document.getElementById('ch03Fu_d_created').textContent = row.createdAt || '—';
+  document.getElementById('ch03Fu_d_status').textContent = ch03FuStatusAr(normCh03FuStatus(row.status)) + ' (' + (row.status || '') + ')';
+  document.getElementById('ch03Fu_d_responsible').textContent = row['المسؤول'] || '—';
+  document.getElementById('ch03Fu_d_scenario').textContent = row['عنوان السيناريو'] || '—';
+  document.getElementById('ch03Fu_d_sev').textContent = row['مستوى الخطورة'] || '—';
+  document.getElementById('ch03Fu_d_loc').textContent = row['الموقع'] || '—';
+  document.getElementById('ch03Fu_d_reason').textContent = row['السبب المختصر'] || '—';
+  document.getElementById('ch03Fu_d_action').textContent = row['الإجراء المطلوب'] || '—';
+  var closed = row.closedAt || row['closedAt'];
+  var isClosed = normCh03FuStatus(row.status) === 'Closed';
+  document.getElementById('ch03Fu_d_closedRow').style.display = 'none';
+  document.getElementById('ch03Fu_d_closed').textContent = closed ? String(closed) : (isClosed ? '—' : '');
+  var stHead = document.getElementById('ch03FuStaticHead');
+  if (stHead) stHead.textContent = isClosed ? 'تفاصيل السجل (للعرض)' : 'بيانات المتابعة الأساسية (ثابتة)';
+  document.getElementById('ch03FuTimeline').innerHTML = renderCh03FuTimelineHtml(logs);
+  document.getElementById('ch03Fu_up_person').value = '';
+  document.getElementById('ch03Fu_up_type').value = 'تحديث';
+  document.getElementById('ch03Fu_up_note').value = '';
+  document.getElementById('ch03Fu_up_newResponsible').value = '';
+  document.getElementById('ch03Fu_up_status_after').value = '';
+  document.getElementById('ch03Fu_close_person').value = '';
+  document.getElementById('ch03Fu_close_note').value = '';
+  document.getElementById('ch03FuUpdatePanel').style.display = 'none';
+  document.getElementById('ch03FuBtnShowUpdate').style.display = isClosed ? 'none' : 'inline-flex';
+  document.getElementById('ch03FuClosePanel').style.display = isClosed ? 'none' : 'block';
+  document.getElementById('ch03FuViewBlock').style.display = 'block';
+  document.getElementById('ch03FuAddBlock').style.display = 'none';
+  document.getElementById('ch03FuFooterSaveBtn').style.display = 'none';
+  document.getElementById('ch03FuModal').classList.add('show');
 }
 
 function openCh03FuAddWithInspection(inspectionId) {
@@ -3863,6 +3956,8 @@ function openCh03FuAddWithInspection(inspectionId) {
 }
 
 function openCh03FuAdd() {
+  var qs = document.getElementById('ch03FuQuickSummary');
+  if (qs) qs.style.display = 'none';
   document.getElementById('ch03FuMode').value = 'add';
   document.getElementById('ch03FuRowId').value = '';
   document.getElementById('ch03FuModalTitle').innerHTML = '<i class="fas fa-plus" style="color:#7c3aed"></i> إضافة متابعة يدوية';
@@ -3888,10 +3983,12 @@ async function submitCh03FuModal() {
     showLoading('جاري الحفظ...');
     var insId = document.getElementById('ch03Fu_a_inspectionId').value.trim();
     if (!insId) { showToast('أدخل مرجع الفحص (inspectionId)', 'error'); hideLoading(); return; }
-    await loadSheetData('SpillKitCheck');
+    await Promise.all([
+      loadSheetData('SpillKitCheck'),
+      loadSheetData('CH03_FollowUps')
+    ]);
     var inspExists = (sheetCache['SpillKitCheck'] || []).some(function(r) { return String(r.id) === String(insId); });
     if (!inspExists) { showToast('مرجع الفحص غير موجود في جدول CH-03 — تأكد من نسخ «معرّف الفحص» من عمود الجدول', 'error'); hideLoading(); return; }
-    await loadSheetData('CH03_FollowUps');
     var dup = (sheetCache['CH03_FollowUps'] || []).some(function(f) { return String(f.inspectionId) === String(insId); });
     if (dup) { showToast('يوجد بالفعل متابعة لهذا الفحص', 'error'); hideLoading(); return; }
     var addRes = await apiPost({
@@ -3915,11 +4012,9 @@ async function submitCh03FuModal() {
       await ch03AppendUpdateLog(addRes.id, document.getElementById('ch03Fu_a_responsible').value || '—', 'إنشاء', 'تم إنشاء متابعة يدوية وربطها بالفحص', 'Open');
     }
     showToast('تمت إضافة سجل المتابعة — تم إنشاء سجل متابعة مستقل', 'success');
-    await loadSheetData('SpillKitCheck');
-    await loadSheetData('CH03_FollowUps');
-    await loadSheetData('CH03_FollowUp_Updates');
+    await loadCh03RelatedSheets_();
     closeCh03FuModal();
-    await renderChemSub('ch03');
+    await renderChemSub('ch03', true);
     updateChemKPIs();
     updateDashboard();
   } catch (e) {
@@ -3939,7 +4034,7 @@ async function submitCh03FuAddUpdate() {
   var newResp = document.getElementById('ch03Fu_up_newResponsible').value.trim();
   try {
     showLoading('جاري حفظ التحديث...');
-    await loadSheetData('CH03_FollowUps');
+    if (sheetCache['CH03_FollowUps'] === undefined) await loadSheetData('CH03_FollowUps');
     var row = (sheetCache['CH03_FollowUps'] || []).find(function(r) { return String(r.id) === String(fuId); });
     if (!row) { showToast('السجل غير موجود', 'error'); hideLoading(); return; }
     if (normCh03FuStatus(row.status) === 'Closed') { showToast('المتابعة مغلقة — لا يمكن إضافة تحديث', 'error'); hideLoading(); return; }
@@ -3952,9 +4047,7 @@ async function submitCh03FuAddUpdate() {
     } else {
       await apiPost({ action: 'updateRow', sheet: 'CH03_FollowUps', rowId: fuId, data: { 'المسؤول': row['المسؤول'] || '' } });
     }
-    await loadSheetData('SpillKitCheck');
-    await loadSheetData('CH03_FollowUps');
-    await loadSheetData('CH03_FollowUp_Updates');
+    await loadCh03RelatedSheets_();
     showToast('تم تسجيل التحديث', 'success');
     document.getElementById('ch03Fu_up_person').value = '';
     document.getElementById('ch03Fu_up_note').value = '';
@@ -3963,13 +4056,14 @@ async function submitCh03FuAddUpdate() {
     document.getElementById('ch03FuUpdatePanel').style.display = 'none';
     document.getElementById('ch03FuBtnShowUpdate').style.display = 'inline-flex';
     var row2 = (sheetCache['CH03_FollowUps'] || []).find(function(r) { return String(r.id) === String(fuId); });
+    var logs2 = (sheetCache['CH03_FollowUp_Updates'] || []).filter(function(u) { return String(u.followUpId) === String(fuId); });
     if (row2) {
+      ch03FuPopulateSummary_(row2, logs2);
       document.getElementById('ch03Fu_d_status').textContent = ch03FuStatusAr(normCh03FuStatus(row2.status)) + ' (' + (row2.status || '') + ')';
       document.getElementById('ch03Fu_d_responsible').textContent = row2['المسؤول'] || '—';
     }
-    var logs2 = (sheetCache['CH03_FollowUp_Updates'] || []).filter(function(u) { return String(u.followUpId) === String(fuId); });
     document.getElementById('ch03FuTimeline').innerHTML = renderCh03FuTimelineHtml(logs2);
-    await renderChemSub('ch03');
+    await renderChemSub('ch03', true);
     updateChemKPIs();
     updateDashboard();
   } catch (e) {
@@ -3982,7 +4076,7 @@ async function submitCh03FuCloseRecord() {
   var id = (document.getElementById('ch03FuRowId').value || '').trim();
   var mode = (document.getElementById('ch03FuMode').value || '').trim();
   if (!id) {
-    showToast('لا يوجد معرّف متابعة — أعد فتح السجل من «المتابعة» أو «تعديل» في جدول المتابعات', 'error');
+    showToast('لا يوجد معرّف متابعة — أعد فتح السجل من «عرض السجل» في جدول المتابعات', 'error');
     console.warn('[CH03 FU Close] aborted: empty ch03FuRowId, mode=', mode);
     return;
   }
@@ -3993,7 +4087,7 @@ async function submitCh03FuCloseRecord() {
   var noteEl = document.getElementById('ch03Fu_close_note');
   var closer = (closerEl && closerEl.value ? closerEl.value : '').trim();
   var closeNote = (noteEl && noteEl.value ? noteEl.value : '').trim();
-  if (!confirm('تأكيد إغلاق المتابعة؟ يُسجَّل إغلاق نهائي في السجل ولا يُحذف التاريخ السابق.')) return;
+  if (!confirm('إغلاق المتابعة نهائياً؟ لا يمكن التراجع من الواجهة.')) return;
   try {
     showLoading('جاري الإغلاق...');
     console.log('[CH03 FU Close] followUpId=', id);
@@ -4026,21 +4120,18 @@ async function submitCh03FuCloseRecord() {
     try {
       await ch03AppendUpdateLog(id, closer || '—', 'إغلاق', closeNote || 'تم إغلاق المتابعة', 'Closed');
     } catch (logErr) {
-      console.error('[CH03 FU Close] append log failed:', logErr);
-      showToast('تم تحديث السجل لكن فشل تسجيل سطر الإغلاق في سجل التحديثات: ' + (logErr && logErr.message ? logErr.message : logErr), 'warning');
+      console.warn('[CH03 FU Close] append log failed:', logErr);
     }
-    await loadSheetData('CH03_FollowUps');
-    await loadSheetData('CH03_FollowUp_Updates');
+    await loadCh03RelatedSheets_();
     var verify = (sheetCache['CH03_FollowUps'] || []).find(function(r) { return String(r.id) === String(id); });
     console.log('[CH03 FU Close] after reload sheetCache row:', verify);
     if (!verify || normCh03FuStatus(verify.status) !== 'Closed') {
       showToast('فشل التحقق: الحالة في الشيت لم تصبح «مغلق» — تحقق من الورقة أو أعد المحاولة', 'error');
       return;
     }
-    await loadSheetData('SpillKitCheck');
-    showToast('تم إغلاق المتابعة وتسجيلها في السجل', 'success');
+    showToast('تم إغلاق المتابعة', 'success');
     closeCh03FuModal();
-    await renderChemSub('ch03');
+    await renderChemSub('ch03', true);
     updateChemKPIs();
     updateDashboard();
   } catch (e) {
@@ -4393,13 +4484,19 @@ function updateChemKPIs() {
   if (elFuC) elFuC.textContent = fuSt.closed;
 }
 
-async function renderChemSub(subId) {
+async function renderChemSub(subId, skipSheetLoad) {
   const cfg = CHEM_SHEETS[subId];
   if (!cfg) return;
-  await loadSheetData(cfg.sheet);
-  if (subId === 'ch03') {
-    await loadSheetData('CH03_FollowUps');
-    await loadSheetData('CH03_FollowUp_Updates');
+  if (!skipSheetLoad) {
+    if (subId === 'ch03') {
+      await Promise.all([
+        loadSheetData(cfg.sheet),
+        loadSheetData('CH03_FollowUps'),
+        loadSheetData('CH03_FollowUp_Updates')
+      ]);
+    } else {
+      await loadSheetData(cfg.sheet);
+    }
   }
   const container = document.getElementById('sub-chemsafety-' + subId);
   const rows = sheetCache[cfg.sheet] || [];
@@ -4537,7 +4634,7 @@ async function renderChemSub(subId) {
         var fuRowAct = followUpByInspection[String(r.id)];
         var fuActBtn = '';
         if (fuRowAct && fuRowAct.id) {
-          fuActBtn = '<button type="button" class="topbar-btn" style="padding:4px 8px;font-size:0.7rem;background:#7c3aed;border:none;color:white;border-radius:6px;cursor:pointer;" onclick=\'openCh03FuEdit(' + JSON.stringify(fuRowAct.id) + ')\'><i class="fas fa-clipboard-check"></i> المتابعة</button>';
+          fuActBtn = '<button type="button" class="topbar-btn" style="padding:4px 8px;font-size:0.7rem;background:#7c3aed;border:none;color:white;border-radius:6px;cursor:pointer;" onclick=\'openCh03FuEdit(' + JSON.stringify(fuRowAct.id) + ')\'><i class="fas fa-eye"></i> عرض السجل</button>';
         } else {
           fuActBtn = '<button type="button" class="topbar-btn" style="padding:4px 8px;font-size:0.7rem;border-radius:6px;cursor:pointer;" onclick=\'openCh03FuAddWithInspection(' + JSON.stringify(r.id) + ')\'><i class="fas fa-link"></i> ربط متابعة</button>';
         }
@@ -4651,24 +4748,21 @@ async function renderChemSub(subId) {
       }
       var toastMsg = editId ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح';
       if (followUpCreated) toastMsg += ' — تم إنشاء سجل متابعة مستقل';
-      else if (subId === 'ch03' && scenarioRes && scenarioRes.followUp && scenarioRes.id !== 'incomplete' && inspectionId && !followUpErrMsg) {
-        await loadSheetData('CH03_FollowUps');
-        var alreadyFu = (sheetCache['CH03_FollowUps'] || []).some(function(f) { return String(f.inspectionId) === String(inspectionId); });
-        if (alreadyFu) toastMsg += ' — سجل المتابعة موجود مسبقاً لهذا الفحص (لا يُنشأ مكرر)';
+      if (subId === 'ch03') {
+        await loadCh03RelatedSheets_();
+        if (!followUpCreated && scenarioRes && scenarioRes.followUp && scenarioRes.id !== 'incomplete' && inspectionId && !followUpErrMsg) {
+          var alreadyFu = (sheetCache['CH03_FollowUps'] || []).some(function(f) { return String(f.inspectionId) === String(inspectionId); });
+          if (alreadyFu) toastMsg += ' — سجل المتابعة موجود مسبقاً لهذا الفحص (لا يُنشأ مكرر)';
+        }
+      } else {
+        await loadSheetData(cfg.sheet);
       }
       if (followUpErrMsg) showToast(toastMsg + ' — ' + followUpErrMsg, 'warning');
       else showToast(toastMsg, 'success');
       document.getElementById('chemForm_' + subId).style.display = 'none';
       document.getElementById('chemEditId_' + subId).value = '';
       cfg.fields.forEach(f => { const el = document.getElementById('chemF_' + subId + '_' + f.key); if (el) el.value = ''; });
-      if (subId === 'ch03') {
-        await loadSheetData('SpillKitCheck');
-        await loadSheetData('CH03_FollowUps');
-        await loadSheetData('CH03_FollowUp_Updates');
-      } else {
-        await loadSheetData(cfg.sheet);
-      }
-      await renderChemSub(subId);
+      await renderChemSub(subId, subId === 'ch03');
       updateChemKPIs();
       if (subId === 'ch03') updateDashboard();
     } catch(e) {
@@ -4678,8 +4772,11 @@ async function renderChemSub(subId) {
   };
 
   window['chemEdit_' + subId] = async function(id) {
-    await loadSheetData(cfg.sheet);
-    if (subId === 'ch03') await loadSheetData('CH03_FollowUps');
+    if (subId === 'ch03') {
+      await Promise.all([loadSheetData(cfg.sheet), loadSheetData('CH03_FollowUps')]);
+    } else {
+      await loadSheetData(cfg.sheet);
+    }
     const fresh = sheetCache[cfg.sheet] || [];
     const row = fresh.find(function(r) { return String(r.id) === String(id); });
     if (!row) { showToast('تعذر تحميل السجل — حدّث الصفحة أو أعد المحاولة', 'error'); return; }
@@ -4718,32 +4815,32 @@ async function renderChemSub(subId) {
   };
 
   window['chemDel_' + subId] = async function(id) {
+    var ch03HadClosedArchive = false;
     if (subId === 'ch03') {
-      await loadSheetData('CH03_FollowUps');
+      if (sheetCache['CH03_FollowUps'] === undefined) await loadSheetData('CH03_FollowUps');
       var fuLink = (sheetCache['CH03_FollowUps'] || []).find(function(f) { return String(f.inspectionId) === String(id); });
       if (fuLink) {
         var stDel = normCh03FuStatus(fuLink.status);
         if (stDel === 'Open' || stDel === 'In Progress') {
-          showToast('لا يمكن حذف الفحص: توجد متابعة مفتوحة أو قيد التنفيذ. أغلِق المتابعة من «المتابعة» أو غيّر الحالة إلى مغلق أولاً.', 'error');
+          showToast('لا يمكن حذف هذا الفحص لأن لديه متابعة غير مغلقة.', 'error');
           return;
         }
-        if (!confirm('يوجد سجل متابعة مرتبط (حالته: مغلق). حذف الفحص يبقي أرشيف المتابعة كما هو دون ربط تلقائي. متابعة الحذف؟')) return;
-      } else if (!confirm('هل أنت متأكد من حذف هذا السجل؟')) return;
+        if (!confirm('هذا الفحص لديه متابعة مغلقة.\nسيتم حذف الفحص فقط، وستبقى المتابعة محفوظة كأرشيف.\nهل تريد المتابعة؟')) return;
+        ch03HadClosedArchive = true;
+      } else if (!confirm('هل تريد حذف هذا الفحص؟')) return;
     } else if (!confirm('هل أنت متأكد من حذف هذا السجل؟')) return;
     try {
-      showToast('جاري الحذف...', 'info');
       const resp = await fetch(API_URL, {method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({action:'deleteRow', sheet:cfg.sheet, rowId:id})});
       const result = await resp.json();
       if (result.status === 'ok' || result.status === 'success') {
-        showToast('تم الحذف بنجاح', 'success');
         if (subId === 'ch03') {
-          await loadSheetData('SpillKitCheck');
-          await loadSheetData('CH03_FollowUps');
-          await loadSheetData('CH03_FollowUp_Updates');
+          await loadCh03RelatedSheets_();
+          showToast(ch03HadClosedArchive ? 'تم حذف الفحص، وبقيت المتابعة محفوظة' : 'تم حذف الفحص', 'success');
         } else {
           await loadSheetData(cfg.sheet);
+          showToast('تم الحذف بنجاح', 'success');
         }
-        await renderChemSub(subId);
+        await renderChemSub(subId, subId === 'ch03');
         updateChemKPIs();
         if (subId === 'ch03') updateDashboard();
       }
