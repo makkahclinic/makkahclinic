@@ -3592,6 +3592,35 @@ const LAB_CHEMICALS = [
   {name:'Staining Alcohol - كحول صبغات',conc:'Absolute/95%',dept:'الأحياء الدقيقة',purpose:'تثبيت وصبغ',hazard:'قابل للاشتعال'}
 ];
 
+/** قيمة صالحة لـ input[type=datetime-local] من تاريخ Sheets أو سلسلة ISO */
+function formatForDatetimeLocal(v) {
+  if (v === undefined || v === null || v === '') return '';
+  var d;
+  if (v instanceof Date) {
+    d = v;
+  } else {
+    var s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+      return s.length >= 16 ? s.substring(0, 16) : s;
+    }
+    d = new Date(s);
+  }
+  if (isNaN(d.getTime())) return '';
+  var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function syncChemAutofillSearch(subId, row) {
+  if (subId !== 'ch01' && subId !== 'ch02' && subId !== 'ch04') return;
+  var si = document.getElementById('chemAutoSearch_' + subId);
+  if (!si) return;
+  var name = '';
+  if (subId === 'ch01') name = row['اسم المادة'] || '';
+  else if (subId === 'ch02') name = row['المادة'] || '';
+  else if (subId === 'ch04') name = row['اسم المادة'] || '';
+  si.value = name ? String(name) : '';
+}
+
 const CHEM_SHEETS = {
   ch01: { sheet:'ChemInventory', title:'سجل الجرد الكيميائي', code:'CH-01', icon:'fa-boxes-stacked',
     fields:[
@@ -4621,8 +4650,15 @@ async function renderChemSub(subId) {
     document.getElementById('chemFormTitle_' + subId).textContent = 'إضافة سجل جديد';
     cfg.fields.forEach(f => {
       const el = document.getElementById('chemF_' + subId + '_' + f.key);
-      if (el) el.value = f.type === 'date' ? new Date().toISOString().split('T')[0] : '';
+      if (!el) return;
+      if (f.type === 'date') el.value = new Date().toISOString().split('T')[0];
+      else if (f.type === 'datetime-local') el.value = formatForDatetimeLocal(new Date());
+      else el.value = '';
     });
+    if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') {
+      const si = document.getElementById('chemAutoSearch_' + subId);
+      if (si) si.value = '';
+    }
     document.getElementById('chemForm_' + subId).style.display = 'block';
     document.getElementById('chemForm_' + subId).scrollIntoView({behavior:'smooth', block:'nearest'});
     if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') initChemAutocomplete(subId);
@@ -4739,6 +4775,14 @@ async function renderChemSub(subId) {
     const fresh = sheetCache[cfg.sheet] || [];
     const row = fresh.find(function(r) { return String(r.id) === String(id); });
     if (!row) { showToast('تعذر تحميل السجل — حدّث الصفحة أو أعد المحاولة', 'error'); return; }
+    cfg.fields.forEach(function(f) {
+      const el = document.getElementById('chemF_' + subId + '_' + f.key);
+      if (el) el.value = '';
+    });
+    if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') {
+      const si = document.getElementById('chemAutoSearch_' + subId);
+      if (si) si.value = '';
+    }
     document.getElementById('chemEditId_' + subId).value = id;
     document.getElementById('chemFormTitle_' + subId).textContent = 'تعديل السجل';
     cfg.fields.forEach(f => {
@@ -4746,15 +4790,19 @@ async function renderChemSub(subId) {
       if (!el) return;
       var v = row[f.key];
       if (v === undefined || v === null) v = '';
-      if (f.type === 'date' && v !== '') {
+      if (f.type === 'datetime-local' && v !== '') {
+        el.value = formatForDatetimeLocal(v);
+      } else if (f.type === 'date' && v !== '') {
         if (v instanceof Date) el.value = v.toISOString().split('T')[0];
         else el.value = String(v).trim().substring(0, 10);
       } else {
         el.value = v === '' ? '' : String(v);
       }
     });
+    syncChemAutofillSearch(subId, row);
     document.getElementById('chemForm_' + subId).style.display = 'block';
     document.getElementById('chemForm_' + subId).scrollIntoView({behavior:'smooth', block:'nearest'});
+    if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') initChemAutocomplete(subId);
     if (subId === 'ch03') {
       window.__ch03ScenarioState = { lastScenarioId: null };
       setTimeout(function() { updateCh03ScenarioUI(); }, 0);
