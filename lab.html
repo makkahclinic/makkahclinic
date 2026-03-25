@@ -357,10 +357,17 @@
     }
 
     /* —— CH-03 Spill Kit / Follow-ups (audit UI) —— */
+    .ch03-section-divider { height:1px; border:0; margin:28px 0 26px; padding:0; background:linear-gradient(90deg, transparent, #c4b5fd 12%, #94a3b8 50%, #c4b5fd 88%, transparent); }
+    .ch03-section-badge { display:inline-flex; align-items:center; font-size:0.65rem; font-weight:800; letter-spacing:0.03em; padding:5px 12px; border-radius:999px; border:1px solid transparent; line-height:1.35; }
+    .ch03-section-badge--followup { background:#f5f3ff; color:#5b21b6; border-color:#ddd6fe; }
+    .ch03-section-badge--inspection { background:#f0f9ff; color:#0369a1; border-color:#bae6fd; }
+    .ch03-section-followup-card .card-header.ch03-section-followup-head { line-height:1.55; }
+    .ch03-section-followup-card .card-body.ch03-section-followup-body { line-height:1.65; }
+    .ch03-section-inspection-wrap { margin-bottom:4px; }
     .ch03-fu-table { font-size:0.78rem; }
-    .ch03-fu-table td, .ch03-fu-table th { padding:10px 12px!important; line-height:1.55; vertical-align:top; }
+    .ch03-fu-table td, .ch03-fu-table th { padding:11px 14px!important; line-height:1.62; vertical-align:top; }
     .ch03-fu-table .data-table { table-layout:auto; }
-    .ch03-inspection-table td { padding:10px 10px!important; line-height:1.55; max-width:220px; }
+    .ch03-inspection-table td { padding:11px 12px!important; line-height:1.62; max-width:220px; }
     .ch03-inspection-table td .ch03-fu-inline-one { max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .ch03-fu-inline-cell { font-size:0.72rem; line-height:1.45; }
     .ch03-fu-inline-title { font-weight:700; color:#5b21b6; margin-bottom:4px; font-size:0.68rem; }
@@ -3604,7 +3611,7 @@ const CHEM_SHEETS = {
     ],
     cols:['المادة','القسم','مصدر SDS / الشركة','تاريخ الإصدار','متاح ورقياً','متاح إلكترونياً','رابط الملف','آخر مراجعة']
   },
-  ch03: { sheet:'SpillKitCheck', title:'قائمة فحص Spill Kit وEyewash/Shower', code:'CH-03', icon:'fa-shield-halved',
+  ch03: { sheet:'SpillKitCheck', title:'سجل الفحوصات اليومية', code:'CH-03', icon:'fa-shield-halved',
     fields:[
       {key:'التاريخ',type:'date',required:true},
       {key:'الموقع',type:'text',required:true},
@@ -3939,11 +3946,18 @@ function buildCh03FuSectionHtml(stats, fuRows) {
     return '<tr style="' + trBg + '"><td style="font-size:0.62rem;font-family:ui-monospace,monospace;">' + escapeHtmlCh03(String(r.id || '')) + '</td><td>' + statusCell + '</td><td>' + sevCell + '</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;">' + escapeHtmlCh03(String(r['الموقع'] || '')) + '</td><td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;">' + escapeHtmlCh03(String(r['المسؤول'] || '')) + '</td><td style="font-size:0.65rem;">' + escapeHtmlCh03(String(r.createdAt || '')) + '</td><td style="font-size:0.62rem;font-family:ui-monospace;">' + escapeHtmlCh03(String(r.inspectionId || '')) + '</td><td class="ch03-fu-actions-cell">' + actions + '</td></tr>';
   }).join('');
   if (!tableRows) {
-    tableRows = '<tr><td colspan="8" style="text-align:center;color:var(--gray-500);padding:28px;line-height:1.7;">✅ لا توجد متابعات حالياً<br><span style="font-size:0.78rem;color:var(--gray-400);">سيتم إنشاء متابعة تلقائياً عند وجود مشكلة في فحص يتطلب ذلك، أو أضف متابعة يدوياً.</span></td></tr>';
+    tableRows = '<tr><td colspan="8" style="text-align:center;color:var(--gray-500);padding:32px 18px;line-height:1.75;">✅ لا توجد متابعات حالياً<br><span style="font-size:0.78rem;color:var(--gray-400);display:block;margin-top:10px;">سيتم إنشاء متابعة تلقائياً عند وجود مشكلة في الفحص</span></td></tr>';
   }
   return banner +
-    '<div class="card" style="margin-bottom:14px;border:2px solid #c4b5fd;"><div class="card-header" style="background:#faf5ff;"><i class="fas fa-clipboard-list"></i> متابعات CH-03 المستقلة <span style="font-size:0.7rem;color:#64748b;font-weight:500;">(ورقة CH03_FollowUps)</span></div><div class="card-body" style="padding:12px;">' +
-    '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;"><button type="button" class="topbar-btn" style="background:#7c3aed;border:none;color:white;" onclick="openCh03FuAdd()"><i class="fas fa-plus"></i> إضافة متابعة يدوية</button></div>' +
+    '<div id="ch03SectionFollowUp" class="card ch03-section-followup-card" style="margin-bottom:28px;border:2px solid #c4b5fd;">' +
+    '<div class="card-header ch03-section-followup-head" style="background:#faf5ff;padding:14px 18px;">' +
+    '<div style="margin-bottom:8px;"><span class="ch03-section-badge ch03-section-badge--followup" aria-label="Follow-up Records">🟣 Follow-up Records</span></div>' +
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+    '<i class="fas fa-clipboard-list" style="color:#7c3aed;font-size:1.05rem;"></i>' +
+    '<span style="font-weight:800;font-size:0.95rem;color:#1e293b;">سجل المتابعات (الإجراءات التصحيحية)</span></div>' +
+    '<div style="font-size:0.72rem;color:#64748b;margin-top:8px;line-height:1.65;">يظهر الحالات التي تحتاج متابعة بعد الفحص</div></div>' +
+    '<div class="card-body ch03-section-followup-body" style="padding:18px 20px;">' +
+    '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><button type="button" class="topbar-btn" style="background:#7c3aed;border:none;color:white;" onclick="openCh03FuAdd()"><i class="fas fa-plus"></i> إضافة متابعة يدوية</button></div>' +
     '<div style="overflow-x:auto;"><table class="data-table ch03-fu-table" id="ch03FuTable"><thead><tr><th>Follow-up ID</th><th>الحالة</th><th>الخطورة</th><th>الموقع</th><th>المسؤول</th><th>تاريخ الإنشاء</th><th>مرجع الفحص</th><th>إجراءات</th></tr></thead><tbody>' + tableRows + '</tbody></table></div></div></div>';
 }
 
@@ -4653,15 +4667,31 @@ async function renderChemSub(subId, skipSheetLoad) {
     var fuRowsTop = sheetCache['CH03_FollowUps'] || [];
     var fuStatsTop = computeCh03FollowUpStats(fuRowsTop);
     html += buildCh03FuSectionHtml(fuStatsTop, fuRowsTop);
-  }
-  html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+    html += '<div class="ch03-section-divider" role="separator" aria-hidden="true"></div>';
+    html += `<div id="ch03SectionInspectionWrap" class="ch03-section-inspection-wrap">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:22px; flex-wrap:wrap; gap:12px;">
+        <div style="flex:1; min-width:200px;">
+          <div style="margin-bottom:8px;"><span class="ch03-section-badge ch03-section-badge--inspection" aria-label="Inspection Records">🔵 Inspection Records</span></div>
+          <h3 style="font-size:0.98rem; font-weight:800; color:var(--gray-800); margin:0; line-height:1.45;"><i class="fas ${cfg.icon}" style="color:#0ea5e9; margin-left:8px;"></i> ${cfg.title}</h3>
+          <p style="font-size:0.74rem; color:#64748b; margin:8px 0 0; font-weight:500; line-height:1.65;">جميع عمليات الفحص المسجلة</p>
+          <span style="font-size:0.68rem; color:var(--gray-400); font-weight:500; display:block; margin-top:6px;">${cfg.code} | MMC-LAB-FRM-${cfg.code}1</span>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:flex-start;">
+          <button class="topbar-btn" style="background:linear-gradient(135deg,#0ea5e9,#0284c7); border:none; color:white;" onclick="showSpillKitInfo()"><i class="fas fa-info-circle"></i> معلومات Spill Kit</button>
+          <button class="topbar-btn" style="background:var(--success); border-color:var(--success); color:white;" onclick="window['chemShowForm_${subId}']()"><i class="fas fa-plus"></i> إضافة سجل</button>
+          <button class="topbar-btn" onclick="window['chemPrint_${subId}']()"><i class="fas fa-print"></i> طباعة</button>
+        </div>
+      </div>
+    </div>`;
+  } else {
+    html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
     <h3 style="font-size:0.95rem; font-weight:700; color:var(--gray-700);"><i class="fas ${cfg.icon}" style="color:#7c3aed; margin-left:6px;"></i> ${cfg.title} <span style="font-size:0.7rem; color:var(--gray-400); font-weight:500;">${cfg.code} | MMC-LAB-FRM-${cfg.code}1</span></h3>
     <div style="display:flex; gap:6px;">
-      ${subId === 'ch03' ? '<button class="topbar-btn" style="background:linear-gradient(135deg,#0ea5e9,#0284c7); border:none; color:white;" onclick="showSpillKitInfo()"><i class="fas fa-info-circle"></i> معلومات Spill Kit</button>' : ''}
       <button class="topbar-btn" style="background:var(--success); border-color:var(--success); color:white;" onclick="window['chemShowForm_${subId}']()"><i class="fas fa-plus"></i> إضافة سجل</button>
       <button class="topbar-btn" onclick="window['chemPrint_${subId}']()"><i class="fas fa-print"></i> طباعة</button>
     </div>
   </div>`;
+  }
 
   html += `<div id="chemForm_${subId}" style="display:none; background:var(--gray-50); border:1px solid var(--gray-200); border-radius:var(--radius-md); padding:16px; margin-bottom:14px;">
     <h4 style="font-size:0.85rem; font-weight:700; margin-bottom:12px; color:#7c3aed;"><i class="fas fa-edit" style="margin-left:5px;"></i> <span id="chemFormTitle_${subId}">إضافة سجل جديد</span></h4>
