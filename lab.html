@@ -434,7 +434,7 @@
     }
     .sub-pill .ch03-subtab-fu-badge.is-visible { display: inline-flex; }
 
-    /* CH-02: بطاقة ملخص السلامة الذكية (بدون خادم خارجي) */
+    /* CH-02: بطاقة ملخص إلكتروني عن المركب (بيانات مرجعية محلية) */
     .ch02-sds-smart-wrap { margin-top: 10px; margin-bottom: 4px; }
     .ch02-sds-smart-card {
       border-radius: 14px;
@@ -504,7 +504,8 @@
       color: #64748b;
       font-size: 0.82rem;
     }
-    .ch02-smart-info-btn { box-shadow: 0 2px 10px rgba(91, 33, 182, 0.2); }
+    .ch02-smart-info-btn { box-shadow: 0 2px 10px rgba(91, 33, 182, 0.2); transition: box-shadow 0.2s ease, opacity 0.2s ease; }
+    .ch02-ref-btn--ready.ch02-smart-info-btn { box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.25), 0 4px 14px rgba(91, 33, 182, 0.35); }
     @media print {
       .ch03-print-hide { display:none!important; }
     }
@@ -2426,6 +2427,34 @@ function clearCh02SdsSmartCard_() {
   el.innerHTML = '';
 }
 
+/** اسم المادة المرئي للمرجع: يقرأ من الحقل الرسمي أو من صندوق البحث (قبل الحفظ). */
+function getCh02CurrentMaterialName_() {
+  var mEl = document.getElementById('chemF_ch02_المادة');
+  var sEl = document.getElementById('chemAutoSearch_ch02');
+  var mv = mEl && mEl.value ? String(mEl.value).trim() : '';
+  var sv = sEl && sEl.value ? String(sEl.value).trim() : '';
+  if (mv.length >= 2) return mv;
+  if (sv.length >= 2) return sv;
+  return '';
+}
+
+/** يملأ حقل «المادة» من البحث إذا كان المستخدم كتب في البحث ولم يُنسخ بعد إلى الحقل الرسمي */
+function ch02SyncMaterialFieldToSearch_() {
+  var mEl = document.getElementById('chemF_ch02_المادة');
+  var sEl = document.getElementById('chemAutoSearch_ch02');
+  if (!mEl || !sEl) return;
+  var mv = String(mEl.value || '').trim();
+  var sv = String(sEl.value || '').trim();
+  if (sv.length >= 2 && mv.length < 2) mEl.value = sv;
+}
+
+function updateCh02SmartRefButtonState_() {
+  var btn = document.getElementById('ch02SmartInfoBtn');
+  if (!btn) return;
+  var ok = getCh02CurrentMaterialName_().length >= 2;
+  btn.classList.toggle('ch02-ref-btn--ready', ok);
+}
+
 function findLabChemicalForCh02_(name) {
   if (!name || !String(name).trim()) return null;
   var n = String(name).trim().toLowerCase();
@@ -2526,17 +2555,19 @@ function buildCh02SmartSafetyCardHtml_(chemName, deptVal, labEntry) {
   return html;
 }
 
-async function generateSDSInfo() {
-  const chemNameRaw = document.getElementById('chemF_ch02_المادة') && document.getElementById('chemF_ch02_المادة').value;
-  const chemName = chemNameRaw ? String(chemNameRaw).trim() : '';
+async function generateSDSInfo(opts) {
+  opts = opts || {};
+  var silent = opts.silent === true;
+  ch02SyncMaterialFieldToSearch_();
+  var chemName = getCh02CurrentMaterialName_();
   const resultDiv = document.getElementById('sdsAiResult');
   const btn = document.getElementById('ch02SmartInfoBtn') || document.getElementById('sdsAiBtn');
   if (!chemName || chemName.length < 2) {
     if (resultDiv) {
       resultDiv.style.display = 'block';
-      resultDiv.innerHTML = '<div class="ch02-sds-empty"><i class="fas fa-circle-info" style="color:#7c3aed;font-size:1.5rem;display:block;margin-bottom:10px;"></i><strong>اختر مركبًا أولًا لعرض الملخص الإلكتروني</strong><div style="font-size:0.72rem;color:#94a3b8;margin-top:8px;">اختر مادة من القائمة أعلاه أو اكتب اسمًا مطابقًا ثم اضغط الزر.</div></div>';
+      resultDiv.innerHTML = '<div class="ch02-sds-empty"><i class="fas fa-circle-info" style="color:#7c3aed;font-size:1.5rem;display:block;margin-bottom:10px;"></i><strong>اختر مركبًا أولًا لعرض المعلومات المرجعية</strong><div style="font-size:0.72rem;color:#94a3b8;margin-top:8px;">اكتب في البحث أعلاه أو اختر من القائمة، ثم اضغط الزر — لا حاجة لحفظ السجل.</div></div>';
     }
-    showToast('اختر أو اكتب اسم المادة أولاً', 'warning');
+    if (!silent) showToast('أدخل أو اختر اسم المادة أولاً', 'warning');
     return;
   }
   if (chemName.length > 200) { showToast('اسم المادة طويل جداً', 'error'); return; }
@@ -2558,7 +2589,8 @@ async function generateSDSInfo() {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-flask-vial"></i> ملخص إلكتروني عن المركب';
   }
-  showToast(labEntry ? 'تم عرض ملخص إلكتروني عن المركب' : 'تم عرض ملخص إرشادي — راجع SDS الرسمي للاعتماد', 'success');
+  updateCh02SmartRefButtonState_();
+  if (!silent) showToast(labEntry ? 'تم عرض ملخص إلكتروني عن المركب' : 'تم عرض ملخص إرشادي — راجع SDS الرسمي للاعتماد', 'success');
 }
 
 function printSDS() {
@@ -3813,6 +3845,7 @@ function syncChemAutofillSearch(subId, row) {
   else if (subId === 'ch02') name = row['المادة'] || '';
   else if (subId === 'ch04') name = row['اسم المادة'] || '';
   si.value = name ? String(name) : '';
+  if (subId === 'ch02') updateCh02SmartRefButtonState_();
 }
 
 const CHEM_SHEETS = {
@@ -5192,6 +5225,7 @@ async function renderChemSub(subId, skipSheetLoad) {
   container.innerHTML = html;
 
   if (subId === 'ch03') initCh03ScenarioUI();
+  if (subId === 'ch02') setTimeout(updateCh02SmartRefButtonState_, 0);
 
   window['chemShowForm_' + subId] = function() {
     document.getElementById('chemEditId_' + subId).value = '';
@@ -5211,6 +5245,7 @@ async function renderChemSub(subId, skipSheetLoad) {
     document.getElementById('chemForm_' + subId).scrollIntoView({behavior:'smooth', block:'nearest'});
     if (subId === 'ch02') clearCh02SdsSmartCard_();
     if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') initChemAutocomplete(subId);
+    if (subId === 'ch02') updateCh02SmartRefButtonState_();
     if (subId === 'ch03') {
       window.__ch03ScenarioState = { lastScenarioId: null };
       setTimeout(function() { updateCh03ScenarioUI(); }, 0);
@@ -5224,7 +5259,10 @@ async function renderChemSub(subId, skipSheetLoad) {
       if (!searchInput || !dropdown) return;
       searchInput.value = '';
       searchInput.oninput = function() {
-        if (sid === 'ch02') clearCh02SdsSmartCard_();
+        if (sid === 'ch02') {
+          clearCh02SdsSmartCard_();
+          updateCh02SmartRefButtonState_();
+        }
         const q = this.value.trim().toLowerCase();
         if (q.length < 1) { dropdown.style.display = 'none'; return; }
         const matches = LAB_CHEMICALS.filter(c => c.name.toLowerCase().includes(q) || c.purpose.toLowerCase().includes(q) || c.dept.includes(q));
@@ -5233,12 +5271,21 @@ async function renderChemSub(subId, skipSheetLoad) {
         dropdown.style.display = 'block';
       };
       searchInput.onfocus = function() { if (this.value.trim().length >= 1) this.oninput(); };
+      if (sid === 'ch02') {
+        searchInput.onblur = function() {
+          ch02SyncMaterialFieldToSearch_();
+          updateCh02SmartRefButtonState_();
+        };
+      }
       document.addEventListener('click', function(e) { if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) dropdown.style.display = 'none'; });
       if (sid === 'ch02') {
         var matF = document.getElementById('chemF_ch02_المادة');
         if (matF && !matF.dataset.ch02SdsBound) {
           matF.dataset.ch02SdsBound = '1';
-          matF.addEventListener('input', clearCh02SdsSmartCard_);
+          matF.addEventListener('input', function() {
+            clearCh02SdsSmartCard_();
+            updateCh02SmartRefButtonState_();
+          });
         }
       }
     };
@@ -5256,6 +5303,8 @@ async function renderChemSub(subId, skipSheetLoad) {
         document.getElementById('chemF_ch02_المادة').value = c.name;
         const deptSelect2 = document.getElementById('chemF_ch02_القسم');
         if (deptSelect2) { for (let o of deptSelect2.options) { if (o.value === c.dept) { deptSelect2.value = c.dept; break; } } }
+        updateCh02SmartRefButtonState_();
+        setTimeout(function() { generateSDSInfo({ silent: true }); }, 180);
       } else if (sid === 'ch04') {
         document.getElementById('chemF_ch04_اسم المادة').value = c.name;
       }
@@ -5362,6 +5411,7 @@ async function renderChemSub(subId, skipSheetLoad) {
     document.getElementById('chemForm_' + subId).scrollIntoView({behavior:'smooth', block:'nearest'});
     if (subId === 'ch02') clearCh02SdsSmartCard_();
     if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') initChemAutocomplete(subId);
+    if (subId === 'ch02') updateCh02SmartRefButtonState_();
     if (subId === 'ch03') {
       window.__ch03ScenarioState = { lastScenarioId: null };
       setTimeout(function() { updateCh03ScenarioUI(); }, 0);
