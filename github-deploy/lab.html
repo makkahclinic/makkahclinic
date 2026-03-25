@@ -433,6 +433,78 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
     }
     .sub-pill .ch03-subtab-fu-badge.is-visible { display: inline-flex; }
+
+    /* CH-02: بطاقة ملخص إلكتروني عن المركب (بيانات مرجعية محلية) */
+    .ch02-sds-smart-wrap { margin-top: 10px; margin-bottom: 4px; }
+    .ch02-sds-smart-card {
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid #e9d5ff;
+      background: linear-gradient(165deg, #faf5ff 0%, #ffffff 38%, #f8fafc 100%);
+      box-shadow: 0 8px 28px rgba(91, 33, 182, 0.1);
+    }
+    .ch02-sds-smart-head {
+      padding: 14px 16px;
+      background: linear-gradient(135deg, #5b21b6, #7c3aed);
+      color: #fff;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .ch02-sds-smart-head h4 { margin: 0; font-size: 1rem; font-weight: 900; line-height: 1.35; }
+    .ch02-sds-smart-head .ch02-sds-sub { font-size: 0.72rem; opacity: 0.92; margin-top: 6px; font-weight: 600; }
+    .ch02-sds-smart-toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ch02-sds-smart-toolbar button {
+      font-family: inherit; font-size: 0.68rem; font-weight: 700; padding: 6px 10px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.15); color: #fff; cursor: pointer;
+    }
+    .ch02-sds-smart-toolbar button:hover { background: rgba(255,255,255,0.28); }
+    .ch02-sds-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 10px;
+      padding: 12px;
+    }
+    .ch02-sds-block {
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.78rem;
+      line-height: 1.65;
+      border: 1px solid transparent;
+    }
+    .ch02-sds-block h5 {
+      margin: 0 0 6px 0;
+      font-size: 0.72rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ch02-sds-block--info { background: #eff6ff; border-color: #bfdbfe; color: #1e3a5f; }
+    .ch02-sds-block--danger { background: #fef2f2; border-color: #fecaca; color: #7f1d1d; }
+    .ch02-sds-block--warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .ch02-sds-block--ok { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+    .ch02-sds-block--neutral { background: #f5f3ff; border-color: #ddd6fe; color: #4c1d95; }
+    .ch02-sds-footnote {
+      padding: 10px 14px;
+      font-size: 0.65rem;
+      color: #64748b;
+      border-top: 1px dashed #e2e8f0;
+      background: #f8fafc;
+      line-height: 1.55;
+    }
+    .ch02-sds-empty {
+      text-align: center;
+      padding: 22px 16px;
+      border-radius: 12px;
+      border: 1px dashed #c4b5fd;
+      background: linear-gradient(135deg, #faf5ff, #fff);
+      color: #64748b;
+      font-size: 0.82rem;
+    }
+    .ch02-smart-info-btn { box-shadow: 0 2px 10px rgba(91, 33, 182, 0.2); }
     @media print {
       .ch03-print-hide { display:none!important; }
     }
@@ -2347,26 +2419,146 @@ function formatSDSValue(rawVal) {
   return html;
 }
 
+function clearCh02SdsSmartCard_() {
+  var el = document.getElementById('sdsAiResult');
+  if (!el) return;
+  el.style.display = 'none';
+  el.innerHTML = '';
+}
+
+function findLabChemicalForCh02_(name) {
+  if (!name || !String(name).trim()) return null;
+  var n = String(name).trim().toLowerCase();
+  var i;
+  for (i = 0; i < LAB_CHEMICALS.length; i++) {
+    if (LAB_CHEMICALS[i].name.toLowerCase() === n) return LAB_CHEMICALS[i];
+  }
+  for (i = 0; i < LAB_CHEMICALS.length; i++) {
+    var c = LAB_CHEMICALS[i];
+    var cn = c.name.toLowerCase();
+    if (cn.indexOf(n) !== -1 || n.indexOf(cn.split(' - ')[0].trim().toLowerCase()) !== -1) return c;
+  }
+  for (i = 0; i < LAB_CHEMICALS.length; i++) {
+    var c2 = LAB_CHEMICALS[i];
+    var first = c2.name.split(' - ')[0].trim().toLowerCase();
+    if (first.length > 2 && n.indexOf(first) !== -1) return c2;
+  }
+  return null;
+}
+
+function inferCh02SafetyNarr_(hazardStr) {
+  var h = (hazardStr || '').toLowerCase();
+  var blocks = {
+    precautions: 'تجنّب استنشاق البخار؛ استخدم منطقة جيدة التهوية أو خزانة دخان عند الحاجة؛ لا تأكل أو تشرب أثناء التعامل؛ اغسل اليدين بعد العمل.',
+    spill: 'أوقف التسرب عند المصدر، استخدم مادة ماصة مناسبة، اجمع الفضلات في وعاء كيميائي معرّف، نظّف الأسطح بماء وفق إجراءات المنشأة.',
+    eye: 'اغسل العين فوراً بمحلول غسل العين أو ماء جاري نظيف لمدة لا تقل عن 15 دقيقة؛ افتح الجفن؛ اطلب المساعدة الطبية عند استمرار الأعراض.',
+    skin: 'أزل الملابس الملوثة، اغسل الجلد بماء جاري وصابون؛ لا تفرك؛ راجع الطبيب عند الحاجة.',
+    storage: 'خزّن في حاوية مغلقة، مع تسمية واضحة، بعيداً عن الحرارة والمصادر المشتعلة والمواد غير المتوافقة؛ حسب إجراءات التخزين في المختبر.',
+    ppe: 'قفازات كيميائية مناسبة، نظارات واقية، رداء مخبر؛ أضف واقي وجه أو تهوية موضعية عند تقييم المخاطر.'
+  };
+  if (h.indexOf('آكل') !== -1 || h.indexOf('حمض') !== -1 || h.indexOf('قلوي') !== -1) {
+    blocks.ppe = 'قفازات مقاومة للكواشف الكيميائية، نظارات كاملة، رداء مخبر؛ واقي وجه عند سكب مركزات.';
+    blocks.spill = 'لا تُسكب ماء مباشرة على مركزات حمضية/قلوية قوية دون تعليمات محايدة؛ استخدم محيداً أو مادة ماصة حسب إجراء الفحص؛ تهوية المنطقة.';
+  }
+  if (h.indexOf('اشتعال') !== -1 || h.indexOf('قابل للاشتعال') !== -1) {
+    blocks.ppe += ' تجنّب الشرر؛ استخدم أدوات لا تشتعل.';
+    blocks.spill += ' أزل مصادر الاشتعال؛ تهوية فورية.';
+    blocks.storage = 'خزّن بعيداً عن اللهب والحرارة؛ وفق تصنيف الاشتعال.';
+  }
+  if (h.indexOf('سام') !== -1 || h.indexOf('مسرطن') !== -1) {
+    blocks.precautions += ' قلّل التعرض؛ استخدم جهاز حماية تنفسية عند الحاجة حسب التقييم؛ أغلق الحاويات فوراً.';
+    blocks.spill += ' تجنّب الاستنشاق؛ عزل المنطقة؛ أبلغ المسؤول.';
+  }
+  if (h.indexOf('مؤكسد') !== -1) {
+    blocks.precautions += ' لا تخزّن مع مواد مختزلة أو قابلة للاحتراق.';
+    blocks.storage += ' بعيداً عن المواد القابلة للاحتراق والمختزلة.';
+  }
+  if (h.indexOf('بيولوجي') !== -1) {
+    blocks.ppe = 'قفازات معقمة، نظارات، رداء؛ وفق إجراءات الوقاية من العدوى في المختبر.';
+    blocks.spill = 'عطّل بالمطهر المناسب، اجمع النفايات في حاوية حادة، أبلغ الربط الحيوي.';
+  }
+  return blocks;
+}
+
+function buildCh02SmartSafetyCardHtml_(chemName, deptVal, labEntry) {
+  var nameParts = String(chemName).split(/\s*-\s*/);
+  var enName = nameParts.length >= 2 ? nameParts[0].trim() : String(chemName);
+  var arName = nameParts.length >= 2 ? nameParts.slice(1).join(' - ').trim() : String(chemName);
+  var hazard = labEntry ? labEntry.hazard : 'غير محدد — راجع ملف SDS المعتمد';
+  var purpose = labEntry ? labEntry.purpose : '—';
+  var conc = labEntry ? labEntry.conc : '';
+  var dept = deptVal || (labEntry ? labEntry.dept : '');
+  var narr = inferCh02SafetyNarr_(hazard);
+  var badge = labEntry
+    ? '<span style="font-size:0.62rem;font-weight:800;padding:3px 8px;border-radius:999px;background:#e0e7ff;color:#3730a3;">ملخص سلامة إلكتروني مبني على بيانات المختبر المرجعية</span>'
+    : '<span style="font-size:0.62rem;font-weight:800;padding:3px 8px;border-radius:999px;background:#fef3c7;color:#92400e;">ملخص إرشادي — لا يغني عن SDS الرسمي</span>';
+
+  var g = function(cls, icon, title, body) {
+    return '<div class="ch02-sds-block ' + cls + '"><h5><i class="fas ' + icon + '"></i> ' + title + '</h5><div>' + body + '</div></div>';
+  };
+
+  var html = '';
+  html += '<div class="ch02-sds-smart-card">';
+  html += '<div class="ch02-sds-smart-head"><div><h4><i class="fas fa-sparkles" style="opacity:0.95;"></i> ملخص إلكتروني عن المركب</h4>';
+  html += '<div class="ch02-sds-sub">' + badge + ' · CH-02</div></div>';
+  html += '<div class="ch02-sds-smart-toolbar">';
+  html += '<button type="button" onclick="printSDS()"><i class="fas fa-print"></i> طباعة</button>';
+  html += '<button type="button" onclick="copySDS()"><i class="fas fa-copy"></i> نسخ</button>';
+  html += '</div></div>';
+
+  html += '<div id="sdsContentBody" class="ch02-sds-body"><div class="ch02-sds-grid">';
+  html += g('ch02-sds-block--info', 'fa-tag', 'اسم المركب (عربي)', '<strong>' + escSDS(arName) + '</strong>');
+  html += g('ch02-sds-block--info', 'fa-language', 'الاسم الإنجليزي / الدولي', escSDS(enName));
+  if (conc) html += g('ch02-sds-block--neutral', 'fa-flask', 'التركيز أو الشكل', escSDS(conc));
+  if (dept) html += g('ch02-sds-block--neutral', 'fa-building', 'القسم / السياق', escSDS(dept));
+  html += g('ch02-sds-block--info', 'fa-microscope', 'الاستخدام في المختبر', escSDS(purpose));
+  html += g('ch02-sds-block--danger', 'fa-skull-crossbones', 'أهم المخاطر', escSDS(hazard));
+  html += g('ch02-sds-block--warn', 'fa-triangle-exclamation', 'الاحتياطات في المختبر', escSDS(narr.precautions));
+  html += g('ch02-sds-block--warn', 'fa-head-side-mask', 'معدات الوقاية المطلوبة', escSDS(narr.ppe));
+  html += g('ch02-sds-block--warn', 'fa-droplet', 'ماذا أفعل عند الانسكاب؟', escSDS(narr.spill));
+  html += g('ch02-sds-block--info', 'fa-eye', 'عند ملامسة العين', escSDS(narr.eye));
+  html += g('ch02-sds-block--info', 'fa-hand', 'عند ملامسة الجلد', escSDS(narr.skin));
+  html += g('ch02-sds-block--ok', 'fa-warehouse', 'التخزين الصحيح', escSDS(narr.storage));
+  html += g('ch02-sds-block--neutral', 'fa-lightbulb', 'ملاحظات مهمة للمختبر', 'راجع دائماً ملف SDS المعتمد والرابط المسجل في فهرس CH-02؛ هذا الملخص للمساعدة السريعة فقط ولا يُعد بديلاً عن الاعتماد المؤسسي أو تعليمات الشركة المصنّعة.');
+  html += '</div></div>';
+  html += '<div class="ch02-sds-footnote"><strong>تنويه:</strong> هذا عرض إلكتروني مُساعد — ملخص سلامة إلكتروني مبني على بيانات المختبر المرجعية عند تطابق الاسم، مع إرشادات عامة آمنة. للاعتماد النهائي استخدم ملف SDS الرسمي وحقل رابط الملف في السجل.</div>';
+  html += '</div>';
+  return html;
+}
+
 async function generateSDSInfo() {
-  const chemName = document.getElementById('chemF_ch02_المادة')?.value;
-  if (!chemName || chemName.trim().length < 2) { showToast('يرجى اختيار أو كتابة اسم المادة أولاً', 'warning'); return; }
+  const chemNameRaw = document.getElementById('chemF_ch02_المادة') && document.getElementById('chemF_ch02_المادة').value;
+  const chemName = chemNameRaw ? String(chemNameRaw).trim() : '';
+  const resultDiv = document.getElementById('sdsAiResult');
+  const btn = document.getElementById('ch02SmartInfoBtn') || document.getElementById('sdsAiBtn');
+  if (!chemName || chemName.length < 2) {
+    if (resultDiv) {
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<div class="ch02-sds-empty"><i class="fas fa-circle-info" style="color:#7c3aed;font-size:1.5rem;display:block;margin-bottom:10px;"></i><strong>اختر مركبًا أولًا لعرض الملخص الإلكتروني</strong><div style="font-size:0.72rem;color:#94a3b8;margin-top:8px;">اختر مادة من القائمة أعلاه أو اكتب اسمًا مطابقًا ثم اضغط الزر.</div></div>';
+    }
+    showToast('اختر أو اكتب اسم المادة أولاً', 'warning');
+    return;
+  }
   if (chemName.length > 200) { showToast('اسم المادة طويل جداً', 'error'); return; }
 
-  const dept = document.getElementById('chemF_ch02_القسم')?.value || '';
-  const resultDiv = document.getElementById('sdsAiResult');
-  const btn = document.getElementById('sdsAiBtn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري تحميل معلومات المركب...'; }
-  if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center; padding:20px; color:var(--primary);"><i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i><div style="margin-top:8px; font-size:0.8rem;">جاري تحميل بيانات السلامة للمركب...</div></div>';
-  if (resultDiv) resultDiv.style.display = 'block';
-
-  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-info-circle"></i> معلومات مساعدة عن المركب'; }
-
-  /* بطاقة SDS التفصيلية كانت تُحمّل من خادم خارجي — البوابة تعتمد فقط على Google Apps Script */
+  const dept = document.getElementById('chemF_ch02_القسم') && document.getElementById('chemF_ch02_القسم').value ? document.getElementById('chemF_ch02_القسم').value : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري إعداد الملخص الإلكتروني...'; }
   if (resultDiv) {
-    resultDiv.innerHTML = '<div style="text-align:center; padding:16px; color:#475569; line-height:1.7;"><i class="fas fa-circle-info" style="color:#7c3aed;"></i> بطاقة SDS التلقائية غير متاحة عبر البوابة. استخدم <strong>ملف SDS الرسمي</strong> وحقل <strong>رابط الملف</strong> في السجل، أو راجع مسؤول السلامة.</div>';
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<div class="ch02-sds-empty" style="border-style:solid;border-color:#e9d5ff;"><i class="fas fa-spinner fa-spin" style="color:#7c3aed;font-size:1.6rem;"></i><div style="margin-top:10px;font-weight:800;color:#5b21b6;">جاري إعداد الملخص الإلكتروني...</div><div style="font-size:0.72rem;color:#64748b;margin-top:6px;">ملخص سلامة إلكتروني مبني على بيانات المختبر المرجعية</div></div>';
   }
-  showToast('لا يوجد تحليل SDS تلقائي — الاعتماد على الملفات المعتمدة والسجل فقط', 'info');
-  return;
+
+  await new Promise(function(r) { setTimeout(r, 380); });
+
+  var labEntry = findLabChemicalForCh02_(chemName);
+  if (resultDiv) {
+    resultDiv.innerHTML = buildCh02SmartSafetyCardHtml_(chemName, dept, labEntry);
+  }
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-flask-vial"></i> ملخص إلكتروني عن المركب';
+  }
+  showToast(labEntry ? 'تم عرض ملخص إلكتروني عن المركب' : 'تم عرض ملخص إرشادي — راجع SDS الرسمي للاعتماد', 'success');
 }
 
 function printSDS() {
@@ -4888,6 +5080,14 @@ async function renderChemSub(subId, skipSheetLoad) {
       <input type="text" id="chemAutoSearch_${subId}" placeholder="${placeholder}" style="width:100%; padding:10px 14px; border:2px solid #7c3aed; border-radius:var(--radius-sm); font-family:inherit; font-size:0.85rem; background:#faf5ff;" autocomplete="off">
       <div id="chemAutoDropdown_${subId}" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid var(--gray-200); border-radius:0 0 var(--radius-sm) var(--radius-sm); max-height:220px; overflow-y:auto; z-index:100; box-shadow:var(--shadow-lg);"></div>
     </div>`;
+    if (subId === 'ch02') {
+      html += `<div style="grid-column:span 2; display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:-2px;">
+        <button type="button" id="ch02SmartInfoBtn" class="topbar-btn ch02-smart-info-btn" onclick="generateSDSInfo()" style="background:linear-gradient(135deg,#7c3aed,#5b21b6); border:none; color:white; padding:9px 16px; font-size:0.78rem; font-weight:800; border-radius:var(--radius-sm); cursor:pointer; display:inline-flex; align-items:center; gap:8px;">
+          <i class="fas fa-flask-vial"></i> ملخص إلكتروني عن المركب
+        </button>
+        <span style="font-size:0.65rem; color:#64748b;">اختر مادة من القائمة ثم اضغط — ملخص سلامة إلكتروني مبني على بيانات المختبر المرجعية</span>
+      </div>`;
+    }
   }
 
   cfg.fields.forEach(f => {
@@ -4905,13 +5105,7 @@ async function renderChemSub(subId, skipSheetLoad) {
   html += `</div>`;
 
   if (subId === 'ch02') {
-    html += `<div style="margin-top:12px; padding-top:12px; border-top:2px dashed #7c3aed;">
-      <button id="sdsAiBtn" onclick="generateSDSInfo()" class="topbar-btn" style="background:linear-gradient(135deg,#7c3aed,#5b21b6); border:none; color:white; padding:10px 20px; font-size:0.85rem; font-weight:700; border-radius:var(--radius-sm); width:100%; cursor:pointer;">
-        <i class="fas fa-info-circle"></i> معلومات مساعدة عن المركب
-      </button>
-      <div style="font-size:0.68rem; color:var(--gray-400); text-align:center; margin-top:4px;">اختر المادة أولاً ثم اضغط لعرض بطاقة بيانات السلامة (SDS) كاملة من 15 قسم — بالعربي والإنجليزي — للمراجعة والاعتماد</div>
-      <div id="sdsAiResult" style="display:none; margin-top:12px;"></div>
-    </div>`;
+    html += `<div id="sdsAiResult" class="ch02-sds-smart-wrap" style="display:none;" aria-live="polite"></div>`;
   }
 
   html += `<div style="display:flex; gap:8px; margin-top:12px; justify-content:flex-start;">
@@ -5015,6 +5209,7 @@ async function renderChemSub(subId, skipSheetLoad) {
     }
     document.getElementById('chemForm_' + subId).style.display = 'block';
     document.getElementById('chemForm_' + subId).scrollIntoView({behavior:'smooth', block:'nearest'});
+    if (subId === 'ch02') clearCh02SdsSmartCard_();
     if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') initChemAutocomplete(subId);
     if (subId === 'ch03') {
       window.__ch03ScenarioState = { lastScenarioId: null };
@@ -5029,6 +5224,7 @@ async function renderChemSub(subId, skipSheetLoad) {
       if (!searchInput || !dropdown) return;
       searchInput.value = '';
       searchInput.oninput = function() {
+        if (sid === 'ch02') clearCh02SdsSmartCard_();
         const q = this.value.trim().toLowerCase();
         if (q.length < 1) { dropdown.style.display = 'none'; return; }
         const matches = LAB_CHEMICALS.filter(c => c.name.toLowerCase().includes(q) || c.purpose.toLowerCase().includes(q) || c.dept.includes(q));
@@ -5038,10 +5234,18 @@ async function renderChemSub(subId, skipSheetLoad) {
       };
       searchInput.onfocus = function() { if (this.value.trim().length >= 1) this.oninput(); };
       document.addEventListener('click', function(e) { if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) dropdown.style.display = 'none'; });
+      if (sid === 'ch02') {
+        var matF = document.getElementById('chemF_ch02_المادة');
+        if (matF && !matF.dataset.ch02SdsBound) {
+          matF.dataset.ch02SdsBound = '1';
+          matF.addEventListener('input', clearCh02SdsSmartCard_);
+        }
+      }
     };
     window.selectChemical = function(idx, sid) {
       const c = LAB_CHEMICALS[idx];
       if (!c) return;
+      if (sid === 'ch02') clearCh02SdsSmartCard_();
       if (sid === 'ch01') {
         document.getElementById('chemF_ch01_اسم المادة').value = c.name;
         document.getElementById('chemF_ch01_التركيز/الشكل').value = c.conc;
@@ -5156,6 +5360,7 @@ async function renderChemSub(subId, skipSheetLoad) {
     syncChemAutofillSearch(subId, row);
     document.getElementById('chemForm_' + subId).style.display = 'block';
     document.getElementById('chemForm_' + subId).scrollIntoView({behavior:'smooth', block:'nearest'});
+    if (subId === 'ch02') clearCh02SdsSmartCard_();
     if (subId === 'ch01' || subId === 'ch02' || subId === 'ch04') initChemAutocomplete(subId);
     if (subId === 'ch03') {
       window.__ch03ScenarioState = { lastScenarioId: null };
