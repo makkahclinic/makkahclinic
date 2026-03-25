@@ -40,6 +40,8 @@ const SHEET_DEFS = {
   ChemInventory:     ['id','القسم','اسم المادة','التركيز/الشكل','الموقع','الغرض من الاستخدام','الكمية الحالية','الكمية المسموح بها','تاريخ الانتهاء','SDS متوفر','المسؤول','ملاحظات','createdAt'],
   SDSIndex:          ['id','المادة','القسم','مصدر SDS / الشركة','تاريخ الإصدار','متاح ورقياً','متاح إلكترونياً','رابط الملف','آخر مراجعة','ملاحظات','createdAt'],
   SpillKitCheck:     ['id','التاريخ','الموقع','Spill Kit مكتمل','PPE متوفر','مواد امتصاص','Eyewash','Shower','Signage','الإجراء المطلوب','المسؤول','createdAt'],
+  /** سجلات متابعة مستقلة مرتبطة بفحص CH-03 (inspectionId = id سجل SpillKitCheck) */
+  CH03_FollowUps:    ['id','inspectionId','التاريخ','الموقع','المسؤول','عنوان السيناريو','مستوى الخطورة','السبب المختصر','الإجراء المطلوب','status','createdAt','scenarioId','ملاحظات','updatedAt'],
   SpillIncident:     ['id','التاريخ والوقت','الموقع/القسم','اسم المادة','الكمية التقريبية','نوع الحادث','وصف الحادث','الإجراءات الفورية','استخدام Eyewash/Shower','تصعيد','المتأثرون','السبب المحتمل','الإجراء التصحيحي','المبلّغ','مراجعة المدير','الحالة','createdAt'],
   ChemTraining:      ['id','اسم الموظف','المسمى','التدريب الأولي','التدريب السنوي','قراءة SDS','استخدام Spill Kit','استخدام Eyewash/Shower','النتيجة/الكفاءة','المقيم','ملاحظات','createdAt'],
   ChemWaste:         ['id','التاريخ','القسم','نوع النفاية','المحتوى/التركيز','الكمية','عبوة/حاوية','التخزين المؤقت','تاريخ التسليم/الإتلاف','المسؤول','ملاحظات','createdAt']
@@ -169,9 +171,14 @@ function updateRow_(ss, sheetName, rowId, data) {
           sh.getRange(i + 1, idx + 1).setValue(data[h]);
         }
       });
+      /* دائماً حدّث updatedAt إن وُجد؛ وإلا createdAt (لا تُستبدل createdAt إذا كان updatedAt موجوداً في الترويسة) */
       var tsCol = headers.indexOf('updatedAt');
-      if (tsCol < 0) tsCol = headers.indexOf('createdAt');
-      if (tsCol >= 0) sh.getRange(i + 1, tsCol + 1).setValue(now);
+      if (tsCol >= 0) {
+        sh.getRange(i + 1, tsCol + 1).setValue(now);
+      } else {
+        tsCol = headers.indexOf('createdAt');
+        if (tsCol >= 0) sh.getRange(i + 1, tsCol + 1).setValue(now);
+      }
       return { message: 'تم التحديث' };
     }
   }
