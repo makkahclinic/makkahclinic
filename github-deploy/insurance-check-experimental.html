@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>نظام مراجعة جودة الرعاية الطبية - نسخة تجريبية | مجمع مكة الطبي</title>
+  <meta name="experimental-version" content="insurance-check-experimental-v1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <style>
+    :root {
+      --primary: #1e3a5f;
+      --primary-light: #2d4a6f;
+      --gold: #c9a962;
+      --gold-light: #d4b872;
+      --success: #22c55e;
+      --error: #ef4444;
+      --warning: #eab308;
+      --info: #3b82f6;
+      --bg: #0f1a2b;
+      --card-bg: #1a2d4a;
+      --text: #ffffff;
+      --text-muted: #94a3b8;
+      --border: rgba(201, 169, 98, 0.3);
+      --exp: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Tajawal", sans-serif;
+      background: linear-gradient(135deg, var(--bg) 0%, #152238 100%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    .container { max-width: 100%; margin: 0 auto; padding: 1rem 2rem; }
+    .header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      padding: 1rem 0;
+      border-bottom: 3px solid var(--gold);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    .header-content { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .logo-section { display: flex; align-items: center; gap: 1rem; }
+    .logo-section img { width: 50px; height: 50px; border-radius: 50%; border: 2px solid var(--gold); }
+    .logo-section h1 { font-size: 1.25rem; color: var(--gold); }
+    .logo-section p { font-size: 0.85rem; color: var(--text-muted); }
+    .header-btns { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .home-btn, .logout-btn {
+      display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.25rem;
+      border-radius: 12px; text-decoration: none; font-weight: 700; transition: all 0.3s;
+      border: none; cursor: pointer; font-family: inherit;
+    }
+    .home-btn { background: var(--gold); color: var(--primary); }
+    .logout-btn { background: var(--error); color: white; }
+    .user-info { color: var(--gold); font-size: 0.9rem; }
+    .exp-badge {
+      display: inline-flex; align-items: center; gap: .45rem;
+      background: rgba(139, 92, 246, 0.14);
+      border: 1px solid rgba(139, 92, 246, 0.45);
+      color: #ddd6fe;
+      border-radius: 999px;
+      padding: .45rem .8rem;
+      font-weight: 700;
+      font-size: .82rem;
+    }
+    .notice-card, .upload-section, .report-section, .login-card, .access-denied, .stat-card {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    }
+    .main-content { padding: 1.5rem 0 2rem; }
+    .login-card, .access-denied { max-width: 560px; margin: 2rem auto; padding: 2rem; text-align: center; }
+    .login-btn {
+      display: inline-flex; align-items: center; gap: 0.75rem;
+      padding: 1rem 2rem; font-size: 1rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      color: var(--primary); border: none; border-radius: 14px; cursor: pointer;
+    }
+    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+    .stat-card { padding: 1.1rem; text-align: center; }
+    .stat-card i { font-size: 1.35rem; color: var(--gold); margin-bottom: 0.45rem; }
+    .stat-card .value { font-size: 1.75rem; font-weight: 800; color: var(--gold); }
+    .stat-card .label { font-size: 0.8rem; color: var(--text-muted); }
+    .notice-card { padding: 1rem 1.1rem; margin-bottom: 1rem; border-color: rgba(139,92,246,.45); }
+    .notice-title { display: flex; align-items: center; gap: .6rem; color: #ddd6fe; margin-bottom: .4rem; font-weight: 800; }
+    .notice-text { color: #cbd5e1; font-size: .92rem; }
+    .upload-section { padding: 1rem; margin-bottom: 1rem; }
+    .section-title { display: flex; align-items: center; gap: 0.5rem; font-size: 1.05rem; color: var(--gold); margin-bottom: .9rem; }
+    .form-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: .9rem; }
+    .field-card {
+      display: flex; align-items: center; gap: .7rem; padding: .85rem;
+      background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 12px;
+    }
+    .field-card .icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, var(--gold), #b8963a); color: #1e3a5f;
+      flex-shrink: 0;
+    }
+    .field-card label { display:block; color: var(--gold); margin-bottom: .25rem; font-size: .86rem; font-weight:700; }
+    .field-card input[type="text"], .field-card textarea, .field-card input[type="email"], .field-card input[type="password"] {
+      width: 100%; padding: .7rem .8rem; border-radius: 10px; border: 1px solid var(--border);
+      background: rgba(0,0,0,.18); color: white; font-family: inherit;
+    }
+    .field-card textarea { min-height: 96px; resize: vertical; }
+    .uploader {
+      border: 2px dashed var(--gold); border-radius: 14px; padding: 1.15rem; text-align: center;
+      background: rgba(201,169,98,0.06); cursor: pointer; transition: all .25s;
+    }
+    .uploader:hover, .uploader.drag { background: rgba(201,169,98,0.14); }
+    .uploader input { display:none; }
+    .uploader i { font-size: 2rem; color: var(--gold); margin-bottom: .45rem; display:block; }
+    .uploader h3 { font-size: .98rem; margin-bottom: .25rem; }
+    .uploader p { color: var(--text-muted); font-size: .82rem; }
+    .files-grid {
+      display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .9rem; margin-top: 1rem;
+    }
+    .file-card {
+      position: relative; background: rgba(255,255,255,0.05); border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .file-card img { width:100%; height: 135px; object-fit: cover; }
+    .excel-preview {
+      width:100%; height: 135px; display:flex; align-items:center; justify-content:center;
+      background: linear-gradient(135deg,#217346,#185c37);
+    }
+    .excel-preview i { font-size: 3rem; color: white; }
+    .file-card .meta { padding: .7rem; font-size: .8rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-card .remove {
+      position:absolute; top:8px; right:8px; width:28px; height:28px; border:none; border-radius:50%;
+      background: var(--error); color:#fff; cursor:pointer;
+    }
+    .analyze-section { display:flex; align-items:center; justify-content:center; gap: .8rem; margin: 1rem 0; flex-wrap: wrap; }
+    .analyze-btn {
+      display:inline-flex; align-items:center; gap:.5rem; padding:.85rem 1.7rem; border:none; border-radius:12px;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: var(--primary); font-weight:800; cursor:pointer;
+      box-shadow: 0 4px 12px rgba(201,169,98,.35);
+    }
+    .analyze-btn:disabled { opacity:.6; cursor:not-allowed; }
+    .status-msg { display:none; align-items:center; gap:.45rem; color: var(--gold); }
+    .status-msg i { animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+    .report-section { display:none; padding: 1rem; }
+    .report-section.show { display:block; animation: fadeIn .35s ease; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(14px);} to { opacity:1; transform: translateY(0);} }
+    .report-content {
+      background: #fff; color: #1e293b; border-radius: 14px; padding: 1.4rem 1.5rem; overflow-x:auto;
+    }
+    .report-content h1, .report-content h2, .report-content h3, .report-content h4 { color: var(--primary); }
+    .report-content table { width:100%; border-collapse:collapse; margin:.8rem 0; }
+    .report-content th, .report-content td { border:1px solid #e2e8f0; padding:.55rem .7rem; text-align:right; vertical-align:top; }
+    .report-content th { background: var(--primary); color:#fff; }
+    .report-actions { display:flex; gap:.8rem; justify-content:center; flex-wrap:wrap; margin-top: 1rem; }
+    .report-actions button {
+      display:inline-flex; align-items:center; gap:.45rem; border:none; border-radius: 10px; padding: .8rem 1.25rem; cursor:pointer; font-family:inherit; font-weight:700;
+    }
+    .btn-save { background: var(--success); color:#fff; }
+    .btn-print { background: var(--info); color:#fff; }
+    .btn-new { background: var(--warning); color: #1e293b; }
+    .validation-panel {
+      display:none; margin-top: 1rem; border:1px solid rgba(139,92,246,.35); border-radius: 14px;
+      background: linear-gradient(145deg, rgba(76,29,149,.22), rgba(30,58,95,.7)); overflow:hidden;
+    }
+    .validation-panel.show { display:block; }
+    .validation-head {
+      display:flex; align-items:center; justify-content:space-between; gap:1rem; padding: .9rem 1rem; border-bottom:1px solid rgba(255,255,255,.08);
+    }
+    .validation-head h3 { color:#ddd6fe; font-size:1rem; display:flex; align-items:center; gap:.5rem; }
+    .validation-badges { display:flex; gap:.45rem; flex-wrap:wrap; }
+    .pill {
+      padding: .32rem .7rem; border-radius:999px; font-size:.78rem; font-weight:700;
+      border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color:#fff;
+    }
+    .pill.low { background: rgba(239,68,68,.12); color:#fecaca; border-color: rgba(239,68,68,.35); }
+    .pill.medium { background: rgba(234,179,8,.12); color:#fde68a; border-color: rgba(234,179,8,.35); }
+    .pill.high { background: rgba(34,197,94,.12); color:#bbf7d0; border-color: rgba(34,197,94,.35); }
+    .validation-body { padding: 1rem; display:grid; grid-template-columns: 1.15fr .85fr; gap: 1rem; }
+    .validation-box {
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: .9rem;
+    }
+    .validation-box h4 { color: var(--gold); margin-bottom: .6rem; font-size: .92rem; }
+    .validation-list { list-style: none; display:grid; gap:.45rem; }
+    .validation-list li {
+      background: rgba(0,0,0,.18); border-radius: 10px; padding: .6rem .7rem; color:#e2e8f0; font-size: .88rem;
+    }
+    .validation-list li strong { color: #fff; }
+    .quality-grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:.65rem; }
+    .quality-item {
+      background: rgba(0,0,0,.18); border-radius: 12px; padding: .8rem; text-align:center;
+    }
+    .quality-item .q-label { color:#cbd5e1; font-size:.82rem; }
+    .quality-item .q-value { color:#fff; font-size:1.35rem; font-weight:800; margin-top:.2rem; }
+    .quality-item .q-note { color:#94a3b8; font-size:.75rem; margin-top:.2rem; }
+    .quality-item.warn .q-value { color:#fde68a; }
+    .quality-item.bad .q-value { color:#fecaca; }
+    .quality-item.good .q-value { color:#bbf7d0; }
+    .validation-foot {
+      padding: .9rem 1rem; border-top:1px solid rgba(255,255,255,.08); color:#cbd5e1; font-size: .84rem;
+      display:flex; align-items:center; gap:.6rem;
+    }
+    .hidden { display:none !important; }
+    @media (max-width: 900px) {
+      .form-grid, .validation-body { grid-template-columns: 1fr; }
+      .container { padding: .9rem 1rem; }
+    }
+  </style>
+  <link rel="icon" type="image/jpeg" href="https://www.m2020m.org/logo2026.jpg">
+  <link rel="apple-touch-icon" href="https://www.m2020m.org/logo2026.jpg">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <div class="logo-section">
+          <img src="https://www.m2020m.org/logo2026.jpg" alt="شعار المجمع">
+          <div>
+            <h1>نظام مراجعة جودة الرعاية الطبية</h1>
+            <p>نسخة تجريبية موازية — مجمع مكة الطبي بالزاهر</p>
+          </div>
+        </div>
+        <div class="header-btns">
+          <span class="exp-badge"><i class="fas fa-flask"></i> Experimental</span>
+          <span class="user-info" id="userInfo"></span>
+          <a class="home-btn" href="https://www.m2020m.org/portal.html"><i class="fas fa-home"></i><span>الرئيسية</span></a>
+          <button class="logout-btn hidden" id="logoutBtn" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>خروج</span></button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="container">
+      <div class="login-card" id="loginScreen">
+        <i class="fas fa-user-shield" style="font-size:4rem;color:var(--gold);margin-bottom:1rem;"></i>
+        <h2 style="color:var(--gold);margin-bottom:.5rem;">تسجيل الدخول مطلوب</h2>
+        <p style="color:var(--text-muted);margin-bottom:1rem;">هذه النسخة التجريبية متاحة فقط للموظفين المصرح لهم</p>
+        <form id="emailLoginForm" style="display:flex; flex-direction:column; gap:12px; width:100%;" onsubmit="event.preventDefault(); loginWithEmail();" autocomplete="on">
+          <input type="email" id="loginEmail" placeholder="البريد الإلكتروني" autocomplete="email">
+          <input type="password" id="loginPassword" placeholder="كلمة المرور" autocomplete="current-password">
+          <button type="submit" class="login-btn" style="background:linear-gradient(135deg, #10b981, #059669);"><i class="fas fa-sign-in-alt"></i>تسجيل الدخول</button>
+          <button type="button" class="login-btn" onclick="registerWithEmail()" style="background:linear-gradient(135deg, #3b82f6, #2563eb);color:#fff;"><i class="fas fa-user-plus"></i>تسجيل جديد</button>
+          <div style="display:flex; align-items:center; gap:10px; margin:10px 0; color:#94a3b8;"><hr style="flex:1; border:none; border-top:1px solid #334155;"><span>أو</span><hr style="flex:1; border:none; border-top:1px solid #334155;"></div>
+          <button type="button" class="login-btn" onclick="loginWithGoogle()"><i class="fab fa-google"></i>تسجيل الدخول بـ Google</button>
+        </form>
+      </div>
+
+      <div class="access-denied hidden" id="accessDenied">
+        <i class="fas fa-ban" style="font-size:4rem;color:var(--error);margin-bottom:1rem;"></i>
+        <h2 style="color:var(--error);margin-bottom:.5rem;">غير مصرح لك بالوصول</h2>
+        <p style="color:var(--text-muted);">عذرًا، هذه النسخة التجريبية تحتاج صلاحية استخدام التأمين.</p>
+        <button class="login-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i>تسجيل الخروج</button>
+      </div>
+
+      <div class="hidden" id="mainApp">
+        <div class="stats-bar">
+          <div class="stat-card"><i class="fas fa-file-medical"></i><div class="value" id="todayCases">0</div><div class="label">حالاتي اليوم</div></div>
+          <div class="stat-card"><i class="fas fa-chart-line"></i><div class="value" id="totalCases">0</div><div class="label">إجمالي حالاتي</div></div>
+          <div class="stat-card"><i class="fas fa-user-md"></i><div class="value" id="totalDoctors">0</div><div class="label">الأطباء</div></div>
+          <div class="stat-card"><i class="fas fa-calendar-day"></i><div class="value" id="allTodayCases">0</div><div class="label">حالات اليوم</div></div>
+        </div>
+
+        <div class="notice-card">
+          <div class="notice-title"><i class="fas fa-circle-info"></i><span>هذه نسخة تجريبية موازية</span></div>
+          <div class="notice-text">تم إنشاؤها كمسار عمل منفصل عن الصفحة الأساسية. الهدف الآن: نسخ السلوك الحالي مع إضافة طبقة تحقق جودة البيانات قبل التحليل حتى لا ننزل عن المستوى الحالي.</div>
+        </div>
+
+        <div class="upload-section">
+          <h3 class="section-title"><i class="fas fa-flask"></i>بيئة التحليل التجريبية</h3>
+          <div class="form-grid">
+            <div style="display:grid; gap:.9rem;">
+              <div class="field-card">
+                <div class="icon"><i class="fas fa-user-md"></i></div>
+                <div style="flex:1;">
+                  <label for="doctorName">الطبيب المعالج</label>
+                  <input id="doctorName" type="text" placeholder="اكتب اسم الطبيب أو الصقه كما في الملف" />
+                </div>
+              </div>
+              <div class="field-card">
+                <div class="icon"><i class="fas fa-edit"></i></div>
+                <div style="flex:1;">
+                  <label for="manualCaseInput">إدخال يدوي إضافي</label>
+                  <textarea id="manualCaseInput" placeholder="يمكنك كتابة الحالة أو الملاحظات أو سياق سريري إضافي هنا..."></textarea>
+                </div>
+              </div>
+            </div>
+            <label class="uploader" id="dropZone" for="fileInput">
+              <input id="fileInput" type="file" multiple accept="image/*,application/pdf,.xlsx,.xls,.csv" />
+              <i class="fas fa-cloud-upload-alt"></i>
+              <h3>رفع الملفات</h3>
+              <p>صور، PDF، Excel، CSV</p>
+              <p style="margin-top:.35rem;color:#cbd5e1;">نفس السلوك الحالي مع طبقة فحص جودة إضافية</p>
+            </label>
+          </div>
+
+          <div id="validationPanel" class="validation-panel" aria-live="polite">
+            <div class="validation-head">
+              <h3><i class="fas fa-shield-heart"></i> فحص جودة البيانات قبل التحليل</h3>
+              <div class="validation-badges">
+                <span class="pill" id="confidenceBadge">لم يتم الفحص</span>
+                <span class="pill" id="filesBadge">0 ملفات</span>
+              </div>
+            </div>
+            <div class="validation-body">
+              <div class="validation-box">
+                <h4>ملاحظات الجودة المكتشفة</h4>
+                <ul class="validation-list" id="validationIssues">
+                  <li>لم يتم تحليل الملفات بعد.</li>
+                </ul>
+              </div>
+              <div class="validation-box">
+                <h4>مؤشرات سريعة</h4>
+                <div class="quality-grid">
+                  <div class="quality-item" id="qi-claims"><div class="q-label">الحالات</div><div class="q-value" id="qClaims">0</div><div class="q-note">Claims</div></div>
+                  <div class="quality-item" id="qi-rows"><div class="q-label">الصفوف</div><div class="q-value" id="qRows">0</div><div class="q-note">Rows</div></div>
+                  <div class="quality-item" id="qi-duplicates"><div class="q-label">التكرارات</div><div class="q-value" id="qDuplicates">0</div><div class="q-note">Duplicate Keys</div></div>
+                  <div class="quality-item" id="qi-missing"><div class="q-label">النواقص</div><div class="q-value" id="qMissing">0</div><div class="q-note">Missing Fields</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="validation-foot"><i class="fas fa-lightbulb"></i><span id="validationSummary">عند رفع ملف Excel سنحسب جودة البيانات ونوضح إن كانت النتيجة تصلح لحكم أولي فقط أو أقرب لقرار موثوق.</span></div>
+          </div>
+
+          <div id="filesGrid" class="files-grid"></div>
+        </div>
+
+        <div class="analyze-section">
+          <button class="analyze-btn" id="analyzeBtn" disabled><i class="fas fa-microscope"></i><span>تشغيل التحليل التجريبي</span></button>
+          <div class="status-msg" id="statusMsg"><i class="fas fa-spinner"></i><span id="statusText">جاري التحليل...</span></div>
+        </div>
+
+        <div class="report-section" id="reportSection">
+          <h3 class="section-title"><i class="fas fa-file-waveform"></i>نتيجة النسخة التجريبية</h3>
+          <div class="report-content" id="reportContent"></div>
+          <div class="report-actions">
+            <button class="btn-save" onclick="saveAndLog()"><i class="fas fa-save"></i> حفظ وتسجيل</button>
+            <button class="btn-print" onclick="printAndTrack()"><i class="fas fa-print"></i> طباعة</button>
+            <button class="btn-new" onclick="resetAnalysis()"><i class="fas fa-rotate-left"></i> تحليل جديد</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
+  authDomain: "insurance-check-6cec9.firebaseapp.com",
+  projectId: "insurance-check-6cec9"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxm_hI1j-4GTd7rttxGrCH49d-xdtinlW9MKt_Otbc09YRrzTIXbcyDcFUv7g2OrF4Y-A/exec';
+const API_URL = '';
+const filesState = [];
+let currentUser = null;
+let originalReport = '';
+let lastReportStats = null;
+let isAnalyzing = false;
+
+const loginScreen = document.getElementById('loginScreen');
+const accessDenied = document.getElementById('accessDenied');
+const mainApp = document.getElementById('mainApp');
+const userInfo = document.getElementById('userInfo');
+const logoutBtn = document.getElementById('logoutBtn');
+const doctorNameInput = document.getElementById('doctorName');
+const fileInput = document.getElementById('fileInput');
+const dropZone = document.getElementById('dropZone');
+const filesGrid = document.getElementById('filesGrid');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const statusMsg = document.getElementById('statusMsg');
+const statusText = document.getElementById('statusText');
+const reportSection = document.getElementById('reportSection');
+const reportContent = document.getElementById('reportContent');
+
+const MEDICAL_COLUMN_MAPPING = {
+  claimNumber: ['claim number','claim no','claim se no','claim seq no','claim'],
+  patientFile: ['patient file no','patient file','mrn','file no','patient no'],
+  invoiceNumber: ['invoice number','invoice no'],
+  claimType: ['claim type'],
+  chiefComplaint: ['chief complaint','complaint'],
+  icd1: ['icd-1','icd 1','icd1'],
+  icd2: ['icd-2','icd 2','icd2'],
+  icd3: ['icd-3','icd 3','icd3'],
+  icd4: ['icd-4','icd 4','icd4'],
+  serviceCode: ['service code','servicecode'],
+  serviceDescription: ['service description','service desc'],
+  weight: ['weight'],
+  height: ['height'],
+  pulse: ['pulse'],
+  temperature: ['temperature','temp'],
+  bloodPressure: ['blood pressure','bp'],
+  netAmount: ['net amount']
+};
+
+function normalizeText(v) {
+  return String(v || '')
+    .replace(/_x000D_/gi, ' ')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[_\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function sanitizeText(text) {
+  if (typeof DOMPurify !== 'undefined') {
+    return DOMPurify.sanitize(String(text), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+  }
+  return String(text).replace(/[<>&"']/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[s]));
+}
+
+function showLoginScreen() {
+  loginScreen.classList.remove('hidden');
+  accessDenied.classList.add('hidden');
+  mainApp.classList.add('hidden');
+  logoutBtn.classList.add('hidden');
+  userInfo.textContent = '';
+}
+function showAccessDenied() {
+  loginScreen.classList.add('hidden');
+  accessDenied.classList.remove('hidden');
+  mainApp.classList.add('hidden');
+  logoutBtn.classList.remove('hidden');
+}
+function showMainApp() {
+  loginScreen.classList.add('hidden');
+  accessDenied.classList.add('hidden');
+  mainApp.classList.remove('hidden');
+  logoutBtn.classList.remove('hidden');
+  userInfo.textContent = '👤 ' + (currentUser?.name || '');
+}
+
+function evaluatePermission(userData) {
+  const role = userData.role || '';
+  const permissions = userData.permissions || {};
+  const status = userData.status || 'active';
+  if (status === 'suspended') return false;
+  if (role === 'owner' || role === 'admin') return true;
+  if (permissions.insurance === true) return true;
+  return null;
+}
+
+async function checkPermission(uid, email) {
+  try {
+    const uidDoc = await db.collection('staff_roles').doc(uid).get();
+    if (uidDoc.exists) {
+      const r = evaluatePermission(uidDoc.data());
+      if (r !== null) return r;
+    }
+    const snapshot = await db.collection('staff_roles').where('email', '==', email.toLowerCase()).get();
+    if (!snapshot.empty) {
+      let best = false;
+      for (const doc of snapshot.docs) {
+        const r = evaluatePermission(doc.data());
+        if (r === true) { best = true; break; }
+      }
+      return best;
+    }
+    return false;
+  } catch (e) {
+    console.error('permission error', e);
+    return false;
+  }
+}
+
+auth.onAuthStateChanged(async (user) => {
+  if (!user) return showLoginScreen();
+  const ok = await checkPermission(user.uid, user.email);
+  if (!ok) return showAccessDenied();
+  currentUser = { email: user.email, name: user.displayName || user.email.split('@')[0], photo: user.photoURL };
+  showMainApp();
+  loadStats();
+});
+
+function loginWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(err => showCustomAlert('حدث خطأ أثناء تسجيل الدخول', 'error'));
+}
+function loginWithEmail() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!email || !password) return showCustomAlert('الرجاء إدخال البريد وكلمة المرور', 'warning');
+  auth.signInWithEmailAndPassword(email, password).catch(err => {
+    if (err.code === 'auth/user-not-found') return showCustomAlert('المستخدم غير موجود', 'warning');
+    if (err.code === 'auth/wrong-password') return showCustomAlert('كلمة المرور غير صحيحة', 'error');
+    showCustomAlert('خطأ في تسجيل الدخول: ' + err.message, 'error');
+  });
+}
+function registerWithEmail() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!email || !password) return showCustomAlert('الرجاء إدخال البريد وكلمة المرور', 'warning');
+  if (password.length < 6) return showCustomAlert('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'warning');
+  auth.createUserWithEmailAndPassword(email, password)
+    .then(() => showCustomAlert('تم التسجيل بنجاح! سيتم التحقق من صلاحياتك...', 'success'))
+    .catch(err => showCustomAlert('خطأ في التسجيل: ' + err.message, 'error'));
+}
+function logout() { auth.signOut(); }
+
+async function fetchWithRetry(url, options, maxRetries = 4) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (response.ok || response.status < 500) return response;
+      lastError = new Error('HTTP ' + response.status);
+    } catch (err) {
+      lastError = err;
+    }
+    if (attempt < maxRetries) await new Promise(r => setTimeout(r, Math.min(5000 * attempt, 15000)));
+  }
+  throw lastError;
+}
+
+async function loadStats() {
+  try {
+    const response = await fetchWithRetry(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getDashboardStats', email: currentUser.email })
+    });
+    const data = await response.json();
+    if (data.success && data.stats) {
+      document.getElementById('todayCases').textContent = data.stats.userTodayCases || 0;
+      document.getElementById('totalCases').textContent = data.stats.userCases || 0;
+      document.getElementById('totalDoctors').textContent = data.stats.totalDoctors || 0;
+      document.getElementById('allTodayCases').textContent = data.stats.todayCases || 0;
+    }
+  } catch (e) { console.error(e); }
+}
+
+function showCustomAlert(message, type = 'info') {
+  const colors = { success: '#22c55e', error: '#ef4444', warning: '#eab308', info: '#3b82f6' };
+  const bg = colors[type] || colors.info;
+  const wrap = document.createElement('div');
+  wrap.style.position = 'fixed';
+  wrap.style.inset = '0';
+  wrap.style.background = 'rgba(0,0,0,.55)';
+  wrap.style.display = 'flex';
+  wrap.style.alignItems = 'center';
+  wrap.style.justifyContent = 'center';
+  wrap.style.zIndex = '99999';
+  wrap.innerHTML = '<div style="background:linear-gradient(145deg,#1a3a5c,#0f2744);border:2px solid ' + bg + ';padding:1.4rem 1.2rem;border-radius:18px;max-width:420px;width:92%;text-align:center;color:#fff;"><div style="font-size:1.15rem;margin-bottom:.9rem;font-weight:800;">' + sanitizeText(message) + '</div><button style="background:' + bg + ';color:#fff;border:none;border-radius:10px;padding:.7rem 1.2rem;font-weight:800;cursor:pointer;">حسنًا</button></div>';
+  document.body.appendChild(wrap);
+  wrap.querySelector('button').onclick = () => wrap.remove();
+}
+
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+  dropZone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); });
+});
+dropZone.addEventListener('dragenter', () => dropZone.classList.add('drag'));
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => {
+  dropZone.classList.remove('drag');
+  handleFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', () => handleFiles(Array.from(fileInput.files)));
+document.getElementById('manualCaseInput').addEventListener('input', updateAnalyzeState);
+doctorNameInput.addEventListener('input', updateAnalyzeState);
+
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+}
+
+function arrayBufferToBase64Safe(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  return btoa(binary);
+}
+
+async function handleFiles(files) {
+  statusText.textContent = 'جاري معالجة الملفات...';
+  statusMsg.style.display = 'flex';
+  for (const f of files) {
+    const ext = f.name.split('.').pop().toLowerCase();
+    if (f.type === 'application/pdf') {
+      try {
+        const arrayBuffer = await f.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
+        const maxPages = Math.min(pdf.numPages, 15);
+        for (let i = 1; i <= maxPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          await page.render({ canvasContext: context, viewport }).promise;
+          filesState.push({ name: `${f.name} - صفحة ${i}`, mimeType: 'image/jpeg', data: canvas.toDataURL('image/jpeg', 0.82), isExcel: false });
+        }
+      } catch (err) {
+        console.error(err);
+        showCustomAlert('خطأ في معالجة PDF: ' + err.message, 'error');
+      }
+    } else if (['xlsx','xls','csv'].includes(ext)) {
+      try {
+        const arrayBuffer = await f.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const base64Excel = arrayBufferToBase64Safe(arrayBuffer);
+        let allData = [];
+        workbook.SheetNames.forEach(sheetName => {
+          const sheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+          const cleanedData = jsonData.map(row => row.map(cell => typeof cell === 'string' ? cell.replace(/[\r\n]+/g, ' ').trim() : cell));
+          allData.push({ sheet: sheetName, data: cleanedData });
+        });
+        const textContent = allData.map(s => `=== ${s.sheet} ===\n` + s.data.map(row => row.map(cell => cell ?? '').join(' | ')).join('\n')).join('\n\n');
+        const quality = analyzeExcelData(allData);
+        filesState.push({
+          name: f.name,
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          data: base64Excel,
+          textContent,
+          isExcel: true,
+          parsedSheets: allData,
+          quality
+        });
+      } catch (err) {
+        console.error(err);
+        showCustomAlert('خطأ في معالجة Excel: ' + err.message, 'error');
+      }
+    } else {
+      const base64Url = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(f);
+      });
+      filesState.push({ name: f.name, mimeType: f.type || 'image/jpeg', data: base64Url, isExcel: false });
+    }
+  }
+  renderFiles();
+  refreshValidationPanel();
+  updateAnalyzeState();
+  statusMsg.style.display = 'none';
+  fileInput.value = '';
+}
+
+function renderFiles() {
+  filesGrid.innerHTML = '';
+  filesState.forEach((f, i) => {
+    const el = document.createElement('div');
+    el.className = 'file-card';
+    el.innerHTML = f.isExcel
+      ? `<button class="remove" data-index="${i}"><i class="fas fa-times"></i></button><div class="excel-preview"><i class="fas fa-file-excel"></i></div><div class="meta">${sanitizeText(f.name)}</div>`
+      : `<button class="remove" data-index="${i}"><i class="fas fa-times"></i></button><img src="${f.data}" alt="${sanitizeText(f.name)}"><div class="meta">${sanitizeText(f.name)}</div>`;
+    filesGrid.appendChild(el);
+  });
+  filesGrid.querySelectorAll('.remove').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const i = +e.currentTarget.dataset.index;
+      filesState.splice(i, 1);
+      renderFiles();
+      refreshValidationPanel();
+      updateAnalyzeState();
+    });
+  });
+}
+
+function mapHeaders(headers) {
+  const result = {};
+  const normalizedHeaders = headers.map(h => normalizeText(h));
+  Object.entries(MEDICAL_COLUMN_MAPPING).forEach(([field, aliases]) => {
+    const aliasSet = aliases.map(a => normalizeText(a));
+    const idx = normalizedHeaders.findIndex(h => aliasSet.includes(h));
+    if (idx >= 0) result[field] = idx;
+  });
+  return result;
+}
+
+function analyzeExcelData(allData) {
+  const quality = {
+    sheets: allData.length,
+    rows: 0,
+    claims: 0,
+    duplicates: 0,
+    missing: 0,
+    confidence: 'medium',
+    issues: [],
+    mappedFields: {},
+    duplicateHeaders: [],
+    missingImportantFields: []
+  };
+  const claimKeys = new Set();
+  const duplicateClaimKeys = new Set();
+  const globalHeaders = [];
+
+  allData.forEach(sheetObj => {
+    const rows = sheetObj.data || [];
+    if (!rows.length) return;
+    quality.rows += Math.max(rows.length - 1, 0);
+    const headerRow = rows[0] || [];
+    const headerNorm = headerRow.map(h => normalizeText(h));
+    globalHeaders.push(...headerNorm);
+    const duplicates = headerNorm.filter((h, idx) => h && headerNorm.indexOf(h) !== idx);
+    duplicates.forEach(d => { if (!quality.duplicateHeaders.includes(d)) quality.duplicateHeaders.push(d); });
+    const mapping = mapHeaders(headerRow);
+    Object.assign(quality.mappedFields, mapping);
+
+    const important = ['claimNumber','patientFile','invoiceNumber','serviceCode','serviceDescription'];
+    important.forEach(key => {
+      if (mapping[key] === undefined && !quality.missingImportantFields.includes(key)) quality.missingImportantFields.push(key);
+    });
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i] || [];
+      if (!row.some(Boolean)) continue;
+      const claim = mapping.claimNumber !== undefined ? normalizeText(row[mapping.claimNumber]) : '';
+      const service = mapping.serviceCode !== undefined ? normalizeText(row[mapping.serviceCode]) : '';
+      const invoice = mapping.invoiceNumber !== undefined ? normalizeText(row[mapping.invoiceNumber]) : '';
+      const composite = [claim, service, invoice].join('|');
+      if (claim) {
+        quality.claims += claimKeys.has(claim) ? 0 : 1;
+        claimKeys.add(claim);
+      }
+      if (claim && service && invoice) {
+        if (duplicateClaimKeys.has(composite)) {
+          quality.duplicates += 1;
+        } else {
+          duplicateClaimKeys.add(composite);
+        }
+      }
+
+      const fieldsToCheck = ['chiefComplaint','icd1','serviceCode','serviceDescription'];
+      fieldsToCheck.forEach(field => {
+        const idx = mapping[field];
+        if (idx !== undefined && !String(row[idx] ?? '').trim()) quality.missing += 1;
+      });
+
+      const clinicalCheck = ['weight','height','pulse','temperature','bloodPressure'];
+      const clinicalFilled = clinicalCheck.filter(field => {
+        const idx = mapping[field];
+        return idx !== undefined && String(row[idx] ?? '').trim();
+      }).length;
+      if (clinicalCheck.some(f => mapping[f] !== undefined) && clinicalFilled < 2) quality.missing += 1;
+    }
+  });
+
+  if (quality.duplicateHeaders.length) {
+    quality.issues.push(`تكرار أعمدة محتمل: ${quality.duplicateHeaders.slice(0,4).join('، ')}`);
+  }
+  if (quality.missingImportantFields.length) {
+    quality.issues.push(`حقول مهمة غير ظاهرة بوضوح: ${quality.missingImportantFields.join('، ')}`);
+  }
+  if (quality.duplicates > 0) {
+    quality.issues.push(`يوجد ${quality.duplicates} صف/مفتاح خدمة متكرر ويحتاج تجميع Claim-aware قبل الحكم النهائي.`);
+  }
+  if (quality.missing > 0) {
+    quality.issues.push(`هناك ${quality.missing} موضع نقص في البيانات الأساسية أو السريرية.`);
+  }
+  if (quality.claims === 0 && quality.rows > 0) {
+    quality.issues.push('تعذر التعرّف بوضوح على claim number، لذلك الثقة في التجميع منخفضة.');
+  }
+
+  const score = (() => {
+    let s = 100;
+    s -= quality.duplicateHeaders.length * 12;
+    s -= quality.missingImportantFields.length * 14;
+    s -= Math.min(quality.duplicates * 4, 25);
+    s -= Math.min(quality.missing * 2, 30);
+    if (quality.claims === 0 && quality.rows > 0) s -= 25;
+    return Math.max(5, Math.min(100, s));
+  })();
+
+  quality.score = score;
+  if (score >= 80) quality.confidence = 'high';
+  else if (score >= 55) quality.confidence = 'medium';
+  else quality.confidence = 'low';
+
+  if (!quality.issues.length) {
+    quality.issues.push('الملف يبدو منظمًا جيدًا كبنية أولية، ومع ذلك يبقى الحكم النهائي بحاجة لربطه بمنطق القرار والتوثيق السريري.');
+  }
+  return quality;
+}
+
+function refreshValidationPanel() {
+  const panel = document.getElementById('validationPanel');
+  const issuesEl = document.getElementById('validationIssues');
+  const confidenceBadge = document.getElementById('confidenceBadge');
+  const filesBadge = document.getElementById('filesBadge');
+  const qClaims = document.getElementById('qClaims');
+  const qRows = document.getElementById('qRows');
+  const qDuplicates = document.getElementById('qDuplicates');
+  const qMissing = document.getElementById('qMissing');
+  const summary = document.getElementById('validationSummary');
+
+  const excelFiles = filesState.filter(f => f.isExcel && f.quality);
+  if (!filesState.length) {
+    panel.classList.remove('show');
+    return;
+  }
+  panel.classList.add('show');
+  filesBadge.textContent = `${filesState.length} ملفات`;
+
+  if (!excelFiles.length) {
+    confidenceBadge.textContent = 'فحص محدود';
+    confidenceBadge.className = 'pill medium';
+    qClaims.textContent = '0';
+    qRows.textContent = '0';
+    qDuplicates.textContent = '0';
+    qMissing.textContent = '0';
+    issuesEl.innerHTML = '<li>لا يوجد ملف Excel بعد، لذا الفحص الحالي يقتصر على عدد الملفات فقط.</li>';
+    summary.textContent = 'يمكن تحليل الصور وPDF، لكن قوة تقرير التأمين ترتفع أكثر عند وجود ملف مطالبات منظم وقابل للتجميع.';
+    return;
+  }
+
+  const agg = excelFiles.reduce((acc, f) => {
+    const q = f.quality;
+    acc.claims += q.claims || 0;
+    acc.rows += q.rows || 0;
+    acc.duplicates += q.duplicates || 0;
+    acc.missing += q.missing || 0;
+    acc.scores.push(q.score || 0);
+    acc.issues.push(...q.issues);
+    return acc;
+  }, { claims:0, rows:0, duplicates:0, missing:0, scores:[], issues:[] });
+
+  const avgScore = Math.round(agg.scores.reduce((a,b) => a + b, 0) / Math.max(agg.scores.length, 1));
+  let level = 'medium';
+  if (avgScore >= 80) level = 'high';
+  else if (avgScore < 55) level = 'low';
+
+  confidenceBadge.textContent = level === 'high' ? `ثقة مرتفعة ${avgScore}%` : level === 'medium' ? `ثقة متوسطة ${avgScore}%` : `ثقة منخفضة ${avgScore}%`;
+  confidenceBadge.className = `pill ${level}`;
+  qClaims.textContent = String(agg.claims);
+  qRows.textContent = String(agg.rows);
+  qDuplicates.textContent = String(agg.duplicates);
+  qMissing.textContent = String(agg.missing);
+
+  document.getElementById('qi-duplicates').className = 'quality-item ' + (agg.duplicates ? 'warn' : 'good');
+  document.getElementById('qi-missing').className = 'quality-item ' + (agg.missing > 5 ? 'bad' : agg.missing ? 'warn' : 'good');
+  document.getElementById('qi-claims').className = 'quality-item ' + (agg.claims ? 'good' : 'bad');
+  document.getElementById('qi-rows').className = 'quality-item ' + (agg.rows ? 'good' : 'bad');
+
+  const uniqueIssues = [...new Set(agg.issues)].slice(0, 8);
+  issuesEl.innerHTML = uniqueIssues.map(issue => `<li><strong>ملاحظة:</strong> ${sanitizeText(issue)}</li>`).join('');
+  summary.textContent = level === 'high'
+    ? 'الملف منظم نسبيًا، لذا يمكن التعامل مع التقرير كنقطة بداية قوية، مع بقاء الحاجة للمراجعة السريرية والسياساتية.'
+    : level === 'medium'
+      ? 'الملف قابل للتحليل الأولي، لكن هناك نواقص أو التباسات تجعل القرار أقرب إلى توصية مفسّرة لا حكم نهائي.'
+      : 'هذه البنية تحتاج تنظيف وتجميع أفضل قبل الاعتماد على المخرجات. سنظل نحللها، لكن سنُظهر أن الثقة منخفضة.';
+}
+
+function updateAnalyzeState() {
+  const manualText = document.getElementById('manualCaseInput').value.trim();
+  analyzeBtn.disabled = !(doctorNameInput.value.trim() && (filesState.length > 0 || manualText.length > 0));
+}
+
+function buildExperimentalPreface() {
+  const excelFiles = filesState.filter(f => f.isExcel && f.quality);
+  if (!excelFiles.length) {
+    return `<div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;padding:1rem;margin-bottom:1rem;color:#334155;"><strong>تنبيه تجريبي:</strong> لا يوجد ملف Excel منظم ضمن المدخلات، لذلك التقرير أدناه سيكون محدودًا أكثر ويعتمد على المحتوى المرفوع أو الإدخال اليدوي.</div>`;
+  }
+  const avg = Math.round(excelFiles.reduce((a,f) => a + (f.quality.score || 0), 0) / excelFiles.length);
+  const label = avg >= 80 ? 'ثقة مرتفعة' : avg >= 55 ? 'ثقة متوسطة' : 'ثقة منخفضة';
+  const color = avg >= 80 ? '#166534' : avg >= 55 ? '#92400e' : '#991b1b';
+  const bg = avg >= 80 ? '#dcfce7' : avg >= 55 ? '#fef3c7' : '#fee2e2';
+  const notes = excelFiles.flatMap(f => f.quality.issues).slice(0,4).map(n => `<li>${sanitizeText(n)}</li>`).join('');
+  return `
+    <div style="background:${bg};border:1px solid ${color};border-radius:12px;padding:1rem;margin-bottom:1rem;color:${color};">
+      <h3 style="margin:0 0 .5rem;">طبقة التحقق التجريبية قبل التقرير</h3>
+      <p style="margin:0 0 .5rem;"><strong>مستوى الثقة في بنية البيانات:</strong> ${label} (${avg}%)</p>
+      <p style="margin:0 0 .5rem;">هذا التقييم يخص جودة الملف نفسه: التكرارات، وضوح الأعمدة، وجود حقول أساسية، وإمكانية تجميع المطالبات بشكل صحيح.</p>
+      <ul style="margin:.4rem 1rem 0 0;">${notes}</ul>
+    </div>`;
+}
+
+function localExperimentalReport() {
+  const doctorName = sanitizeText(doctorNameInput.value.trim() || 'غير محدد');
+  const manual = sanitizeText(document.getElementById('manualCaseInput').value.trim());
+  const excelFiles = filesState.filter(f => f.isExcel && f.quality);
+  const images = filesState.filter(f => !f.isExcel).length;
+  let totalClaims = 0, totalRows = 0, totalDup = 0, totalMissing = 0;
+  excelFiles.forEach(f => {
+    totalClaims += f.quality.claims || 0;
+    totalRows += f.quality.rows || 0;
+    totalDup += f.quality.duplicates || 0;
+    totalMissing += f.quality.missing || 0;
+  });
+  const preface = buildExperimentalPreface();
+  return `
+    <div>
+      <h1 style="text-align:center;border-bottom:3px solid #c9a962;padding-bottom:.8rem;margin-bottom:1rem;">تقرير تجريبي أولي — مراجعة جودة الرعاية الطبية</h1>
+      ${preface}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:.75rem;margin-bottom:1rem;">
+        <div style="background:#f8fafc;border-radius:12px;padding:.85rem;border:1px solid #e2e8f0;"><strong>الطبيب المعالج:</strong><br>${doctorName}</div>
+        <div style="background:#f8fafc;border-radius:12px;padding:.85rem;border:1px solid #e2e8f0;"><strong>عدد المطالبات:</strong><br>${totalClaims}</div>
+        <div style="background:#f8fafc;border-radius:12px;padding:.85rem;border:1px solid #e2e8f0;"><strong>عدد الصفوف:</strong><br>${totalRows}</div>
+        <div style="background:#f8fafc;border-radius:12px;padding:.85rem;border:1px solid #e2e8f0;"><strong>الصور/الصفحات المرفوعة:</strong><br>${images}</div>
+      </div>
+      <h3>قراءة أولية للبيئة</h3>
+      <table>
+        <thead><tr><th>البند</th><th>الحالة</th><th>الملاحظة</th></tr></thead>
+        <tbody>
+          <tr><td>وضوح الأعمدة</td><td>${excelFiles.length ? 'تم الرصد' : 'غير متاح'}</td><td>${excelFiles.length ? 'جرت محاولة للتعرّف على claim / patient / service / invoice / ICD / vitals' : 'لا يوجد Excel للحكم'}</td></tr>
+          <tr><td>التكرارات</td><td>${totalDup ? 'موجودة' : 'محدودة أو غير ظاهرة'}</td><td>${totalDup ? `تم اكتشاف ${totalDup} تكرارات على مستوى claim/service/invoice` : 'لا توجد تكرارات واضحة ضمن المفاتيح المركبة'}</td></tr>
+          <tr><td>النواقص</td><td>${totalMissing ? 'تحتاج انتباه' : 'ضمن المقبول مبدئيًا'}</td><td>${totalMissing ? `تم رصد ${totalMissing} موضع نقص في بيانات مهمة أو سياق سريري` : 'لا توجد نواقص مؤثرة كثيرة وفق الفحص الأولي'}</td></tr>
+          <tr><td>قابلية الاعتماد</td><td>${excelFiles.length ? 'أولي' : 'منخفض'}</td><td>هذه النسخة لا تتظاهر بحكم نهائي؛ هي تعطي قراءة أكثر صدقًا لحالة البيانات قبل الاستنتاج.</td></tr>
+        </tbody>
+      </table>
+      <h3>التوصية التجريبية الحالية</h3>
+      <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:1rem;color:#312e81;">
+        نوصي في هذه المرحلة باستخدام التقرير كـ <strong>تقييم أولي موجّه</strong>، وليس كقرار نهائي، ما لم تتحسن طبقة التحقق وربط policy/rules لاحقًا.
+      </div>
+      ${manual ? `<h3>إدخال يدوي مرفق</h3><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1rem;white-space:pre-wrap;">${manual}</div>` : ''}
+      <h3>الخطوة التالية المقترحة</h3>
+      <ul style="margin-right:1.1rem;line-height:1.9;">
+        <li>تجميع السطور على مستوى Claim بدل عدّ كل خدمة كحالة مستقلة.</li>
+        <li>إظهار الحقول الناقصة بوضوح داخل التقرير النهائي بدل إخفائها في الخلفية.</li>
+        <li>إضافة طبقة قرار بسيطة تربط النتائج بسياساتك بدل الاعتماد على الصياغة فقط.</li>
+      </ul>
+    </div>`;
+}
+
+analyzeBtn.addEventListener('click', async () => {
+  if (isAnalyzing) return;
+  if (!doctorNameInput.value.trim()) return showCustomAlert('يرجى إدخال اسم الطبيب المعالج', 'warning');
+  isAnalyzing = true;
+  analyzeBtn.disabled = true;
+  statusMsg.style.display = 'flex';
+  statusText.textContent = 'جاري توليد التقرير التجريبي...';
+  try {
+    const html = localExperimentalReport();
+    originalReport = html;
+    reportContent.innerHTML = html;
+    reportSection.classList.add('show');
+    const excelFiles = filesState.filter(f => f.isExcel && f.quality);
+    if (excelFiles.length) {
+      const agg = excelFiles.reduce((acc, f) => {
+        acc.totalCases += f.quality.claims || 0;
+        acc.totalServices += f.quality.rows || 0;
+        acc.docItems += f.quality.missing || 0;
+        acc.reviewItems += f.quality.duplicates || 0;
+        return acc;
+      }, { totalCases: 0, totalServices: 0, acceptedItems: 0, reviewItems: 0, docItems: 0 });
+      agg.acceptedItems = Math.max(0, agg.totalServices - agg.reviewItems - agg.docItems);
+      lastReportStats = agg;
+    } else {
+      lastReportStats = { totalCases: 0, totalServices: 0, acceptedItems: 0, reviewItems: 0, docItems: 0 };
+    }
+    reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    console.error(e);
+    showCustomAlert('فشل توليد التقرير التجريبي: ' + e.message, 'error');
+  } finally {
+    isAnalyzing = false;
+    updateAnalyzeState();
+    statusMsg.style.display = 'none';
+  }
+});
+
+async function saveAndLog() {
+  const doctorName = doctorNameInput.value.trim();
+  const safeDoctorName = sanitizeText(doctorName || 'غير محدد');
+  const safeReviewerName = sanitizeText(currentUser?.name || 'النظام');
+  const dateStr = new Date().toISOString().split('T')[0];
+  const fileName = `تقرير_تجريبي_${safeDoctorName}_${dateStr}.html`;
+  const htmlContent = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>${fileName}</title><link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet"><style>body{font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:18px;color:#1e293b}table{width:100%;border-collapse:collapse;margin:10px 0}th,td{border:1px solid #cbd5e1;padding:8px;text-align:right}th{background:#1e3a5f;color:#fff}</style></head><body><div style="border-bottom:3px solid #c9a962;padding-bottom:10px;margin-bottom:18px;"><h1 style="color:#1e3a5f;">تقرير تجريبي — مراجعة جودة الرعاية الطبية</h1><p>الطبيب: <strong>${safeDoctorName}</strong></p><p>المراجع: <strong>${safeReviewerName}</strong></p></div>${reportContent.innerHTML}</body></html>`;
+  try {
+    const saveData = {
+      action: 'logUsageAndSaveHTML',
+      userEmail: currentUser.email,
+      userName: currentUser.name,
+      doctorName,
+      caseType: 'مراجعة تأمين - Experimental',
+      filesCount: filesState.length,
+      totalCases: lastReportStats?.totalCases || 0,
+      totalServices: lastReportStats?.totalServices || 0,
+      acceptedItems: lastReportStats?.acceptedItems || 0,
+      reviewItems: lastReportStats?.reviewItems || 0,
+      docItems: lastReportStats?.docItems || 0,
+      vitalSignsRate: 0,
+      docQuality: 0,
+      medicalQuality: 0,
+      eligibility: 0,
+      insuranceDocQuality: 0,
+      notes: 'نسخة تجريبية موازية',
+      htmlContent,
+      fileName
+    };
+    const response = await fetchWithRetry(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(saveData)
+    });
+    const text = await response.text();
+    let result;
+    try { result = JSON.parse(text); } catch { result = { success: false, error: text }; }
+    if (result.success) showCustomAlert('تم حفظ التقرير التجريبي في Google Drive بنجاح', 'success');
+    else showCustomAlert('تعذر حفظ التقرير: ' + (result.error || 'خطأ غير معروف'), 'warning');
+  } catch (e) {
+    console.error(e);
+    showCustomAlert('حدث خطأ أثناء الحفظ: ' + e.message, 'error');
+  }
+}
+
+function printAndTrack() {
+  if (!reportContent.innerHTML.trim()) return showCustomAlert('لا يوجد تقرير للطباعة', 'warning');
+  const win = window.open('', '_blank');
+  if (!win) return showCustomAlert('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning');
+  const doctor = sanitizeText(doctorNameInput.value.trim() || 'غير محدد');
+  win.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>طباعة التقرير التجريبي</title><link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet"><style>*{font-family:Tajawal,sans-serif;direction:rtl}body{padding:20px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #1e3a5f;padding:8px;text-align:right}th{background:#1e3a5f;color:#fff}.print-btn{background:#c9a962;color:#1e3a5f;padding:14px 28px;border:none;border-radius:10px;font-weight:800;cursor:pointer} @media print {.print-wrap{display:none}}</style></head><body><div class="print-wrap" style="text-align:center;margin-bottom:18px;"><button class="print-btn" onclick="window.print()">🖨️ اضغط هنا للطباعة</button></div><div style="border-bottom:3px solid #c9a962;padding-bottom:10px;margin-bottom:18px;"><h1 style="color:#1e3a5f;">تقرير تجريبي — مراجعة جودة الرعاية الطبية</h1><p>الطبيب: <strong>${doctor}</strong></p></div>${reportContent.innerHTML}</body></html>`);
+  win.document.close();
+  win.focus();
+}
+
+function resetAnalysis() {
+  filesState.length = 0;
+  originalReport = '';
+  lastReportStats = null;
+  reportContent.innerHTML = '';
+  reportSection.classList.remove('show');
+  doctorNameInput.value = '';
+  document.getElementById('manualCaseInput').value = '';
+  fileInput.value = '';
+  renderFiles();
+  refreshValidationPanel();
+  updateAnalyzeState();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
