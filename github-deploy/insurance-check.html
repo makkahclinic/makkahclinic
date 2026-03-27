@@ -2655,14 +2655,75 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// URLs — Google Apps Script للمهام والصلاحيات فقط (لا Replit / لا تحليل خارجي)
+// URLs - Split between Apps Script (tasks/permissions) and Gemini (analysis)
 const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxm_hI1j-4GTd7rttxGrCH49d-xdtinlW9MKt_Otbc09YRrzTIXbcyDcFUv7g2OrF4Y-A/exec';
 const TASKS_API_URL = BACKEND_URL;
-/** معطّل — لا Replit؛ مسارات التحليل لا تُنفَّذ لأن wakeUpServer() تعيد false */
-const API_URL = '';
+// Analysis API - Replit/Gemini endpoint for AI analysis
+const API_URL = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/patient-analyzer';
 
-// ✅ لا خادم تحليل خارجي — التحليل الآلي معطّل؛ المهام عبر Google Apps Script فقط
+// ✅ Health Check - إيقاظ الخادم قبل التحليل
 async function wakeUpServer() {
+  const healthUrl = API_URL.replace('/api/patient-analyzer', '/api/health');
+  const statusEl = document.getElementById('analysisStatus');
+  const MAX_ATTEMPTS = 8;
+  
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), attempt === 1 ? 8000 : 20000);
+      
+      const response = await fetch(healthUrl, { 
+        method: 'GET',
+        signal: controller.signal 
+      });
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        console.log('[Health Check] Server is awake (attempt ' + attempt + ')');
+        if (statusEl && attempt > 1) {
+          statusEl.innerHTML = `
+            <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px; border-radius: 16px; text-align: center;">
+              <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 10px;"></i>
+              <div style="font-size: 1.2rem; font-weight: bold;">تم الاتصال بنجاح ✅</div>
+              <div style="font-size: 0.9rem; margin-top: 5px;">جاري بدء التحليل...</div>
+            </div>
+          `;
+        }
+        return true;
+      }
+      throw new Error('HTTP ' + response.status);
+    } catch (err) {
+      console.log('[Health Check] Attempt ' + attempt + '/' + MAX_ATTEMPTS + ' failed:', err.message);
+      
+      if (attempt < MAX_ATTEMPTS) {
+        if (statusEl) {
+          const progress = Math.round((attempt / MAX_ATTEMPTS) * 100);
+          statusEl.innerHTML = `
+            <div style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 30px; border-radius: 16px; text-align: center; box-shadow: 0 4px 20px rgba(139,92,246,0.4);">
+              <i class="fas fa-bed" style="font-size: 3rem; margin-bottom: 15px; animation: bounce 1s infinite;"></i>
+              <div style="font-size: 1.4rem; font-weight: bold; margin-bottom: 10px;">الخادم يستيقظ... ☕</div>
+              <div style="font-size: 1rem; opacity: 0.95;">انتظر لحظات قليلة وسيبدأ التحليل تلقائياً</div>
+              <div style="margin-top: 15px;">
+                <div style="background: rgba(255,255,255,0.2); border-radius: 10px; height: 8px; overflow: hidden;">
+                  <div style="background: white; height: 100%; width: ${progress}%; border-radius: 10px; transition: width 0.5s;"></div>
+                </div>
+                <div style="font-size: 0.8rem; margin-top: 8px; opacity: 0.8;">المحاولة ${attempt} من ${MAX_ATTEMPTS}</div>
+              </div>
+              <div style="margin-top: 10px; font-size: 0.85rem; opacity: 0.8;">
+                <i class="fas fa-info-circle"></i> هذا طبيعي بعد فترة عدم استخدام
+              </div>
+            </div>
+            <style>
+              @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+            </style>
+          `;
+        }
+        const delay = Math.min(4000 * attempt, 15000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
   return false;
 }
 
@@ -5780,13 +5841,61 @@ async function translateReport() {
     translateText.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     
     try {
-      showCustomAlert('الترجمة الآلية غير متاحة — البوابة تعتمد على Google Apps Script فقط (لا خادم تحليل خارجي).', 'info');
+      const filesForAnalysis = filesState.map(f => ({
+        name: f.name,
+        base64: f.data || '',
+        textContent: f.textContent || '',
+        type: f.mimeType || 'text/plain'
+      }));
+      
+      const resp = await fetchWithRetry(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          files: filesForAnalysis, 
+          uiLang: 'en' 
+        })
+      });
+
+      const data = await resp.json();
+      if (data.htmlReport) {
+        data.success = true;
+        data.html = data.htmlReport;
+      }
+      
+      if (data.success) {
+        const doctorName = doctorNameInput.value.trim();
+        const printHeader = `
+          <div class="print-header" style="direction: ltr;">
+            <img src="https://www.m2020m.org/logo2026.jpg" alt="Logo">
+            <div class="print-header-text">
+              <h1 style="font-family: Arial, sans-serif;">Medical Care Quality Review Report</h1>
+              <p style="font-family: Arial, sans-serif;">Makkah Medical Complex - Insurance Experts</p>
+              <p style="font-family: Arial, sans-serif;">Doctor: ${doctorName}</p>
+            </div>
+            <div class="print-header-dates">
+              <div>${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+            </div>
+          </div>
+        `;
+        
+        const printFooter = `
+          <div class="print-footer" style="direction: ltr; font-family: Arial, sans-serif;">
+            <strong>Makkah Medical Complex Al-Zaher</strong> - All Rights Reserved<br>
+            www.m2020m.org | Reviewer: ${currentUser.name}
+          </div>
+        `;
+        
+        translatedReport = printHeader + data.html + printFooter;
+        reportContent.innerHTML = translatedReport;
+        currentLang = 'en';
+        translateText.textContent = 'العربية';
+      }
     } catch(err) {
       console.error('Translation error:', err);
       showCustomAlert('حدث خطأ أثناء الترجمة', 'error');
     } finally {
       translateBtn.disabled = false;
-      translateText.textContent = 'English';
     }
   } else {
     reportContent.innerHTML = originalReport;
